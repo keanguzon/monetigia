@@ -80,9 +80,9 @@
   /* Smooth color transitions for theme switching - prevent flickering */
   /* Only apply the hard sync during an actual theme change.
      This avoids permanently overriding hover/width/transform animations. */
-  html.theme-transitioning *,
-  html.theme-transitioning *::before,
-  html.theme-transitioning *::after {
+  html.theme-transitioning *:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning *:not([data-theme-toggle]):not([data-theme-toggle] *)::before,
+  html.theme-transitioning *:not([data-theme-toggle]):not([data-theme-toggle] *)::after {
     transition: background-color 150ms ease,
       border-color 150ms ease,
       fill 150ms ease,
@@ -90,19 +90,19 @@
   }
 
   /* Text elements: keep color instant (no flicker), but sync bg/borders */
-  html.theme-transitioning h1,
-  html.theme-transitioning h2,
-  html.theme-transitioning h3,
-  html.theme-transitioning h4,
-  html.theme-transitioning h5,
-  html.theme-transitioning h6,
-  html.theme-transitioning p,
-  html.theme-transitioning span,
-  html.theme-transitioning a,
-  html.theme-transitioning strong,
-  html.theme-transitioning b,
-  html.theme-transitioning label,
-  html.theme-transitioning div {
+  html.theme-transitioning h1:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning h2:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning h3:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning h4:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning h5:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning h6:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning p:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning span:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning a:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning strong:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning b:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning label:not([data-theme-toggle]):not([data-theme-toggle] *),
+  html.theme-transitioning div:not([data-theme-toggle]):not([data-theme-toggle] *) {
     transition: background-color 150ms ease,
       border-color 150ms ease !important;
   }

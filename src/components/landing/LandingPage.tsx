@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 import { ScrollReveal } from "./ScrollReveal";
 import {
   ArrowRight,
@@ -21,9 +21,12 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 
 export function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -46,11 +49,10 @@ export function LandingPage() {
 
       {/* ─── Header ─── */}
       <header
-        className={`fixed top-0 z-50 w-full transition-all duration-300 ${
-          scrolled
-            ? "bg-background/80 backdrop-blur-xl shadow-sm"
-            : "bg-transparent"
-        }`}
+        className={`fixed top-0 z-50 w-full transition-all duration-300 ${scrolled
+          ? "bg-background/80 backdrop-blur-xl shadow-sm"
+          : "bg-transparent"
+          }`}
       >
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
           <Link href="/" className="flex items-center space-x-2 group">
@@ -66,7 +68,7 @@ export function LandingPage() {
             </span>
           </Link>
           <nav className="flex items-center gap-2 sm:gap-4">
-            <ThemeToggle />
+            <ModeToggle />
             <Link href="/login" className="hidden sm:inline">
               <Button variant="ghost" size="sm" className="text-sm">
                 Sign In
@@ -95,8 +97,15 @@ export function LandingPage() {
           <div className="container relative mx-auto flex max-w-5xl flex-col items-center gap-8 px-4 text-center">
             {/* Badge */}
             <ScrollReveal delay={0} duration={600}>
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm text-primary backdrop-blur-sm">
-                <Zap className="h-3.5 w-3.5" />
+              <div
+                className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium backdrop-blur-sm shadow-sm"
+                style={{
+                  backgroundColor: isDark ? '#022c15' : '#e8f5e3',
+                  border: `1px solid ${isDark ? '#15803d' : '#86efac'}`,
+                  color: isDark ? '#4ade80' : '#15803d',
+                }}
+              >
+                <Zap className="h-4 w-4" />
                 <span>Money tracking made simple</span>
               </div>
             </ScrollReveal>
@@ -138,7 +147,7 @@ export function LandingPage() {
             {/* Hero visual — mock dashboard card */}
             <ScrollReveal delay={400} duration={1000} distance={50}>
               <div className="relative mt-8 w-full max-w-4xl">
-                <div className="landing-card-glow rounded-xl border bg-card/80 backdrop-blur-sm p-6 sm:p-8 shadow-2xl">
+                <div className="landing-card-glow rounded-xl border bg-card/80 backdrop-blur-sm p-4 sm:p-8 shadow-2xl overflow-hidden w-full max-w-[90vw] mx-auto">
                   {/* Mock dashboard top bar */}
                   <div className="flex items-center gap-2 mb-6">
                     <div className="h-3 w-3 rounded-full bg-red-400/70" />
@@ -156,12 +165,12 @@ export function LandingPage() {
                     ].map((stat, i) => (
                       <div
                         key={i}
-                        className="rounded-lg border bg-background/50 p-4 landing-stat-shimmer"
+                        className="rounded-lg border bg-background/50 p-2 sm:p-4 landing-stat-shimmer flex flex-col justify-center"
                         style={{ animationDelay: `${i * 200}ms` }}
                       >
-                        <p className="text-xs text-muted-foreground">{stat.label}</p>
-                        <p className="text-sm sm:text-lg font-bold mt-1">{stat.value}</p>
-                        <p className={`text-xs mt-1 ${stat.up ? "text-primary" : "text-destructive"}`}>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">{stat.label}</p>
+                        <p className="text-xs sm:text-lg font-bold mt-1 truncate">{stat.value}</p>
+                        <p className={`text-[10px] sm:text-xs mt-0.5 sm:mt-1 ${stat.up ? "text-primary" : "text-destructive"}`}>
                           {stat.change}
                         </p>
                       </div>
@@ -169,7 +178,7 @@ export function LandingPage() {
                   </div>
 
                   {/* Mock chart lines */}
-                  <div className="h-32 sm:h-48 rounded-lg border bg-background/30 flex items-end px-4 pb-4 gap-1.5 overflow-hidden">
+                  <div className="h-24 sm:h-48 rounded-lg border bg-background/30 flex items-end px-2 sm:px-4 pb-2 sm:pb-4 gap-1 sm:gap-1.5 overflow-hidden w-full">
                     {[40, 55, 35, 65, 50, 70, 45, 80, 60, 75, 90, 68, 85, 72, 95, 78, 88, 70, 82, 92].map(
                       (h, i) => (
                         <div

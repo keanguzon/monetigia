@@ -48,16 +48,16 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
   const [interestRate, setInterestRate] = useState("");
   const [includeNetworth, setIncludeNetworth] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Custom wallet states
   const [isCreatingCustom, setIsCreatingCustom] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customColor, setCustomColor] = useState("#10b981");
   const [customCategory, setCustomCategory] = useState<"wallet" | "savings" | "paylater">("wallet");
-  const [customType, setCustomType] = useState<"cash" | "bank" | "credit_card" | "ewallet">("ewallet");
+  const [customType, setCustomType] = useState<"cash" | "bank" | "credit_card" | "e_wallet">("e_wallet");
 
   const customColors = [
-    "#10b981", "#06b6d4", "#3b82f6", "#8b5cf6", 
+    "#10b981", "#06b6d4", "#3b82f6", "#8b5cf6",
     "#ec4899", "#f43f5e", "#f59e0b", "#84cc16"
   ];
 
@@ -90,12 +90,12 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
       }
 
       let accountData: any;
-      
+
       if (isCreatingCustom) {
         const isSavings = customCategory === "savings";
         const isDebt = customCategory === "paylater";
         const accountType = isDebt ? "credit_card" : customType;
-        
+
         accountData = {
           user_id: user.id,
           name: customName.trim(),
@@ -131,7 +131,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
       }
 
       toast({ title: "Account added", description: "Your account was created successfully." });
-      
+
       // Reset states
       setSelectedAccount(null);
       setIsCreatingCustom(false);
@@ -140,7 +140,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
       setCustomCategory("wallet");
       setBalance("");
       setInterestRate("");
-      
+
       onClose();
       router.refresh();
     } catch (err) {
@@ -161,7 +161,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in duration-200" onClick={onClose}>
-      <div 
+      <div
         className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl animate-in slide-in-from-bottom-4 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
@@ -194,11 +194,11 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                         onClick={() => !isDisabled && setSelectedAccount(option)}
                         className={`
                           flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                          ${isDisabled 
-                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700" 
+                          ${isDisabled
+                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700"
                             : selectedAccount === option
-                            ? "border-primary shadow-lg"
-                            : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
+                              ? "border-primary shadow-lg"
+                              : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
                           }
                         `}
                         style={
@@ -262,11 +262,11 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                         onClick={() => !isDisabled && setSelectedAccount(option)}
                         className={`
                           flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                          ${isDisabled 
-                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700" 
+                          ${isDisabled
+                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700"
                             : selectedAccount === option
-                            ? "border-primary shadow-lg"
-                            : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
+                              ? "border-primary shadow-lg"
+                              : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
                           }
                         `}
                         style={
@@ -333,11 +333,11 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                         onClick={() => !isDisabled && setSelectedAccount(option)}
                         className={`
                           flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                          ${isDisabled 
-                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700" 
+                          ${isDisabled
+                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700"
                             : selectedAccount === option
-                            ? "border-primary shadow-lg"
-                            : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
+                              ? "border-primary shadow-lg"
+                              : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
                           }
                         `}
                         style={
@@ -388,7 +388,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
             {isCreatingCustom && (
               <div className="space-y-4 p-4 border-2 border-primary/20 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                 <h4 className="text-sm font-semibold">Create Custom {customCategory === "wallet" ? "Wallet" : customCategory === "savings" ? "Savings Account" : "PayLater Account"}</h4>
-                
+
                 {/* Account Name */}
                 <div>
                   <label htmlFor="customName" className="block text-sm font-medium mb-2">
@@ -437,7 +437,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                   <select
                     id="customType"
                     value={customType}
-                    onChange={(e) => setCustomType(e.target.value as "cash" | "bank" | "ewallet" | "credit_card")}
+                    onChange={(e) => setCustomType(e.target.value as "cash" | "bank" | "e_wallet" | "credit_card")}
                     className="w-full px-4 py-2 border rounded-lg dark:bg-slate-900 dark:border-slate-700"
                     required
                   >
@@ -445,13 +445,13 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                       <>
                         <option value="cash">Cash</option>
                         <option value="bank">Bank Account</option>
-                        <option value="ewallet">E-Wallet</option>
+                        <option value="e_wallet">E-Wallet</option>
                       </>
                     )}
                     {customCategory === "savings" && (
                       <>
                         <option value="bank">Bank Savings</option>
-                        <option value="ewallet">E-Wallet Savings</option>
+                        <option value="e_wallet">E-Wallet Savings</option>
                       </>
                     )}
                     {customCategory === "paylater" && (

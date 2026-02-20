@@ -57,6 +57,8 @@ export default function AccountsPage() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
   const [walletView, setWalletView] = useState<"tiles" | "details">("tiles");
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [editingAccountName, setEditingAccountName] = useState("");
   const { toast } = useToast();
 
   const normalizeLogoFilename = (filename: string) => {
@@ -170,9 +172,53 @@ export default function AccountsPage() {
       description: "The wallet has been successfully deleted.",
     });
 
+    toast({
+      title: "Wallet deleted",
+      description: "The wallet has been successfully deleted.",
+    });
+
     setAccountToDelete(null);
     loadAccounts();
   };
+
+  const startEditingAccount = (accountId: string, currentName: string) => {
+    setEditingAccountId(accountId);
+    setEditingAccountName(currentName);
+  };
+
+  const saveAccountName = async (accountId: string) => {
+    const newName = editingAccountName.trim();
+    if (!newName) {
+      setEditingAccountId(null);
+      return;
+    }
+
+    const currentAcc = accounts.find((a) => a.id === accountId);
+    if (currentAcc && currentAcc.name === newName) {
+      setEditingAccountId(null);
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id) return;
+
+    const { error } = await sb
+      .from("accounts")
+      .update({ name: newName })
+      .eq("id", accountId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      toast({ title: "Error", description: "Failed to rename wallet", variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Wallet renamed", description: "The wallet has been successfully renamed." });
+    setEditingAccountId(null);
+    loadAccounts();
+  };
+
+  const isCustomAccount = (account: any) => !account.icon && account.name !== "Cash on Hand";
 
   const loadAccounts = async () => {
     setIsLoading(true);
@@ -617,21 +663,51 @@ export default function AccountsPage() {
                           }
                         >
                           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium truncate pr-2">
-                              {account.name}
-                            </CardTitle>
-                            <div className="flex items-center gap-2">
-                              {isEditingOrder ? <GripVertical className="h-5 w-5 text-muted-foreground" /> : (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setAccountToDelete(account.id);
+                            {editingAccountId === account.id ? (
+                              <div className="flex items-center gap-2 pr-2 w-full" onClick={(e) => e.stopPropagation()}>
+                                <Input
+                                  value={editingAccountName}
+                                  onChange={(e) => setEditingAccountName(e.target.value)}
+                                  className="h-7 text-sm px-2 flex-1 min-w-[100px]"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveAccountName(account.id);
+                                    if (e.key === "Escape") setEditingAccountId(null);
                                   }}
-                                  className="p-1 rounded hover:bg-destructive/10 transition-colors"
-                                  title="Delete wallet"
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </button>
+                                  onBlur={() => saveAccountName(account.id)}
+                                />
+                              </div>
+                            ) : (
+                              <CardTitle className="text-sm font-medium truncate pr-2">
+                                {account.name}
+                              </CardTitle>
+                            )}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {isEditingOrder ? <GripVertical className="h-5 w-5 text-muted-foreground" /> : (
+                                <div className="flex items-center">
+                                  {isCustomAccount(account) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        startEditingAccount(account.id, account.name);
+                                      }}
+                                      className="p-1 rounded hover:bg-blue-500/10 transition-colors mr-1"
+                                      title="Rename wallet"
+                                    >
+                                      <Edit2 className="h-4 w-4 text-blue-500" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAccountToDelete(account.id);
+                                    }}
+                                    className="p-1 rounded hover:bg-destructive/10 transition-colors"
+                                    title="Delete wallet"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </button>
+                                </div>
                               )}
                               <div
                                 className="p-2 rounded-full transition-all duration-200 hover:scale-110"
@@ -774,8 +850,24 @@ export default function AccountsPage() {
                                     <Icon className="h-4 w-4" style={{ color: account.color || "#22c55e" }} />
                                   )}
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="font-semibold truncate">{account.name}</p>
+                                <div className="min-w-0 flex-1">
+                                  {editingAccountId === account.id ? (
+                                    <div className="flex items-center gap-2 mb-1" onClick={(e) => e.stopPropagation()}>
+                                      <Input
+                                        value={editingAccountName}
+                                        onChange={(e) => setEditingAccountName(e.target.value)}
+                                        className="h-7 text-sm px-2 w-[150px]"
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") saveAccountName(account.id);
+                                          if (e.key === "Escape") setEditingAccountId(null);
+                                        }}
+                                        onBlur={() => saveAccountName(account.id)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <p className="font-semibold truncate">{account.name}</p>
+                                  )}
                                   <p className="text-xs text-muted-foreground">
                                     {accountTypeLabels[account.type as keyof typeof accountTypeLabels]}
                                   </p>
@@ -783,16 +875,30 @@ export default function AccountsPage() {
                               </div>
                               <div className="flex items-center gap-2">
                                 {isEditingOrder ? <GripVertical className="h-5 w-5 text-muted-foreground" /> : (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setAccountToDelete(account.id);
-                                    }}
-                                    className="p-1 rounded hover:bg-destructive/10 transition-colors"
-                                    title="Delete wallet"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </button>
+                                  <div className="flex items-center">
+                                    {isCustomAccount(account) && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          startEditingAccount(account.id, account.name);
+                                        }}
+                                        className="p-1 rounded hover:bg-blue-500/10 transition-colors mr-1"
+                                        title="Rename wallet"
+                                      >
+                                        <Edit2 className="h-4 w-4 text-blue-500" />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAccountToDelete(account.id);
+                                      }}
+                                      className="p-1 rounded hover:bg-destructive/10 transition-colors"
+                                      title="Delete wallet"
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </button>
+                                  </div>
                                 )}
                                 <div className="text-right">
                                   <p className="text-lg font-bold">
