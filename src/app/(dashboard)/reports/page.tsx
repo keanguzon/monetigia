@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, TrendingUp, TrendingDown, DollarSign, ChevronDown } from "lucide-react";
@@ -25,7 +26,10 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Pie, Line, Radar } from 'react-chartjs-2';
+
+const PieChart = dynamic(() => import("react-chartjs-2").then((mod) => mod.Pie), { ssr: false });
+const LineChart = dynamic(() => import("react-chartjs-2").then((mod) => mod.Line), { ssr: false });
+const RadarChart = dynamic(() => import("react-chartjs-2").then((mod) => mod.Radar), { ssr: false });
 
 ChartJS.register(
   CategoryScale,
@@ -550,7 +554,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center">
             {computed.chartData.categories.length > 0 ? (
-              <Pie
+              <PieChart
                 data={{
                   labels: computed.chartData.categories.map((c: any) => c.name),
                   datasets: [{
@@ -596,7 +600,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center">
             {computed.chartData.categories.length > 0 ? (
-              <Radar
+              <RadarChart
                 data={{
                   labels: computed.chartData.categories.slice(0, 6).map((c: any) => c.name),
                   datasets: [{
@@ -662,7 +666,7 @@ export default function ReportsPage() {
         </CardHeader>
         <CardContent className="h-[400px]">
           {computed.chartData.dailyLabels.length > 0 ? (
-            <Line
+            <LineChart
               data={{
                 labels: computed.chartData.dailyLabels,
                 datasets: [

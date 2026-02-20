@@ -22,27 +22,37 @@ export function ScrollReveal({
   once = true,
 }: ScrollRevealProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
 
+    // Failsafe: if the observer never fires (e.g. element already in viewport),
+    // force visible after delay + duration so content is never permanently hidden.
+    const failsafe = window.setTimeout(() => {
+      setIsVisible(true);
+    }, delay + duration + 200);
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           setIsVisible(true);
+          window.clearTimeout(failsafe);
           if (once) observer.unobserve(element);
         } else if (!once) {
           setIsVisible(false);
         }
       },
-      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
+      { threshold: 0.05, rootMargin: "50px 0px 0px 0px" }
     );
 
     observer.observe(element);
-    return () => observer.disconnect();
-  }, [once]);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(failsafe);
+    };
+  }, [once, delay, duration]);
 
   const directionMap = {
     up: `translateY(${distance}px)`,

@@ -77,34 +77,14 @@
     margin-right: 0 !important;
   }
 
-  /* Smooth color transitions for theme switching - prevent flickering */
-  /* Only apply the hard sync during an actual theme change.
-     This avoids permanently overriding hover/width/transform animations. */
-  html.theme-transitioning *:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning *:not([data-theme-toggle]):not([data-theme-toggle] *)::before,
-  html.theme-transitioning *:not([data-theme-toggle]):not([data-theme-toggle] *)::after {
+  /* Smooth color transitions for theme switching
+     Only transition the root containers — children swap instantly.
+     This avoids forcing the browser to recalculate transitions on
+     thousands of DOM elements (which kills low-end phone performance). */
+  html.theme-transitioning,
+  html.theme-transitioning body {
     transition: background-color 150ms ease,
-      border-color 150ms ease,
-      fill 150ms ease,
-      stroke 150ms ease !important;
-  }
-
-  /* Text elements: keep color instant (no flicker), but sync bg/borders */
-  html.theme-transitioning h1:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning h2:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning h3:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning h4:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning h5:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning h6:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning p:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning span:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning a:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning strong:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning b:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning label:not([data-theme-toggle]):not([data-theme-toggle] *),
-  html.theme-transitioning div:not([data-theme-toggle]):not([data-theme-toggle] *) {
-    transition: background-color 150ms ease,
-      border-color 150ms ease !important;
+      color 150ms ease !important;
   }
 }
 

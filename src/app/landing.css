@@ -449,6 +449,16 @@ html {
   background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent);
 }
 
+/* ─── Pause animations during theme transitions (prevents GPU thrash) ─── */
+html.theme-transitioning .landing-float-slow,
+html.theme-transitioning .landing-float-slower,
+html.theme-transitioning .landing-bg-animation::before,
+html.theme-transitioning .landing-bg-animation::after,
+html.theme-transitioning .landing-bg-blob,
+html.theme-transitioning .landing-gradient-line {
+  animation-play-state: paused !important;
+}
+
 /* ─── Respect prefers-reduced-motion ─── */
 @media (prefers-reduced-motion: reduce) {
 

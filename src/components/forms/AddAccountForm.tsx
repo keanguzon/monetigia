@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -133,7 +134,7 @@ export default function AddAccountForm() {
             {EWalletIcons.map((i) => (
               <label key={i} className={`p-1 border rounded cursor-pointer ${icon === i ? "ring-2 ring-offset-2" : ""}`}>
                 <input type="radio" name="icon" value={i} checked={icon === i} onChange={() => setIcon(i)} className="hidden" />
-                <img src={`/logos/${i}`} alt={i} className="h-8 w-8" />
+                <Image src={`/logos/${i}`} alt={i} width={32} height={32} className="h-8 w-8" />
               </label>
             ))}
           </div>
@@ -150,7 +151,7 @@ export default function AddAccountForm() {
             {DebtIcons.map((i) => (
               <label key={i} className={`p-1 border rounded cursor-pointer ${icon === i ? "ring-2 ring-offset-2" : ""}`}>
                 <input type="radio" name="icon" value={i} checked={icon === i} onChange={() => setIcon(i)} className="hidden" />
-                <img src={`/logos/${i}`} alt={i} className="h-8 w-8" />
+                <Image src={`/logos/${i}`} alt={i} width={32} height={32} className="h-8 w-8" />
               </label>
             ))}
           </div>
