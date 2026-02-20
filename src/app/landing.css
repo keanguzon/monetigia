@@ -35,12 +35,10 @@ html {
 
 /* ─── Gradient text (Neon-style) ─── */
 .landing-gradient-text {
-  background: linear-gradient(
-    135deg,
-    hsl(var(--primary)) 0%,
-    hsl(142 70% 55%) 50%,
-    hsl(160 70% 45%) 100%
-  );
+  background: linear-gradient(135deg,
+      hsl(var(--primary)) 0%,
+      hsl(142 70% 55%) 50%,
+      hsl(160 70% 45%) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -95,14 +93,12 @@ html {
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(
-    135deg,
-    hsl(var(--primary) / 0.5) 0%,
-    hsl(var(--primary) / 0.15) 30%,
-    transparent 50%,
-    hsl(var(--primary) / 0.15) 70%,
-    hsl(var(--primary) / 0.35) 100%
-  );
+  background: linear-gradient(135deg,
+      hsl(var(--primary) / 0.5) 0%,
+      hsl(var(--primary) / 0.15) 30%,
+      transparent 50%,
+      hsl(var(--primary) / 0.15) 70%,
+      hsl(var(--primary) / 0.35) 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -149,12 +145,10 @@ html {
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(
-    135deg,
-    hsl(var(--primary) / 0.5),
-    hsl(var(--primary) / 0.1),
-    hsl(var(--primary) / 0.3)
-  );
+  background: linear-gradient(135deg,
+      hsl(var(--primary) / 0.5),
+      hsl(var(--primary) / 0.1),
+      hsl(var(--primary) / 0.3));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -189,12 +183,16 @@ html {
 
 /* ─── Floating animation for orbs ─── */
 @keyframes landingFloat {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0) translateX(0);
   }
+
   33% {
     transform: translateY(-20px) translateX(10px);
   }
+
   66% {
     transform: translateY(10px) translateX(-10px);
   }
@@ -202,10 +200,12 @@ html {
 
 .landing-float-slow {
   animation: landingFloat 12s ease-in-out infinite;
+  will-change: transform;
 }
 
 .landing-float-slower {
   animation: landingFloat 18s ease-in-out infinite reverse;
+  will-change: transform;
 }
 
 /* ─── Stat card shimmer ─── */
@@ -214,6 +214,7 @@ html {
     opacity: 0;
     transform: translateY(8px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -230,6 +231,7 @@ html {
     transform: scaleY(0);
     opacity: 0;
   }
+
   to {
     transform: scaleY(1);
     opacity: 1;
@@ -289,7 +291,6 @@ html {
 .landing-bg-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
 }
 
 .landing-bg-blob-1 {
@@ -297,7 +298,7 @@ html {
   height: 500px;
   top: 30%;
   left: 10%;
-  background: hsl(var(--primary) / 0.04);
+  background: radial-gradient(circle, hsl(var(--primary) / 0.04) 0%, transparent 70%);
   animation: landingBgBlob3 20s ease-in-out infinite;
 }
 
@@ -306,7 +307,7 @@ html {
   height: 400px;
   top: 60%;
   right: 15%;
-  background: hsl(160 70% 45% / 0.04);
+  background: radial-gradient(circle, hsl(160 70% 45% / 0.04) 0%, transparent 70%);
   animation: landingBgBlob4 22s ease-in-out infinite;
 }
 
@@ -315,53 +316,107 @@ html {
   height: 350px;
   top: 10%;
   left: 50%;
-  background: hsl(142 70% 55% / 0.03);
+  background: radial-gradient(circle, hsl(142 70% 55% / 0.03) 0%, transparent 70%);
   animation: landingBgBlob1 28s ease-in-out infinite reverse;
 }
 
 .dark .landing-bg-blob-1 {
-  background: hsl(var(--primary) / 0.06);
+  background: radial-gradient(circle, hsl(var(--primary) / 0.06) 0%, transparent 70%);
 }
 
 .dark .landing-bg-blob-2 {
-  background: hsl(160 70% 45% / 0.06);
+  background: radial-gradient(circle, hsl(160 70% 45% / 0.06) 0%, transparent 70%);
 }
 
 .dark .landing-bg-blob-3 {
-  background: hsl(142 70% 55% / 0.05);
+  background: radial-gradient(circle, hsl(142 70% 55% / 0.05) 0%, transparent 70%);
 }
 
 @keyframes landingBgBlob1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  25% { transform: translate(-80px, 60px) scale(1.1); }
-  50% { transform: translate(-40px, -40px) scale(0.95); }
-  75% { transform: translate(60px, 30px) scale(1.05); }
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate(-80px, 60px) scale(1.1);
+  }
+
+  50% {
+    transform: translate(-40px, -40px) scale(0.95);
+  }
+
+  75% {
+    transform: translate(60px, 30px) scale(1.05);
+  }
 }
 
 @keyframes landingBgBlob2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  25% { transform: translate(70px, -50px) scale(1.05); }
-  50% { transform: translate(30px, 60px) scale(0.9); }
-  75% { transform: translate(-50px, -20px) scale(1.1); }
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate(70px, -50px) scale(1.05);
+  }
+
+  50% {
+    transform: translate(30px, 60px) scale(0.9);
+  }
+
+  75% {
+    transform: translate(-50px, -20px) scale(1.1);
+  }
 }
 
 @keyframes landingBgBlob3 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(50px, -80px) scale(1.08); }
-  66% { transform: translate(-60px, 40px) scale(0.92); }
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(50px, -80px) scale(1.08);
+  }
+
+  66% {
+    transform: translate(-60px, 40px) scale(0.92);
+  }
 }
 
 @keyframes landingBgBlob4 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(-40px, 70px) scale(1.12); }
-  66% { transform: translate(70px, -30px) scale(0.88); }
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(-40px, 70px) scale(1.12);
+  }
+
+  66% {
+    transform: translate(70px, -30px) scale(0.88);
+  }
 }
 
 /* ─── Moving gradient lines (subtle, video-like) ─── */
 @keyframes landingGradientMove {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .landing-gradient-line {
@@ -396,6 +451,7 @@ html {
 
 /* ─── Respect prefers-reduced-motion ─── */
 @media (prefers-reduced-motion: reduce) {
+
   .landing-float-slow,
   .landing-float-slower,
   .landing-bg-animation::before,

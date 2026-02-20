@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -562,7 +563,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
               </label>
               {accounts.length === 0 ? (
                 <p className="text-sm text-muted-foreground p-3 bg-slate-100 dark:bg-slate-900 rounded-lg">
-                  You don't have any accounts yet. <a href="/accounts" className="text-primary underline">Create an account first</a>
+                  You don't have any accounts yet. <Link href="/accounts" className="text-primary underline">Create an account first</Link>
                 </p>
               ) : (
                 <select

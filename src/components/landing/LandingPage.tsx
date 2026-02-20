@@ -97,8 +97,14 @@ export function LandingPage() {
           <div className="absolute inset-0 landing-hero-glow" />
 
           {/* Floating orbs */}
-          <div className="absolute top-1/4 left-1/4 w-72 h-72 rounded-full bg-primary/10 blur-[120px] landing-float-slow" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-primary/5 blur-[150px] landing-float-slower" />
+          <div
+            className="absolute top-1/4 left-1/4 w-72 h-72 rounded-full landing-float-slow pointer-events-none"
+            style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.1) 0%, transparent 70%)" }}
+          />
+          <div
+            className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full landing-float-slower pointer-events-none"
+            style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.05) 0%, transparent 70%)" }}
+          />
 
           <div className="container relative mx-auto flex max-w-5xl flex-col items-center gap-8 px-4 text-center">
             {/* Badge */}
@@ -201,7 +207,10 @@ export function LandingPage() {
                 </div>
 
                 {/* Glow under the card */}
-                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-3/4 h-16 bg-primary/20 blur-[60px] rounded-full" />
+                <div
+                  className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-3/4 h-16 rounded-full pointer-events-none"
+                  style={{ background: "radial-gradient(ellipse, hsl(var(--primary) / 0.2) 0%, transparent 70%)" }}
+                />
               </div>
             </ScrollReveal>
           </div>
@@ -383,7 +392,10 @@ export function LandingPage() {
         {/* ─── Stats Section ─── */}
         <section className="relative py-24 md:py-32 overflow-hidden">
           <div className="absolute inset-0 landing-grid-bg opacity-40" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[150px]" />
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.05) 0%, transparent 70%)" }}
+          />
 
           <div className="container relative mx-auto px-4 md:px-8">
             <ScrollReveal>

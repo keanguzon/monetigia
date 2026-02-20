@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -209,7 +210,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                       >
                         <div className="w-12 h-12 mb-2 flex items-center justify-center bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700">
                           {option.icon ? (
-                            <img src={`/logos/${option.icon}`} alt={option.name} className="w-10 h-10 object-contain" />
+                            <Image src={`/logos/${option.icon}`} alt={option.name} width={40} height={40} className="w-10 h-10 object-contain" />
                           ) : (
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth="2">
                               <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path>
@@ -277,7 +278,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                       >
                         <div className="w-12 h-12 mb-2 flex items-center justify-center bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700">
                           {option.icon ? (
-                            <img src={`/logos/${option.icon}`} alt={option.name} className="w-10 h-10 object-contain" />
+                            <Image src={`/logos/${option.icon}`} alt={option.name} width={40} height={40} className="w-10 h-10 object-contain" />
                           ) : (
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth="2">
                               <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path>
@@ -348,7 +349,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                       >
                         <div className="w-12 h-12 mb-2 flex items-center justify-center bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700">
                           {option.icon ? (
-                            <img src={`/logos/${option.icon}`} alt={option.name} className="w-10 h-10 object-contain" />
+                            <Image src={`/logos/${option.icon}`} alt={option.name} width={40} height={40} className="w-10 h-10 object-contain" />
                           ) : (
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth="2">
                               <rect x="2" y="6" width="20" height="12" rx="2"></rect>
