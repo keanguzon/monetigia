@@ -16,6 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogOut, Menu, Settings, User as UserIcon } from "lucide-react";
 import { getInitials } from "@/lib/utils";
 import { ModeToggle } from "@/components/ui/mode-toggle";
+import { clearTabSessionMarker } from "@/lib/session-preferences";
 
 interface HeaderProps {
   user: {
@@ -41,6 +42,7 @@ export function Header({ user, onMenuClick }: HeaderProps) {
       });
       return;
     }
+    clearTabSessionMarker();
     router.push("/login");
     router.refresh();
   };

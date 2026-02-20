@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/use-toast";
 import { User, Upload, Loader2, DollarSign, Shield, Eye, EyeOff } from "lucide-react";
 import { getInitials } from "@/lib/utils";
+import { clearTabSessionMarker } from "@/lib/session-preferences";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -237,6 +238,7 @@ export default function SettingsPage() {
       });
 
       await supabase.auth.signOut();
+      clearTabSessionMarker();
       window.location.href = "/login";
     } catch (error: any) {
       toast({

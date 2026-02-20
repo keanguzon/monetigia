@@ -25,8 +25,14 @@ import { useTheme } from "next-themes";
 
 export function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
+  // Default to dark before hydration since the app's defaultTheme is "dark"
+  const isDark = !mounted ? true : resolvedTheme === 'dark';
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);

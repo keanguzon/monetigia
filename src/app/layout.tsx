@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import "./landing.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { AuthSessionManager } from "@/components/providers/auth-session-manager";
 import { Toaster } from "@/components/ui/toaster";
 import { LoadingBar } from "@/components/ui/loading-bar";
 import ThemeTransitionOverlay from "@/components/theme/ThemeTransitionOverlay";
@@ -32,6 +33,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
+          <AuthSessionManager />
           <LoadingBar />
           <ThemeTransitionOverlay />
           <div className="min-h-screen animate-fade-in">{children}</div>

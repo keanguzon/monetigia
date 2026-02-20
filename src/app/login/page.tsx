@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,10 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { PiggyBank, Loader2, Eye, EyeOff } from "lucide-react";
+import { getRememberMePreference, saveRememberMePreference } from "@/lib/session-preferences";
 
 function LoginPageInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -23,6 +25,10 @@ function LoginPageInner() {
   const supabase = createClient();
 
   const redirectTo = searchParams.get("redirect") || "/dashboard";
+
+  useEffect(() => {
+    setRememberMe(getRememberMePreference());
+  }, []);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +48,8 @@ function LoginPageInner() {
         });
         return;
       }
+
+      saveRememberMePreference(rememberMe);
 
       router.push(redirectTo);
       router.refresh();
@@ -157,6 +165,21 @@ function LoginPageInner() {
                 </button>
               </div>
             </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                id="remember-me"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isLoading}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
+                Remember me
+              </Label>
+            </div>
+
             <Button type="submit" className="w-full landing-btn-glow" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
