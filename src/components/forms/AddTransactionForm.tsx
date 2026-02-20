@@ -330,7 +330,7 @@ export default function AddTransactionForm() {
                     id="startMonth"
                     value={startMonth}
                     onChange={(e) => setStartMonth(e.target.value)}
-                    className="w-full rounded-md border px-3 py-2"
+                    className="w-full rounded-md border px-3 py-2 appearance-none block min-w-full bg-transparent"
                   />
                 </div>
                 {installments > 1 && (
@@ -405,7 +405,7 @@ export default function AddTransactionForm() {
                   setDebtPaymentMonth(month);
                   if (month) setDate(`${month}-01`);
                 }}
-                className="w-full rounded-md border px-3 py-2"
+                className="w-full rounded-md border px-3 py-2 appearance-none block min-w-full bg-transparent"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Payment will be recorded under this month in your debt breakdown.
@@ -432,7 +432,7 @@ export default function AddTransactionForm() {
 
       <div>
         <label className="text-sm font-medium">Date</label>
-        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="appearance-none block min-w-full bg-transparent w-full" />
       </div>
 
       <div>

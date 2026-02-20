@@ -504,8 +504,8 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                   type="button"
                   onClick={() => setType("expense")}
                   className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all duration-200 ${type === "expense"
-                      ? "border-red-500 bg-red-50 dark:bg-red-950/20"
-                      : "border-gray-200 dark:border-slate-700 hover:border-red-300"
+                    ? "border-red-500 bg-red-50 dark:bg-red-950/20"
+                    : "border-gray-200 dark:border-slate-700 hover:border-red-300"
                     }`}
                 >
                   <ArrowUpRight className={`h-6 w-6 mb-2 ${type === "expense" ? "text-red-500" : "text-gray-400"}`} />
@@ -515,8 +515,8 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                   type="button"
                   onClick={() => setType("income")}
                   className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all duration-200 ${type === "income"
-                      ? "border-green-500 bg-green-50 dark:bg-green-950/20"
-                      : "border-gray-200 dark:border-slate-700 hover:border-green-300"
+                    ? "border-green-500 bg-green-50 dark:bg-green-950/20"
+                    : "border-gray-200 dark:border-slate-700 hover:border-green-300"
                     }`}
                 >
                   <ArrowDownLeft className={`h-6 w-6 mb-2 ${type === "income" ? "text-green-500" : "text-gray-400"}`} />
@@ -526,8 +526,8 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                   type="button"
                   onClick={() => setType("transfer")}
                   className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all duration-200 ${type === "transfer"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
-                      : "border-gray-200 dark:border-slate-700 hover:border-blue-300"
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                    : "border-gray-200 dark:border-slate-700 hover:border-blue-300"
                     }`}
                 >
                   <ArrowLeftRight className={`h-6 w-6 mb-2 ${type === "transfer" ? "text-blue-500" : "text-gray-400"}`} />
@@ -645,7 +645,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                         id="startMonth"
                         value={startMonth}
                         onChange={(e) => setStartMonth(e.target.value)}
-                        className="w-full px-4 py-3 border rounded-lg dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-primary transition-all"
+                        className="w-full px-4 py-3 border rounded-lg dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-primary transition-all appearance-none block min-w-full bg-transparent"
                       />
                     </div>
                     {installments > 1 && (
@@ -708,7 +708,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                         setDebtPaymentMonth(month);
                         if (month) setDate(`${month}-01`);
                       }}
-                      className="w-full px-4 py-2 border rounded-lg dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-primary transition-all"
+                      className="w-full px-4 py-2 border rounded-lg dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-primary transition-all appearance-none block min-w-full bg-transparent"
                     />
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       Payment will be recorded under this month in your debt breakdown.
@@ -755,7 +755,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                 id="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full px-4 py-3 border rounded-lg dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-primary transition-all"
+                className="w-full px-4 py-3 border rounded-lg dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-primary transition-all appearance-none block min-w-full bg-transparent"
                 required
               />
             </div>
