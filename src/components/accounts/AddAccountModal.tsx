@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { X, Plus } from "lucide-react";
+import { parseNonNegativeAmount, sanitizeColor } from "@/lib/utils";
+import type { Database } from "@/types/database";
 
 interface AccountOption {
   type: "cash" | "bank" | "credit_card" | "e_wallet" | "investment";
@@ -57,6 +59,8 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
   const [customCategory, setCustomCategory] = useState<"wallet" | "savings" | "paylater">("wallet");
   const [customType, setCustomType] = useState<"cash" | "bank" | "credit_card" | "e_wallet">("e_wallet");
 
+  type AccountInsert = Database["public"]["Tables"]["accounts"]["Insert"];
+
   const customColors = [
     "#10b981", "#06b6d4", "#3b82f6", "#8b5cf6",
     "#ec4899", "#f43f5e", "#f59e0b", "#84cc16"
@@ -78,6 +82,23 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
       return;
     }
 
+    if (isCreatingCustom && customName.trim().length > 60) {
+      toast({ title: "Invalid name", description: "Wallet name must be 60 characters or fewer", variant: "destructive" });
+      return;
+    }
+
+    const parsedBalance = parseNonNegativeAmount(balance || "0");
+    if (parsedBalance === null) {
+      toast({ title: "Invalid balance", description: "Balance must be a non-negative amount", variant: "destructive" });
+      return;
+    }
+
+    const parsedInterest = Number(interestRate || "0");
+    if (!Number.isFinite(parsedInterest) || parsedInterest < 0 || parsedInterest > 100) {
+      toast({ title: "Invalid interest rate", description: "Interest rate must be between 0 and 100", variant: "destructive" });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -90,7 +111,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
         return;
       }
 
-      let accountData: any;
+      let accountData: AccountInsert;
 
       if (isCreatingCustom) {
         const isSavings = customCategory === "savings";
@@ -101,12 +122,12 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
           user_id: user.id,
           name: customName.trim(),
           type: accountType,
-          balance: Number(balance || 0),
+          balance: parsedBalance,
           currency: "PHP",
-          color: customColor,
+          color: sanitizeColor(customColor),
           icon: "", // No icon for custom wallets
           is_savings: isSavings,
-          interest_rate: isSavings ? Number(interestRate || 0) : 0,
+          interest_rate: isSavings ? parsedInterest : 0,
           include_in_networth: isDebt ? false : includeNetworth,
         };
       } else {
@@ -114,17 +135,17 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
           user_id: user.id,
           name: selectedAccount!.name,
           type: selectedAccount!.type,
-          balance: Number(balance || 0),
+          balance: parsedBalance,
           currency: "PHP",
-          color: selectedAccount!.color,
+          color: sanitizeColor(selectedAccount!.color),
           icon: selectedAccount!.icon,
           is_savings: selectedAccount!.isSavings,
-          interest_rate: selectedAccount!.isSavings ? Number(interestRate || 0) : 0,
+          interest_rate: selectedAccount!.isSavings ? parsedInterest : 0,
           include_in_networth: includeNetworth,
         };
       }
 
-      const { error } = await (supabase as any).from("accounts").insert([accountData]);
+      const { error } = await supabase.from("accounts").insert([accountData]);
 
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });

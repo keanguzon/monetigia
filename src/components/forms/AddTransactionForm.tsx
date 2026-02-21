@@ -6,15 +6,16 @@ import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import type { Account, Category } from "@/types/database";
+import { isValidUuid, parsePositiveAmount } from "@/lib/utils";
 
 export default function AddTransactionForm() {
   const supabase = createClient();
-  const sb = supabase as any;
   const router = useRouter();
   const { toast } = useToast();
 
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   const [accountId, setAccountId] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
@@ -26,14 +27,14 @@ export default function AddTransactionForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [debtPaymentMonth, setDebtPaymentMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
-  const getAccount = (id: string) => accounts.find((a: any) => a?.id === id);
+  const getAccount = (id: string) => accounts.find((a) => a.id === id);
 
   const [isPayLater, setIsPayLater] = useState(false);
   const [payLaterAccountId, setPayLaterAccountId] = useState<string>("");
   const [installments, setInstallments] = useState<number>(1);
   const [startMonth, setStartMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
-  const debtAccounts = accounts.filter((a: any) => a?.type === "credit_card");
+  const debtAccounts = accounts.filter((a) => a.type === "credit_card");
   const transferToAccount = transferToAccountId ? getAccount(transferToAccountId) : null;
   const isDebtPayment = type === "transfer" && transferToAccount?.type === "credit_card";
 
@@ -42,18 +43,18 @@ export default function AddTransactionForm() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.id) return;
 
-      const { data: accountsData } = await sb.from("accounts").select("*").eq("user_id", user.id).order("name");
-      const accountsList = (accountsData ?? []) as any[];
+      const { data: accountsData } = await supabase.from("accounts").select("*").eq("user_id", user.id).order("name");
+      const accountsList = (accountsData ?? []) as Account[];
       setAccounts(accountsList);
 
-      const { data: catsData } = await sb.from("categories").select("*").order("name");
-      const catsList = (catsData ?? []) as any[];
+      const { data: catsData } = await supabase.from("categories").select("*").order("name");
+      const catsList = (catsData ?? []) as Category[];
       setCategories(catsList);
 
       if (accountsList.length > 0) setAccountId(accountsList[0]?.id ?? "");
       if (catsList.length > 0) setCategoryId(catsList[0]?.id ?? "");
 
-      const firstCredit = accountsList.find((a: any) => a?.type === "credit_card");
+      const firstCredit = accountsList.find((a) => a.type === "credit_card");
       if (firstCredit) setPayLaterAccountId(firstCredit.id);
     };
 
@@ -78,16 +79,36 @@ export default function AddTransactionForm() {
         return;
       }
 
-      const amt = Number(amount);
+      const amt = parsePositiveAmount(amount);
       const effectiveAccountId = type === "expense" && isPayLater ? payLaterAccountId : accountId;
-      if (!effectiveAccountId || !amt) {
+      if (!amt) {
+        toast({ title: "Invalid amount", description: "Enter a valid amount greater than 0", variant: "destructive" });
+        return;
+      }
+
+      if (!effectiveAccountId || !isValidUuid(effectiveAccountId)) {
         toast({ title: "Missing fields", description: "Please select account and amount", variant: "destructive" });
+        return;
+      }
+
+      if (!accounts.some((a) => a.id === effectiveAccountId)) {
+        toast({ title: "Invalid account", description: "Selected account is not available", variant: "destructive" });
+        return;
+      }
+
+      if (categoryId && (!isValidUuid(categoryId) || !categories.some((c) => c.id === categoryId))) {
+        toast({ title: "Invalid category", description: "Selected category is not valid", variant: "destructive" });
+        return;
+      }
+
+      if (description.trim().length > 160) {
+        toast({ title: "Invalid description", description: "Description must be 160 characters or fewer", variant: "destructive" });
         return;
       }
 
       // Month-level guard for debt payments (transfer TO credit card)
       if (isDebtPayment) {
-        if (!transferToAccountId) {
+        if (!transferToAccountId || !isValidUuid(transferToAccountId)) {
           toast({ title: "Missing fields", description: "Please select a destination account", variant: "destructive" });
           return;
         }
@@ -102,7 +123,7 @@ export default function AddTransactionForm() {
         nextMonth.setMonth(nextMonth.getMonth() + 1);
         const end = nextMonth.toISOString().slice(0, 10);
 
-        const { data: monthTx, error: monthTxErr } = await sb
+        const { data: monthTx, error: monthTxErr } = await supabase
           .from("transactions")
           .select("account_id, type, amount, date, transfer_to_account_id")
           .eq("user_id", user.id)
@@ -150,6 +171,11 @@ export default function AddTransactionForm() {
 
       // Insert transaction(s) - for PayLater with installments, create multiple transactions
       if (type === "expense" && isPayLater && installments > 1) {
+        if (!Number.isInteger(installments) || installments < 1 || installments > 12) {
+          toast({ title: "Invalid installments", description: "Installments must be between 1 and 12", variant: "destructive" });
+          return;
+        }
+
         const installmentAmount = amt / installments;
         const transactions = [];
 
@@ -170,18 +196,35 @@ export default function AddTransactionForm() {
           });
         }
 
-        const { error } = await sb.from("transactions").insert(transactions);
+        const { error } = await supabase.from("transactions").insert(transactions);
         if (error) {
           toast({ title: "Error", description: error.message, variant: "destructive" });
           return;
         }
 
         // Update debt account balance (sum of all installments)
-        const { data: acc } = await sb.from("accounts").select("balance").eq("id", effectiveAccountId).single();
+        const { data: acc } = await supabase.from("accounts").select("balance").eq("id", effectiveAccountId).single();
         const current = Number(acc?.balance || 0);
         const newBal = current + amt; // Debt increases by total amount
-        await sb.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
+        await supabase.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
       } else {
+        if (type === "transfer") {
+          if (!transferToAccountId || !isValidUuid(transferToAccountId)) {
+            toast({ title: "Invalid transfer", description: "Please choose a valid destination account", variant: "destructive" });
+            return;
+          }
+
+          if (transferToAccountId === accountId) {
+            toast({ title: "Invalid transfer", description: "Source and destination accounts must be different", variant: "destructive" });
+            return;
+          }
+
+          if (!accounts.some((a) => a.id === transferToAccountId)) {
+            toast({ title: "Invalid transfer", description: "Destination account is not available", variant: "destructive" });
+            return;
+          }
+        }
+
         // Single transaction
         const transactionDate = isDebtPayment
           ? `${debtPaymentMonth}-01`
@@ -201,7 +244,7 @@ export default function AddTransactionForm() {
           }
           return `Debt - ${label}`;
         })();
-        const { error, data: inserted } = await sb.from("transactions").insert({
+        const { error, data: inserted } = await supabase.from("transactions").insert({
           user_id: user.id,
           account_id: effectiveAccountId,
           category_id: categoryId || null,
@@ -220,7 +263,7 @@ export default function AddTransactionForm() {
         // Update balances for single transaction
         if (type === "income") {
           const meta = getAccount(effectiveAccountId);
-          const { data: acc } = await sb.from("accounts").select("balance").eq("id", effectiveAccountId).single();
+          const { data: acc } = await supabase.from("accounts").select("balance").eq("id", effectiveAccountId).single();
           const current = Number(acc?.balance || 0);
           if (meta?.type === "credit_card" && current - amt < 0) {
             toast({
@@ -231,17 +274,17 @@ export default function AddTransactionForm() {
             return;
           }
           const newBal = meta?.type === "credit_card" ? current - amt : current + amt;
-          await sb.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
+          await supabase.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
         } else if (type === "expense") {
           const meta = getAccount(effectiveAccountId);
-          const { data: acc } = await sb.from("accounts").select("balance").eq("id", effectiveAccountId).single();
+          const { data: acc } = await supabase.from("accounts").select("balance").eq("id", effectiveAccountId).single();
           const current = Number(acc?.balance || 0);
           const newBal = meta?.type === "credit_card" ? current + amt : current - amt;
-          await sb.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
+          await supabase.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
         } else if (type === "transfer") {
           // subtract from source
-          const { data: src } = await sb.from("accounts").select("balance").eq("id", accountId).single();
-          const { data: dst } = await sb.from("accounts").select("balance").eq("id", transferToAccountId).single();
+          const { data: src } = await supabase.from("accounts").select("balance").eq("id", accountId).single();
+          const { data: dst } = await supabase.from("accounts").select("balance").eq("id", transferToAccountId).single();
           const srcMeta = getAccount(accountId);
           const dstMeta = getAccount(transferToAccountId);
           if (!dst) {
@@ -259,8 +302,8 @@ export default function AddTransactionForm() {
               });
               return;
             }
-            await sb.from("accounts").update({ balance: nextSrc }).eq("id", accountId);
-            await sb.from("accounts").update({ balance: nextDst }).eq("id", transferToAccountId);
+            await supabase.from("accounts").update({ balance: nextSrc }).eq("id", accountId);
+            await supabase.from("accounts").update({ balance: nextDst }).eq("id", transferToAccountId);
           }
         }
       }
@@ -356,13 +399,13 @@ export default function AddTransactionForm() {
           }}
         >
           {(type === "expense" && isPayLater
-            ? accounts.filter((a: any) => a?.type === "credit_card")
-            : accounts.filter((a: any) => a?.type !== "credit_card")
-          ).map((a: any) => (
+            ? accounts.filter((a) => a.type === "credit_card")
+            : accounts.filter((a) => a.type !== "credit_card")
+          ).map((a) => (
             <option value={a.id} key={a.id}>{a.name} ({a.currency})</option>
           ))}
         </select>
-        {type === "expense" && isPayLater && accounts.filter((a: any) => a?.type === "credit_card").length === 0 && (
+        {type === "expense" && isPayLater && accounts.filter((a) => a.type === "credit_card").length === 0 && (
           <p className="mt-2 text-xs text-muted-foreground">Create a PayLater/Debt account first (type: Credit Card) in Accounts.</p>
         )}
       </div>

@@ -37,6 +37,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
       accounts: {
         Row: {
@@ -87,6 +88,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
       categories: {
         Row: {
@@ -119,6 +121,7 @@ export interface Database {
           is_default?: boolean;
           created_at?: string;
         };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
       transactions: {
         Row: {
@@ -160,6 +163,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
       budgets: {
         Row: {
@@ -195,6 +199,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
       goals: {
         Row: {
@@ -236,6 +241,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
       user_preferences: {
         Row: {
@@ -268,6 +274,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
     };
     Views: {};

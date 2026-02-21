@@ -1,16 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, isValidUuid } from "@/lib/utils";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2 } from "lucide-react";
 import Tooltip from "@/components/ui/tooltip";
-import AddTransactionModal from "@/components/transactions/AddTransactionModal";
-import TransactionDetailModal from "@/components/transactions/TransactionDetailModal";
 import { useToast } from "@/components/ui/use-toast";
 import { TableSkeleton } from "@/components/ui/skeleton";
+
+const AddTransactionModal = dynamic(() => import("@/components/transactions/AddTransactionModal"), {
+  ssr: false,
+});
+
+const TransactionDetailModal = dynamic(() => import("@/components/transactions/TransactionDetailModal"), {
+  ssr: false,
+});
 
 
 export default function TransactionsPage() {
@@ -34,6 +41,23 @@ export default function TransactionsPage() {
   const deleteTransaction = async (transaction: any) => {
     setIsDeleting(true);
     try {
+      if (!transaction?.id || !isValidUuid(transaction.id)) {
+        toast({ title: "Error", description: "Invalid transaction id", variant: "destructive" });
+        return;
+      }
+
+      if (!transaction?.account_id || !isValidUuid(transaction.account_id)) {
+        toast({ title: "Error", description: "Invalid source account id", variant: "destructive" });
+        return;
+      }
+
+      if (transaction?.type === "transfer") {
+        if (!transaction?.transfer_to_account_id || !isValidUuid(transaction.transfer_to_account_id)) {
+          toast({ title: "Error", description: "Invalid destination account id", variant: "destructive" });
+          return;
+        }
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.id) {
         toast({ title: "Not signed in", description: "You must be signed in to delete transactions", variant: "destructive" });

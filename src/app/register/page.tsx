@@ -113,10 +113,13 @@ export default function RegisterPage() {
           title: "Error",
           description:
             error.message === "Database error saving new user"
-              ? "Database trigger failed. Make sure you ran supabase/schema.sql in Supabase SQL Editor (extensions + tables + handle_new_user trigger)."
+              ? "Registration failed. Please try again or contact support."
               : error.message,
           variant: "destructive",
         });
+        if (error.message === "Database error saving new user") {
+          console.error("Registration DB trigger error — ensure supabase/schema.sql has been run (extensions + tables + handle_new_user trigger).");
+        }
         return;
       }
 

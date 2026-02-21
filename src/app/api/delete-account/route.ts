@@ -2,13 +2,29 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { assertSameOrigin } from "@/lib/security/origin";
+import { consumeRateLimit, getClientIp } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
+  try { assertSameOrigin(request); } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const clientIp = getClientIp(request);
+  const limit = consumeRateLimit(`delete-account:${clientIp}`, 5, 15 * 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const body = await request.json().catch(() => ({}));
   const password = typeof body?.password === "string" ? body.password : "";
 
   if (!password) {
     return NextResponse.json({ error: "Password is required" }, { status: 400 });
+  }
+
+  if (password.length < 6 || password.length > 128) {
+    return NextResponse.json({ error: "Invalid password format" }, { status: 400 });
   }
 
   const cookieStore = cookies();
@@ -71,7 +87,8 @@ export async function POST(request: Request) {
 
   const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
   if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    console.error("delete-account: failed to delete user", deleteError.message);
+    return NextResponse.json({ error: "Failed to delete account" }, { status: 500 });
   }
 
   const response = NextResponse.json({ ok: true });

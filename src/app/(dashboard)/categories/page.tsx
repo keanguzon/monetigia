@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Tags, ArrowDownLeft, ArrowUpRight, Edit2 } from "lucide-react";
-import AddCategoryModal from "@/components/categories/AddCategoryModal";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
+import { isValidUuid } from "@/lib/utils";
+
+const AddCategoryModal = dynamic(() => import("@/components/categories/AddCategoryModal"), {
+  ssr: false,
+});
 
 type Category = {
   id: string;
@@ -37,13 +42,33 @@ export default function CategoriesPage() {
   };
 
   const saveCategoryName = async (categoryId: string) => {
+    if (!isValidUuid(categoryId)) {
+      toast({ title: "Error", description: "Invalid category id", variant: "destructive" });
+      return;
+    }
+
     const newName = editingCategoryName.trim();
     if (!newName) {
       setEditingCategoryId(null);
       return;
     }
 
+    if (newName.length > 50) {
+      toast({ title: "Error", description: "Category name must be 50 characters or fewer", variant: "destructive" });
+      return;
+    }
+
     const currentCat = categories.find((c) => c.id === categoryId);
+    if (!currentCat) {
+      toast({ title: "Error", description: "Category not found", variant: "destructive" });
+      return;
+    }
+
+    if (currentCat.is_default) {
+      toast({ title: "Error", description: "Default categories cannot be renamed", variant: "destructive" });
+      return;
+    }
+
     if (currentCat && currentCat.name === newName) {
       setEditingCategoryId(null);
       return;

@@ -80,9 +80,9 @@ export default function SettingsPage() {
   const sendPasswordSetupLink = async () => {
     setSendingPasswordLink(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const email = session?.user?.email;
-      if (!email) throw new Error("No email found for this account");
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const email = user?.email;
+      if (userError || !email) throw new Error("No email found for this account");
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
@@ -165,14 +165,14 @@ export default function SettingsPage() {
 
     setChangingPassword(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.email) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user?.email) {
         throw new Error("Not authenticated");
       }
 
       // Reauthenticate with current password
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: session.user.email,
+        email: user.email,
         password: currentPassword,
       });
 
@@ -259,30 +259,30 @@ export default function SettingsPage() {
 
   const loadProfile = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setCurrentEmail(session.user.email ?? "");
-        // Load user profile
-        const { data: userData } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", session.user.id)
-          .single();
-        if (userData) {
-          setProfile(userData);
-          setName((userData as any).name || "");
-          setUsername((userData as any).username || "");
-          setAvatarUrl((userData as any).avatar_url || "");
-        }
-        // Load user preferences (currency)
-        const { data: prefData } = await supabase
-          .from("user_preferences")
-          .select("currency")
-          .eq("user_id", session.user.id)
-          .single();
-        if (prefData && (prefData as any).currency) {
-          setCurrency((prefData as any).currency);
-        }
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error("Not authenticated");
+
+      setCurrentEmail(user.email ?? "");
+      // Load user profile
+      const { data: userData } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      if (userData) {
+        setProfile(userData);
+        setName((userData as any).name || "");
+        setUsername((userData as any).username || "");
+        setAvatarUrl((userData as any).avatar_url || "");
+      }
+      // Load user preferences (currency)
+      const { data: prefData } = await supabase
+        .from("user_preferences")
+        .select("currency")
+        .eq("user_id", user.id)
+        .single();
+      if (prefData && (prefData as any).currency) {
+        setCurrency((prefData as any).currency);
       }
     } catch (error) {
       console.error("Error loading profile:", error);
@@ -386,14 +386,14 @@ export default function SettingsPage() {
       }
 
       // Sync public profile record after confirmed
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.id) {
-        const { error: updateError } = await (supabase as any)
-          .from("users")
-          .update({ email: authedEmail })
-          .eq("id", session.user.id);
-        if (updateError) throw updateError;
-      }
+      const { data: { user: syncUser }, error: syncError } = await supabase.auth.getUser();
+      if (syncError || !syncUser?.id) throw new Error("Not authenticated");
+
+      const { error: updateError } = await (supabase as any)
+        .from("users")
+        .update({ email: authedEmail })
+        .eq("id", syncUser.id);
+      if (updateError) throw updateError;
 
       setCurrentEmail(authedEmail);
       setNewEmail("");
@@ -432,11 +432,11 @@ export default function SettingsPage() {
     setUploading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
 
       const fileExt = file.name.split(".").pop();
-      const fileName = `${session.user.id}-${Date.now()}.${fileExt}`;
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
       // Use server-side upload to bypass RLS and ensure bucket existence
@@ -462,7 +462,7 @@ export default function SettingsPage() {
       const { error: updateError } = await (supabase as any)
         .from("users")
         .update({ avatar_url: publicUrl })
-        .eq("id", session.user.id);
+        .eq("id", user.id);
 
       if (updateError) throw updateError;
 
@@ -486,18 +486,18 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
 
       // Update user profile
-      const { error: userError } = await (supabase as any)
+      const { error: profileError } = await (supabase as any)
         .from("users")
         .update({
           name,
           username: username.toLowerCase(),
         })
-        .eq("id", session.user.id);
-      if (userError) throw userError;
+        .eq("id", user.id);
+      if (profileError) throw profileError;
 
       toast({
         title: "Success!",
@@ -518,12 +518,12 @@ export default function SettingsPage() {
   const handleSaveCurrency = async () => {
     setSavingCurrency(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
 
       const { error: prefError } = await supabase
         .from("user_preferences")
-        .upsert({ user_id: session.user.id, currency } as any, { onConflict: "user_id" });
+        .upsert({ user_id: user.id, currency } as any, { onConflict: "user_id" });
       if (prefError) throw prefError;
 
       toast({

@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, isValidUuid } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,8 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, Plus, Wallet, CreditCard, Landmark, Smartphone, TrendingUp, GripVertical, Edit2, Trash2, LayoutGrid, List } from "lucide-react";
-import AddAccountModal from "@/components/accounts/AddAccountModal";
-import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import { useToast } from "@/components/ui/use-toast";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,6 +35,14 @@ const accountTypeLabels = {
   e_wallet: "E-Wallet",
   investment: "Investment",
 };
+
+const AddAccountModal = dynamic(() => import("@/components/accounts/AddAccountModal"), {
+  ssr: false,
+});
+
+const AddTransactionModal = dynamic(() => import("@/components/transactions/AddTransactionModal"), {
+  ssr: false,
+});
 
 export default function AccountsPage() {
   const supabase = createClient();
@@ -85,9 +92,11 @@ export default function AccountsPage() {
   }, [accounts]);
 
   const saveInterestRate = async (accountId: string) => {
+    if (!isValidUuid(accountId)) return;
+
     const raw = (interestRateDraft[accountId] ?? "").trim();
     const parsed = raw === "" ? 0 : Number(raw);
-    const nextRate = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    const nextRate = Number.isFinite(parsed) ? Math.max(0, Math.min(parsed, 100)) : 0;
 
     const currentAcc = accounts.find((a) => a?.id === accountId);
     const currentRate = Number(currentAcc?.interest_rate || 0);
@@ -119,6 +128,8 @@ export default function AccountsPage() {
   };
 
   const toggleIncludeInNetworth = async (accountId: string) => {
+    if (!isValidUuid(accountId)) return;
+
     const currentAcc = accounts.find((a) => a?.id === accountId);
     if (!currentAcc) return;
 
@@ -146,6 +157,17 @@ export default function AccountsPage() {
   };
 
   const deleteAccount = async (accountId: string) => {
+    if (!isValidUuid(accountId)) {
+      toast({ title: "Error", description: "Invalid wallet id", variant: "destructive" });
+      return;
+    }
+
+    const ownedAccount = accounts.find((a) => a?.id === accountId);
+    if (!ownedAccount) {
+      toast({ title: "Error", description: "Wallet not found", variant: "destructive" });
+      return;
+    }
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -172,11 +194,6 @@ export default function AccountsPage() {
       description: "The wallet has been successfully deleted.",
     });
 
-    toast({
-      title: "Wallet deleted",
-      description: "The wallet has been successfully deleted.",
-    });
-
     setAccountToDelete(null);
     loadAccounts();
   };
@@ -187,9 +204,19 @@ export default function AccountsPage() {
   };
 
   const saveAccountName = async (accountId: string) => {
+    if (!isValidUuid(accountId)) {
+      toast({ title: "Error", description: "Invalid wallet id", variant: "destructive" });
+      return;
+    }
+
     const newName = editingAccountName.trim();
     if (!newName) {
       setEditingAccountId(null);
+      return;
+    }
+
+    if (newName.length > 60) {
+      toast({ title: "Error", description: "Wallet name must be 60 characters or fewer", variant: "destructive" });
       return;
     }
 
@@ -356,6 +383,12 @@ export default function AccountsPage() {
   const saveAccountOrder = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user?.id) return;
+
+    const invalidAccount = accounts.some((acc) => !acc?.id || !isValidUuid(acc.id));
+    if (invalidAccount) {
+      toast({ title: "Error", description: "Invalid account ordering data", variant: "destructive" });
+      return;
+    }
 
     const updates = accounts.map((acc, idx) =>
       sb.from("accounts")

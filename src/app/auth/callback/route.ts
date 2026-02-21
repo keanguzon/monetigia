@@ -2,10 +2,35 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+/**
+ * Escape JSON.stringify output for safe embedding inside an inline <script> block.
+ * Prevents </script> breakout and problematic Unicode line separators.
+ */
+function escapeJsonForInlineScript(json: string): string {
+  return json
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+/**
+ * Only allow same-site relative paths. Blocks absolute URLs, protocol-relative
+ * URLs (//evil.com), backslash tricks (/\evil.com), and embedded protocols.
+ */
+function sanitizeRedirect(raw: string | null, fallback = "/dashboard"): string {
+  if (!raw) return fallback;
+  if (!raw.startsWith("/")) return fallback;
+  if (raw.startsWith("//")) return fallback;
+  if (raw.startsWith("/\\")) return fallback;
+  if (raw.includes("://")) return fallback;
+  return raw;
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const redirect = requestUrl.searchParams.get("redirect") || "/dashboard";
+  const redirect = sanitizeRedirect(requestUrl.searchParams.get("redirect"));
   const isPopup = requestUrl.searchParams.get("popup") === "1";
 
   const cookieStore = cookies();
@@ -43,9 +68,9 @@ export async function GET(request: Request) {
       (function () {
         try {
           if (window.opener && !window.opener.closed) {
-            window.opener.postMessage({ type: 'oauth-error', message: ${JSON.stringify(
-              error.message
-            )} }, ${JSON.stringify(requestUrl.origin)});
+            window.opener.postMessage({ type: 'oauth-error', message: ${escapeJsonForInlineScript(JSON.stringify(
+          error.message
+        ))} }, ${escapeJsonForInlineScript(JSON.stringify(requestUrl.origin))});
           }
         } catch (e) {}
         try { window.close(); } catch (e) {}
@@ -87,8 +112,8 @@ export async function GET(request: Request) {
   <body>
     <script>
       (function () {
-        var origin = ${JSON.stringify(requestUrl.origin)};
-        var redirectTo = ${JSON.stringify(redirect)};
+        var origin = ${escapeJsonForInlineScript(JSON.stringify(requestUrl.origin))};
+        var redirectTo = ${escapeJsonForInlineScript(JSON.stringify(redirect))};
 
         try {
           if (window.opener && !window.opener.closed) {

@@ -31,11 +31,21 @@ export async function middleware(request: NextRequest) {
   if (isProtectedRoute && !user) {
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set("redirect", request.nextUrl.pathname);
-    return NextResponse.redirect(redirectUrl);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    // Copy refreshed session cookies to prevent session loss
+    response.headers.getSetCookie().forEach((cookie) => {
+      redirectResponse.headers.append("Set-Cookie", cookie);
+    });
+    return redirectResponse;
   }
 
   if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const redirectResponse = NextResponse.redirect(new URL("/dashboard", request.url));
+    // Copy refreshed session cookies to prevent session loss
+    response.headers.getSetCookie().forEach((cookie) => {
+      redirectResponse.headers.append("Set-Cookie", cookie);
+    });
+    return redirectResponse;
   }
 
   return response;

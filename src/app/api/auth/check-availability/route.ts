@@ -1,7 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { assertSameOrigin } from "@/lib/security/origin";
+import { consumeRateLimit, getClientIp } from "@/lib/security/rate-limit";
 
 export async function POST(req: Request) {
+  try { assertSameOrigin(req); } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const clientIp = getClientIp(req);
+  const limit = consumeRateLimit(`check-availability:${clientIp}`, 20, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const body = await req.json().catch(() => ({}));
 
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -11,16 +23,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing email or username" }, { status: 400 });
   }
 
+  if (email) {
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!isEmail || email.length > 255) {
+      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
+    }
+  }
+
+  if (username) {
+    const validUsername = /^[a-z0-9_]{3,30}$/.test(username);
+    if (!validUsername) {
+      return NextResponse.json({ error: "Invalid username" }, { status: 400 });
+    }
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceKey) {
+    console.error("check-availability: missing required Supabase env vars");
     return NextResponse.json(
-      {
-        error:
-          "Server auth is not configured (missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)",
-      },
-      { status: 500 }
+      { error: "Service temporarily unavailable" },
+      { status: 503 }
     );
   }
 

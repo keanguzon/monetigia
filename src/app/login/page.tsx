@@ -13,6 +13,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { PiggyBank, Loader2, Eye, EyeOff } from "lucide-react";
 import { getRememberMePreference, saveRememberMePreference } from "@/lib/session-preferences";
 
+function sanitizeRedirect(raw: string | null, fallback = "/dashboard"): string {
+  if (!raw) return fallback;
+  if (!raw.startsWith("/")) return fallback;
+  if (raw.startsWith("//") || raw.startsWith("/\\") || raw.includes("://")) return fallback;
+  return raw;
+}
+
 function LoginPageInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,7 +31,7 @@ function LoginPageInner() {
   const { toast } = useToast();
   const supabase = createClient();
 
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const redirectTo = sanitizeRedirect(searchParams.get("redirect"));
 
   useEffect(() => {
     setRememberMe(getRememberMePreference());
