@@ -179,7 +179,24 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
           }
         });
 
-        setDebtByMonthForPaymentTarget(byMonth);
+        // Keep debt-month view consistent with Accounts page by carrying
+        // any negative month credit forward to newer months.
+        const normalizedByMonth: Record<string, number> = {};
+        const ascMonths = Object.keys(byMonth).sort((a, b) => (a < b ? -1 : 1));
+        let carry = 0;
+        for (const m of ascMonths) {
+          const raw = Number(byMonth[m] || 0);
+          const next = raw + carry;
+          if (next < 0) {
+            normalizedByMonth[m] = 0;
+            carry = next;
+          } else {
+            normalizedByMonth[m] = next;
+            carry = 0;
+          }
+        }
+
+        setDebtByMonthForPaymentTarget(normalizedByMonth);
       } finally {
         setIsDebtMonthLoading(false);
       }

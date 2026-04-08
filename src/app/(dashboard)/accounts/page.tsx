@@ -322,6 +322,10 @@ export default function AccountsPage() {
           } else {
             const byMonth: Record<string, number> = {};
             const itemsByMonth: Record<string, any[]> = {};
+            const byCreditAccount: Record<string, number> = {};
+            creditIds.forEach((id: string) => {
+              byCreditAccount[id] = 0;
+            });
 
             (txData || []).forEach((t: any) => {
               const monthKey = typeof t?.date === "string" ? t.date.slice(0, 7) : "unknown";
@@ -339,16 +343,82 @@ export default function AccountsPage() {
               // - transfer FROM credit_card increases debt (cash advance / movement)
               if (t.type === "expense" && isCreditSource) {
                 byMonth[monthKey] += amt;
+                byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) + amt;
                 itemsByMonth[monthKey].push(t);
               } else if (t.type === "income" && isCreditSource) {
                 byMonth[monthKey] -= amt;
+                byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) - amt;
               } else if (t.type === "transfer") {
                 if (isCreditDestination) byMonth[monthKey] -= amt;
                 if (isCreditSource) byMonth[monthKey] += amt;
+                if (isCreditDestination) {
+                  byCreditAccount[t.transfer_to_account_id] = Number(byCreditAccount[t.transfer_to_account_id] || 0) - amt;
+                }
+                if (isCreditSource) {
+                  byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) + amt;
+                }
               }
             });
 
-            setDebtByMonth(byMonth);
+            // Normalize month buckets so historical overpayments (negative month values)
+            // roll forward to later months instead of inflating visible month totals.
+            const normalizedByMonth: Record<string, number> = {};
+            const ascMonths = Object.keys(byMonth)
+              .filter((k) => k && k !== "unknown")
+              .sort((a, b) => (a < b ? -1 : 1));
+            let carry = 0;
+            for (const m of ascMonths) {
+              const raw = Number(byMonth[m] || 0);
+              const next = raw + carry;
+              if (next < 0) {
+                normalizedByMonth[m] = 0;
+                carry = next;
+              } else {
+                normalizedByMonth[m] = next;
+                carry = 0;
+              }
+            }
+
+            // Keep stored credit-card balances aligned with transaction-derived debt.
+            const nextCreditBalanceById: Record<string, number> = {};
+            creditIds.forEach((id: string) => {
+              nextCreditBalanceById[id] = Math.max(0, Number(byCreditAccount[id] || 0));
+            });
+
+            const creditUpdates = accountsList
+              .filter((a: any) => a?.type === "credit_card" && a?.id)
+              .map((a: any) => {
+                const nextBal = Number(nextCreditBalanceById[a.id] || 0);
+                const currentBal = Number(a?.balance || 0);
+                return { id: a.id, currentBal, nextBal };
+              })
+              .filter((u) => Math.abs(u.nextBal - u.currentBal) > 0.005);
+
+            if (creditUpdates.length > 0) {
+              const syncResults = await Promise.all(
+                creditUpdates.map((u) =>
+                  sb
+                    .from("accounts")
+                    .update({ balance: u.nextBal })
+                    .eq("id", u.id)
+                    .eq("user_id", user.id)
+                )
+              );
+
+              const hasSyncError = syncResults.some((r: any) => !!r?.error);
+              if (hasSyncError) {
+                console.error("Failed to sync one or more credit-card balances from debt history", syncResults);
+              } else {
+                accountsList = accountsList.map((a: any) =>
+                  a?.type === "credit_card" && a?.id
+                    ? { ...a, balance: Number(nextCreditBalanceById[a.id] || 0) }
+                    : a
+                );
+                setAccounts(accountsList);
+              }
+            }
+
+            setDebtByMonth(normalizedByMonth);
             setExpenseItemsByMonth(itemsByMonth);
           }
         }
@@ -413,7 +483,7 @@ export default function AccountsPage() {
     const keys = Object.keys(debtByMonth).filter((k) => {
       if (!k || k === "unknown") return false;
       const debt = Math.max(0, Number(debtByMonth[k] || 0));
-      return debt > 0; // Only show months with outstanding debt
+      return debt > 0.005; // Only show months with meaningful outstanding debt
     });
     keys.sort((a, b) => (a < b ? 1 : -1));
     return keys;
