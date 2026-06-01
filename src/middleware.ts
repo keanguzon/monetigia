@@ -23,13 +23,13 @@ export async function middleware(request: NextRequest) {
   );
 
   // Auth routes (redirect if already logged in)
-  const authRoutes = ["/login", "/register", "/forgot-password", "/reset-password"];
+  const authRoutes = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
   const isAuthRoute = authRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   );
 
   if (isProtectedRoute && !user) {
-    const redirectUrl = new URL("/login", request.url);
+    const redirectUrl = new URL("/", request.url);
     redirectUrl.searchParams.set("redirect", request.nextUrl.pathname);
     const redirectResponse = NextResponse.redirect(redirectUrl);
     // Copy refreshed session cookies to prevent session loss
@@ -63,5 +63,6 @@ export const config = {
     "/register",
     "/forgot-password",
     "/reset-password",
+    "/verify-email",
   ],
 };

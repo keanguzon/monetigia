@@ -50,7 +50,6 @@ export default function ReportsPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [previousTransactions, setPreviousTransactions] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [viewMode, setViewMode] = useState<"purchases" | "cashflow">("purchases");
   const [currency, setCurrency] = useState("PHP");
   const [isDark, setIsDark] = useState(false);
   const [dateRange, setDateRange] = useState<"last7" | "last30" | "thisMonth">("last30");
@@ -196,33 +195,20 @@ export default function ReportsPage() {
         )
         .reduce((sum: number, t: any) => sum + Number(t.amount), 0);
 
-      let totalIn = 0;
-      let totalOut = 0;
-      let txCount = 0;
+      const incomeTx = periodTransactions.filter((t: any) => t.type === "income" && !isCredit(t.account_id));
+      const expenseTx = periodTransactions.filter((t: any) => t.type === "expense" && !isCredit(t.account_id));
+      const debtPayTx = periodTransactions.filter(
+        (t: any) =>
+          t.type === "transfer" &&
+          !isCredit(t.account_id) &&
+          isCredit(t.transfer_to_account_id)
+      );
 
-      if (viewMode === "purchases") {
-        const incomeTx = periodTransactions.filter((t: any) => t.type === "income" && !isCredit(t.account_id));
-        const expenseTx = periodTransactions.filter((t: any) => t.type === "expense");
-
-        totalIn = incomeTx.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-        totalOut = expenseTx.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-        txCount = incomeTx.length + expenseTx.length;
-      } else {
-        const incomeTx = periodTransactions.filter((t: any) => t.type === "income" && !isCredit(t.account_id));
-        const expenseTx = periodTransactions.filter((t: any) => t.type === "expense" && !isCredit(t.account_id));
-        const debtPayTx = periodTransactions.filter(
-          (t: any) =>
-            t.type === "transfer" &&
-            !isCredit(t.account_id) &&
-            isCredit(t.transfer_to_account_id)
-        );
-
-        totalIn = incomeTx.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-        totalOut =
-          expenseTx.reduce((sum: number, t: any) => sum + Number(t.amount), 0) +
-          debtPayTx.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-        txCount = incomeTx.length + expenseTx.length + debtPayTx.length;
-      }
+      const totalIn = incomeTx.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+      const totalOut =
+        expenseTx.reduce((sum: number, t: any) => sum + Number(t.amount), 0) +
+        debtPayTx.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+      const txCount = incomeTx.length + expenseTx.length + debtPayTx.length;
 
       return {
         totalIn,
@@ -257,36 +243,24 @@ export default function ReportsPage() {
       categoryMap[key].count += 1;
     };
 
-    if (viewMode === "purchases") {
-      const expenseTx = txs.filter((t: any) => t.type === "expense");
-      expenseTx.forEach((t: any) => {
-        const cat = t.category;
-        if (cat) {
-          addCategory(cat.id, { name: cat.name, color: cat.color || null, total: Number(t.amount) });
-        } else {
-          addCategory("uncategorized", { name: "Uncategorized", color: null, total: Number(t.amount) });
-        }
-      });
-    } else {
-      const expenseTx = txs.filter((t: any) => t.type === "expense" && !isCredit(t.account_id));
-      const debtPayTx = txs.filter(
-        (t: any) =>
-          t.type === "transfer" &&
-          !isCredit(t.account_id) &&
-          isCredit(t.transfer_to_account_id)
-      );
-      expenseTx.forEach((t: any) => {
-        const cat = t.category;
-        if (cat) {
-          addCategory(cat.id, { name: cat.name, color: cat.color || null, total: Number(t.amount) });
-        } else {
-          addCategory("uncategorized", { name: "Uncategorized", color: null, total: Number(t.amount) });
-        }
-      });
-      debtPayTx.forEach((t: any) => {
-        addCategory("debt_payment", { name: "Debt payments", color: null, total: Number(t.amount) });
-      });
-    }
+    const expenseTx = txs.filter((t: any) => t.type === "expense" && !isCredit(t.account_id));
+    const debtPayTx = txs.filter(
+      (t: any) =>
+        t.type === "transfer" &&
+        !isCredit(t.account_id) &&
+        isCredit(t.transfer_to_account_id)
+    );
+    expenseTx.forEach((t: any) => {
+      const cat = t.category;
+      if (cat) {
+        addCategory(cat.id, { name: cat.name, color: cat.color || null, total: Number(t.amount) });
+      } else {
+        addCategory("uncategorized", { name: "Uncategorized", color: null, total: Number(t.amount) });
+      }
+    });
+    debtPayTx.forEach((t: any) => {
+      addCategory("debt_payment", { name: "Debt payments", color: null, total: Number(t.amount) });
+    });
 
     const net = current.totalIn - current.totalOut;
     const topCategories = Object.values(categoryMap)
@@ -336,7 +310,7 @@ export default function ReportsPage() {
         dailyExpense,
       },
     };
-  }, [transactions, previousTransactions, accounts, accountById, viewMode]);
+  }, [transactions, previousTransactions, accounts, accountById]);
 
   if (loading) {
     return (
@@ -356,19 +330,8 @@ export default function ReportsPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant={viewMode === "purchases" ? "default" : "outline"}
-          onClick={() => setViewMode("purchases")}
-        >
-          Spending (Purchases)
-        </Button>
-        <Button
-          size="sm"
-          variant={viewMode === "cashflow" ? "default" : "outline"}
-          onClick={() => setViewMode("cashflow")}
-        >
-          Cashflow (Paid)
+        <Button size="sm" variant="default" disabled>
+          Unified Cashflow View
         </Button>
         <div className="flex items-center gap-2 ml-auto">
           <span className="text-xs text-muted-foreground">Range</span>
@@ -499,9 +462,7 @@ export default function ReportsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Top Categories</CardTitle>
-          <CardDescription>
-            {viewMode === "purchases" ? "Your purchases breakdown" : "Your cash outflow breakdown"}
-          </CardDescription>
+          <CardDescription>Your cash outflow breakdown</CardDescription>
         </CardHeader>
         <CardContent>
           {computed.topCategories.length > 0 ? (

@@ -269,6 +269,18 @@ BEGIN
   INSERT INTO public.user_preferences (user_id)
   VALUES (NEW.id);
   
+  -- Create default categories
+  INSERT INTO public.categories (user_id, name, type, icon, color, is_default) VALUES
+    (NEW.id, 'Salary', 'income', 'Banknote', '#22c55e', FALSE),
+    (NEW.id, 'Freelance', 'income', 'Laptop', '#3b82f6', FALSE),
+    (NEW.id, 'Other Income', 'income', 'Plus', '#6b7280', FALSE),
+    (NEW.id, 'Food & Dining', 'expense', 'UtensilsCrossed', '#f97316', FALSE),
+    (NEW.id, 'Transportation', 'expense', 'Car', '#eab308', FALSE),
+    (NEW.id, 'Shopping', 'expense', 'ShoppingBag', '#ec4899', FALSE),
+    (NEW.id, 'Bills & Utilities', 'expense', 'Receipt', '#ef4444', FALSE),
+    (NEW.id, 'Entertainment', 'expense', 'Film', '#8b5cf6', FALSE),
+    (NEW.id, 'Other Expense', 'expense', 'Minus', '#6b7280', FALSE);
+  
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -277,27 +289,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- =====================================================
--- STEP 8: INSERT DEFAULT CATEGORIES
--- =====================================================
-INSERT INTO public.categories (name, type, icon, color, is_default) VALUES
-  ('Salary', 'income', 'Banknote', '#22c55e', TRUE),
-  ('Freelance', 'income', 'Laptop', '#3b82f6', TRUE),
-  ('Investments', 'income', 'TrendingUp', '#8b5cf6', TRUE),
-  ('Gifts', 'income', 'Gift', '#ec4899', TRUE),
-  ('Other Income', 'income', 'Plus', '#6b7280', TRUE),
-  ('Food & Dining', 'expense', 'UtensilsCrossed', '#f97316', TRUE),
-  ('Transportation', 'expense', 'Car', '#eab308', TRUE),
-  ('Shopping', 'expense', 'ShoppingBag', '#ec4899', TRUE),
-  ('Entertainment', 'expense', 'Film', '#8b5cf6', TRUE),
-  ('Bills & Utilities', 'expense', 'Receipt', '#ef4444', TRUE),
-  ('Healthcare', 'expense', 'Heart', '#14b8a6', TRUE),
-  ('Education', 'expense', 'GraduationCap', '#3b82f6', TRUE),
-  ('Travel', 'expense', 'Plane', '#06b6d4', TRUE),
-  ('Groceries', 'expense', 'ShoppingCart', '#84cc16', TRUE),
-  ('Other Expense', 'expense', 'Minus', '#6b7280', TRUE)
-ON CONFLICT DO NOTHING;
 
 -- =====================================================
 -- DATABASE RESET COMPLETE!

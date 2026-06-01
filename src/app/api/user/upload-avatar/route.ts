@@ -4,6 +4,8 @@ import { createClient as createAuthClient } from "@/lib/supabase/server";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { consumeRateLimit, getClientIp } from "@/lib/security/rate-limit";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try { assertSameOrigin(request); } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

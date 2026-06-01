@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Manrope, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import "./landing.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
@@ -8,7 +8,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { LoadingBar } from "@/components/ui/loading-bar";
 import ThemeTransitionOverlay from "@/components/theme/ThemeTransitionOverlay";
 
-const inter = Inter({ subsets: ["latin"] });
+const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
+const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage" });
 
 export const metadata: Metadata = {
   title: "Buko Juice - Money Tracker",
@@ -26,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${manrope.className} ${manrope.variable} ${bricolage.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

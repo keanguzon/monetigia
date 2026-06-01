@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Tags, ArrowDownLeft, ArrowUpRight, Edit2 } from "lucide-react";
+import { Plus, Tags, ArrowDownLeft, ArrowUpRight, Edit2, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
 import { isValidUuid } from "@/lib/utils";
@@ -64,11 +64,6 @@ export default function CategoriesPage() {
       return;
     }
 
-    if (currentCat.is_default) {
-      toast({ title: "Error", description: "Default categories cannot be renamed", variant: "destructive" });
-      return;
-    }
-
     if (currentCat && currentCat.name === newName) {
       setEditingCategoryId(null);
       return;
@@ -93,6 +88,32 @@ export default function CategoriesPage() {
     loadCategories();
   };
 
+  const deleteCategory = async (categoryId: string) => {
+    if (!isValidUuid(categoryId)) {
+      toast({ title: "Error", description: "Invalid category id", variant: "destructive" });
+      return;
+    }
+
+    if (confirm("Are you sure you want to delete this category? Any transactions using this category will be updated to 'No category', and budgets for this category will be deleted.")) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return;
+
+      const { error } = await sb
+        .from("categories")
+        .delete()
+        .eq("id", categoryId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        toast({ title: "Error", description: "Failed to delete category: " + error.message, variant: "destructive" });
+        return;
+      }
+
+      toast({ title: "Category deleted", description: "The category has been successfully deleted." });
+      loadCategories();
+    }
+  };
+
   const loadCategories = async () => {
     setIsLoading(true);
     const {
@@ -108,7 +129,7 @@ export default function CategoriesPage() {
     const { data } = await sb
       .from("categories")
       .select("*")
-      .or(`user_id.eq.${user.id},is_default.eq.true`)
+      .eq("user_id", user.id)
       .order("name");
 
     setCategories((data ?? []) as Category[]);
@@ -193,9 +214,7 @@ export default function CategoriesPage() {
                         <span className="font-medium truncate">{category.name}</span>
                       )}
                     </div>
-                    {category.is_default ? (
-                      <span className="text-xs text-muted-foreground">Default</span>
-                    ) : (
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -206,7 +225,17 @@ export default function CategoriesPage() {
                       >
                         <Edit2 className="h-4 w-4 text-blue-500" />
                       </button>
-                    )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteCategory(category.id);
+                        }}
+                        className="p-1 rounded hover:bg-red-500/10 transition-colors"
+                        title="Delete category"
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -252,9 +281,7 @@ export default function CategoriesPage() {
                         <span className="font-medium truncate">{category.name}</span>
                       )}
                     </div>
-                    {category.is_default ? (
-                      <span className="text-xs text-muted-foreground">Default</span>
-                    ) : (
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -265,7 +292,17 @@ export default function CategoriesPage() {
                       >
                         <Edit2 className="h-4 w-4 text-blue-500" />
                       </button>
-                    )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteCategory(category.id);
+                        }}
+                        className="p-1 rounded hover:bg-red-500/10 transition-colors"
+                        title="Delete category"
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

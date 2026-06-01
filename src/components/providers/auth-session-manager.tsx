@@ -23,6 +23,9 @@ export function AuthSessionManager() {
     let isCancelled = false;
 
     const enforceRememberPreference = async () => {
+      if (!supabase || !supabase.auth) {
+        return;
+      }
       const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) !== "0";
       if (rememberMe) {
         sessionStorage.setItem(TAB_SESSION_KEY, "1");
