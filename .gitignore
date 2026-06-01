@@ -40,3 +40,7 @@ next-env.d.ts
 # Prisma
 /prisma/*.db
 /prisma/*.db-journal
+
+# Skill MD
+SKILL.md
+
