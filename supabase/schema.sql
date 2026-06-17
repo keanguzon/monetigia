@@ -1,5 +1,5 @@
 -- =====================================================
--- BUKO JUICE MONEY TRACKER - COMPLETE DATABASE RESET
+-- MONETIGIA MONEY TRACKER - COMPLETE DATABASE RESET
 -- =====================================================
 -- This script will DROP ALL existing tables and recreate them from scratch
 -- WARNING: This will delete ALL data AND ALL USERS in your database!

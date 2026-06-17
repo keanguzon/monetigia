@@ -121,13 +121,13 @@ function LandingPageInner() {
           <Link href="/" className="flex items-center space-x-2 group">
             <Image
               src="/logos/main-logo.png"
-              alt="Buko Juice Logo"
+              alt="Monetigia Logo"
               width={32}
               height={32}
               className="h-8 w-8 transition-transform duration-300 group-hover:scale-110"
             />
             <span className="text-xl font-black tracking-tight text-foreground">
-              Buko Juice
+              Monetigia
             </span>
           </Link>
           <nav className="flex items-center gap-4">
@@ -146,7 +146,7 @@ function LandingPageInner() {
         <section className="relative flex items-center justify-center pt-28 pb-0">
           <div className="container mx-auto px-4 md:px-8 grid gap-8 items-center md:grid-cols-12 max-w-6xl">
             
-            {/* Left Column: Premium Monospace Tag & "Buko Juice." Brand reveal */}
+            {/* Left Column: Premium Monospace Tag & "Monetigia." Brand reveal */}
             <div className="md:col-span-7 flex flex-col justify-center text-left space-y-6">
               {/* Minimal Monospace Secure Indicator */}
               <div className="font-mono text-primary tracking-widest text-[10px] uppercase font-bold">
@@ -156,27 +156,27 @@ function LandingPageInner() {
               {mounted ? (
                 <div className="space-y-4">
                   <BlurText
-                    text="Track Your Money"
+                    text="Trace Your Wealth"
                     className="text-5xl sm:text-7xl lg:text-8xl font-black tracking-tighter text-foreground leading-none font-heading"
                     staggerDelay={0.06}
                   />
                   <div className="text-xl sm:text-2xl font-black tracking-tight text-primary">
-                    Own your money. Every single peso.
+                    Follow the footprints of your money. Every single peso.
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <h1 className="text-5xl sm:text-7xl lg:text-8xl font-black tracking-tighter text-foreground leading-none font-heading">
-                    Track Your Money
+                    Trace Your Wealth
                   </h1>
                   <div className="text-xl sm:text-2xl font-black tracking-tight text-primary">
-                    Own your money. Every single peso.
+                    Follow the footprints of your money. Every single peso.
                   </div>
                 </div>
               )}
 
               <p className="text-base sm:text-lg leading-relaxed text-muted-foreground max-w-xl">
-                See where your money goes. Manage multiple financial accounts, wallets, and debts seamlessly with automated visual reports.
+                Trace the footprints of your wealth. Manage multiple accounts, wallets, and debts seamlessly with automated visual reports.
               </p>
 
               {/* Dynamic Feature Badges */}
@@ -204,8 +204,8 @@ function LandingPageInner() {
                 <CardHeader className="space-y-2 text-center pb-4">
                   <div className="mb-2 flex justify-center">
                     <Link href="/" className="flex items-center gap-2 transition-transform duration-200 hover:scale-105">
-                      <Image src="/logos/main-logo.png" alt="Buko Juice Logo" width={40} height={40} className="h-10 w-10" />
-                      <span className="text-2xl font-black tracking-tight text-foreground">Buko Juice</span>
+                      <Image src="/logos/main-logo.png" alt="Monetigia Logo" width={40} height={40} className="h-10 w-10" />
+                      <span className="text-2xl font-black tracking-tight text-foreground">Monetigia</span>
                     </Link>
                   </div>
                   <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
@@ -419,13 +419,13 @@ function LandingPageInner() {
           <div className="flex items-center gap-2">
             <Image
               src="/logos/main-logo.png"
-              alt="Buko Juice Logo"
+              alt="Monetigia Logo"
               width={20}
               height={20}
               className="h-5 w-5"
             />
             <p className="text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} Buko Juice Money Tracker.
+              &copy; {new Date().getFullYear()} Monetigia Money Tracker.
             </p>
           </div>
           <p className="text-xs text-muted-foreground">

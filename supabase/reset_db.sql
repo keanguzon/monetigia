@@ -1,4 +1,4 @@
--- Buko Juice Money Tracker - Full Reset Script
+-- Monetigia Money Tracker - Full Reset Script
 -- Usage (Supabase Dashboard): SQL Editor -> paste & run this file
 -- After this runs, re-run: supabase/schema.sql to recreate tables, policies, trigger, defaults.
 

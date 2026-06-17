@@ -1,4 +1,4 @@
-# Security Hardening Plan (SAST) — Buko Juice (Next.js + Supabase)
+# Security Hardening Plan (SAST) — Monetigia (Next.js + Supabase)
 
 Date: 2026-02-21  
 Scope: full workspace (`src/**`, Supabase SQL in `supabase/**`, config files).

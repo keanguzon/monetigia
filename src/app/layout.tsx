@@ -12,8 +12,8 @@ const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage" });
 
 export const metadata: Metadata = {
-  title: "Buko Juice - Money Tracker",
-  description: "Track your finances with ease. Manage expenses, income, accounts, and categories.",
+  title: "Monetigia - Money Tracker",
+  description: "Trace the footprints of your wealth with Monetigia. A premium personal finance tracker designed for clarity and control.",
   keywords: ["money tracker", "finance", "expenses", "accounts", "categories"],
   icons: {
     icon: "/logos/main-logo.png",

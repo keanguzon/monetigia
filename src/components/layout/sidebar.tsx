@@ -64,9 +64,9 @@ export function Sidebar({
           {/* Logo + Close button on mobile */}
           <div className="flex h-16 items-center justify-between border-b px-4">
             <Link href="/dashboard" className="flex items-center space-x-2" onClick={onClose}>
-              <Image src="/logos/main-logo.png" alt="Buko Juice Logo" width={32} height={32} className="h-8 w-8 flex-shrink-0" />
+              <Image src="/logos/main-logo.png" alt="Monetigia Logo" width={32} height={32} className="h-8 w-8 flex-shrink-0" />
               {!isCollapsed && (
-                <span className="text-xl font-bold transition-[opacity,color] duration-300 ease-in-out opacity-100">Buko Juice</span>
+                <span className="text-xl font-bold transition-[opacity,color] duration-300 ease-in-out opacity-100">Monetigia</span>
               )}
             </Link>
             {/* Close button - mobile only */}
