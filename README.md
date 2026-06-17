@@ -39,4 +39,4 @@ npm run dev
 
 ---
 
-Built with 💚 by the Monetigia Team
+Built with 💚 by Kean Guzon

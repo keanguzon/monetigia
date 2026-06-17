@@ -425,7 +425,7 @@ function LandingPageInner() {
               className="h-5 w-5"
             />
             <p className="text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} Monetigia Money Tracker.
+              &copy; {new Date().getFullYear()} Kean Guzon. All rights reserved.
             </p>
           </div>
           <p className="text-xs text-muted-foreground">
