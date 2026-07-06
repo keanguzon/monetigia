@@ -598,7 +598,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
               )}
               {selectedAccount ? (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Balance: <span className="font-medium text-foreground">{formatCurrency(selectedAccountBalance, selectedAccountCurrency)}</span>
+                  Balance: <span className="font-medium text-foreground">{formatCurrency(selectedAccountBalance)}</span>
                 </p>
               ) : null}
               {isPayLater && type === "expense" && accounts.filter((a: any) => a?.type === "credit_card").length === 0 && (
@@ -699,7 +699,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                 </select>
                 {transferToAccount ? (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Balance: <span className="font-medium text-foreground">{formatCurrency(transferToBalance, transferToCurrency)}</span>
+                    Balance: <span className="font-medium text-foreground">{formatCurrency(transferToBalance)}</span>
                   </p>
                 ) : null}
                 {isDebtPayment ? (
@@ -723,7 +723,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                     </p>
                     <p className="mt-2 text-base font-bold text-green-500">
                       {selectedDebtMonthLabel}{" "}
-                      - {isDebtMonthLoading ? "Loading..." : formatCurrency(selectedDebtMonthAmount, transferToCurrency)}
+                      - {isDebtMonthLoading ? "Loading..." : formatCurrency(selectedDebtMonthAmount)}
                     </p>
                   </div>
                 ) : null}

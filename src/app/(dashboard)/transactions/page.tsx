@@ -316,7 +316,7 @@ export default function TransactionsPage() {
               </p>
               <div className="bg-slate-100 dark:bg-slate-900 p-3 rounded-lg mb-6 text-sm">
                 <p className="font-medium">{deleteConfirm.description || deleteConfirm.category?.name || "Transaction"}</p>
-                <p className="text-muted-foreground">{formatCurrency(Number(deleteConfirm.amount), currency)} • {formatDate(deleteConfirm.date)}</p>
+                <p className="text-muted-foreground">{formatCurrency(Number(deleteConfirm.amount))} • {formatDate(deleteConfirm.date)}</p>
               </div>
               <div className="flex gap-3">
                 <button

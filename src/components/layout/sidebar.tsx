@@ -9,7 +9,6 @@ import {
   ArrowLeftRight,
   Wallet,
   Tags,
-  BarChart3,
   Settings,
   ChevronLeft,
   ChevronRight,
