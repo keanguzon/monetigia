@@ -6,10 +6,11 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, isValidUuid } from "@/lib/utils";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2 } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search } from "lucide-react";
 import Tooltip from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 
 const AddTransactionModal = dynamic(() => import("@/components/transactions/AddTransactionModal"), {
   ssr: false,
@@ -32,7 +33,7 @@ export default function TransactionsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [currency, setCurrency] = useState("PHP");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     loadTransactions();
@@ -46,67 +47,20 @@ export default function TransactionsPage() {
         return;
       }
 
-      if (!transaction?.account_id || !isValidUuid(transaction.account_id)) {
-        toast({ title: "Error", description: "Invalid source account id", variant: "destructive" });
-        return;
-      }
-
-      if (transaction?.type === "transfer") {
-        if (!transaction?.transfer_to_account_id || !isValidUuid(transaction.transfer_to_account_id)) {
-          toast({ title: "Error", description: "Invalid destination account id", variant: "destructive" });
-          return;
-        }
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.id) {
         toast({ title: "Not signed in", description: "You must be signed in to delete transactions", variant: "destructive" });
         return;
       }
 
-      const amt = Number(transaction.amount);
-
-      // Delete the transaction
-      const { error: deleteError } = await sb
-        .from("transactions")
-        .delete()
-        .eq("id", transaction.id)
-        .eq("user_id", user.id);
+      const { error: deleteError } = await sb.rpc('delete_transaction_atomic', {
+        p_transaction_id: transaction.id,
+        p_user_id: user.id
+      });
 
       if (deleteError) {
         toast({ title: "Error", description: deleteError.message, variant: "destructive" });
         return;
-      }
-
-      // Revert balance based on transaction type
-      if (transaction.type === "income") {
-        const { data: acc } = await sb.from("accounts").select("balance,type").eq("id", transaction.account_id).single();
-        const current = Number(acc?.balance || 0);
-        const newBal = acc?.type === "credit_card" ? current + amt : current - amt;
-        await sb.from("accounts").update({ balance: newBal }).eq("id", transaction.account_id);
-      } else if (transaction.type === "expense") {
-        const { data: acc } = await sb.from("accounts").select("balance,type").eq("id", transaction.account_id).single();
-        const current = Number(acc?.balance || 0);
-        const newBal = acc?.type === "credit_card" ? current - amt : current + amt;
-        await sb.from("accounts").update({ balance: newBal }).eq("id", transaction.account_id);
-      } else if (transaction.type === "transfer") {
-        const { data: src } = await sb.from("accounts").select("balance,type").eq("id", transaction.account_id).single();
-        const { data: dst } = await sb.from("accounts").select("balance,type").eq("id", transaction.transfer_to_account_id).single();
-        if (src && dst) {
-          const srcCurrent = Number(src.balance);
-          const dstCurrent = Number(dst.balance);
-
-          // Reverting a transfer means undoing whatever we did during creation.
-          // Normal accounts: src + amt, dst - amt.
-          // Credit cards are debt-style:
-          // - If src is credit_card: creation did src + amt, so revert is src - amt.
-          // - If dst is credit_card: creation did dst - amt, so revert is dst + amt.
-          const nextSrc = src.type === "credit_card" ? srcCurrent - amt : srcCurrent + amt;
-          const nextDst = dst.type === "credit_card" ? dstCurrent + amt : dstCurrent - amt;
-
-          await sb.from("accounts").update({ balance: nextSrc }).eq("id", transaction.account_id);
-          await sb.from("accounts").update({ balance: nextDst }).eq("id", transaction.transfer_to_account_id);
-        }
       }
 
       toast({ title: "Transaction deleted", description: "Transaction and balance have been reverted." });
@@ -125,15 +79,7 @@ export default function TransactionsPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    let userCurrency = "PHP";
     if (user?.id) {
-      const { data: pref } = await supabase
-        .from("user_preferences")
-        .select("currency")
-        .eq("user_id", user.id)
-        .single();
-      if (pref && (pref as any).currency) userCurrency = (pref as any).currency;
-      setCurrency(userCurrency);
 
       const { data, error } = await sb
         .from("transactions")
@@ -141,8 +87,8 @@ export default function TransactionsPage() {
           "id, user_id, account_id, category_id, type, amount, description, date, transfer_to_account_id, created_at, category:categories(id,name,color), account:accounts!account_id(id,name,type), transfer_to_account:accounts!transfer_to_account_id(id,name,type)"
         )
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
         .order("date", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(50);
 
       if (error) {
@@ -171,6 +117,18 @@ export default function TransactionsPage() {
         : filter === "income"
           ? "Income"
           : "Transfer";
+
+  const searchFilteredTransactions = filteredTransactions.filter((t) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      (t.description?.toLowerCase().includes(query)) ||
+      (t.category?.name?.toLowerCase().includes(query)) ||
+      (t.amount?.toString().includes(query)) ||
+      (t.account?.name?.toLowerCase().includes(query)) ||
+      (t.transfer_to_account?.name?.toLowerCase().includes(query))
+    );
+  });
 
   return (
     <>
@@ -215,7 +173,19 @@ export default function TransactionsPage() {
                 Transfer
               </Button>
             </div>
-            <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
+            <div className="flex flex-1 items-center space-x-2 sm:max-w-xs ml-auto w-full sm:w-auto">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search transactions..."
+                  className="pl-8 h-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+            <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto mt-2 sm:mt-0">
               <Plus className="mr-2 h-4 w-4" />
               Add Transaction
             </Button>
@@ -231,9 +201,9 @@ export default function TransactionsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {!isLoading && filteredTransactions && filteredTransactions.length > 0 ? (
+            {!isLoading && searchFilteredTransactions && searchFilteredTransactions.length > 0 ? (
               <div className="space-y-4">
-                {filteredTransactions.map((transaction, index) => (
+                {searchFilteredTransactions.map((transaction, index) => (
                   <div
                     key={transaction.id}
                     className="flex items-center justify-between p-4 rounded-lg border gap-3 transition-all duration-200 hover:scale-[1.01] hover:shadow-md"
@@ -288,7 +258,7 @@ export default function TransactionsPage() {
                             }`}
                         >
                           {transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : ""}
-                          {formatCurrency(Number(transaction.amount), currency)}
+                          {formatCurrency(Number(transaction.amount))}
                         </p>
                         <p className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                           {formatDate(transaction.date)}
@@ -381,7 +351,6 @@ export default function TransactionsPage() {
       <TransactionDetailModal
         isOpen={!!selectedTransaction}
         transaction={selectedTransaction}
-        currency={currency}
         onClose={() => setSelectedTransaction(null)}
         onRequestDelete={(tx) => setDeleteConfirm(tx)}
       />

@@ -52,7 +52,6 @@ export default function AccountsPage() {
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
   const [defaultTransactionAccountId, setDefaultTransactionAccountId] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
-  const [currency, setCurrency] = useState("PHP");
   const [interestRateDraft, setInterestRateDraft] = useState<Record<string, string>>({});
 
   const [isDebtLoading, setIsDebtLoading] = useState(false);
@@ -254,13 +253,6 @@ export default function AccountsPage() {
     } = await supabase.auth.getUser();
 
     if (user?.id) {
-      const { data: pref } = await supabase
-        .from("user_preferences")
-        .select("currency")
-        .eq("user_id", user.id)
-        .single();
-      if (pref && (pref as any).currency) setCurrency((pref as any).currency);
-
       let accountsList: any[] = [];
 
       const { data, error } = await supabase
@@ -566,7 +558,7 @@ export default function AccountsPage() {
           <CardContent className="space-y-4">
             <div>
               <p className="text-4xl font-bold text-primary">
-                {formatCurrency(currentMoney, currency)}
+                {formatCurrency(currentMoney)}
               </p>
               <p className="text-sm text-muted-foreground">
                 This excludes credit card/debt account balances
@@ -579,9 +571,9 @@ export default function AccountsPage() {
                   <p className="text-sm text-muted-foreground">
                     Debt selected ({selectedMonthsDetailLabel})
                   </p>
-                  <p className="font-semibold text-red-500">
-                    {isDebtLoading ? "Loading..." : `-${formatCurrency(Math.abs(selectedDebt), currency)}`}
-                  </p>
+                  <span className="font-semibold text-red-500">
+                    {isDebtLoading ? "Loading..." : `-${formatCurrency(Math.abs(selectedDebt))}`}
+                  </span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -654,9 +646,9 @@ export default function AccountsPage() {
               {previewAfterPay && (
                 <div className="pt-3 border-t">
                   <p className="text-sm text-muted-foreground mb-1">Money after paying selected debt</p>
-                  <p className="text-3xl font-bold text-foreground">
-                    {formatCurrency(previewMoney, currency)}
-                  </p>
+                  <div className={`text-2xl font-bold mt-1 ${previewMoney < 0 ? 'text-red-500' : 'text-primary'}`}>
+                    {formatCurrency(previewMoney)}
+                  </div>
                 </div>
               )}
             </div>
@@ -830,7 +822,7 @@ export default function AccountsPage() {
                           </CardHeader>
                           <CardContent>
                             <div className="text-2xl font-bold">
-                              {account.type === "credit_card" ? "-" : ""}{formatCurrency(Math.abs(Number(account.balance)), currency)}
+                              {account.type === "credit_card" ? "-" : ""}{formatCurrency(Math.abs(Number(account.balance)))}
                             </div>
                             <p className="text-xs text-muted-foreground">
                               {accountTypeLabels[account.type as keyof typeof accountTypeLabels]}
@@ -1004,8 +996,8 @@ export default function AccountsPage() {
                                   </div>
                                 )}
                                 <div className="text-right">
-                                  <p className="text-lg font-bold">
-                                    {account.type === "credit_card" ? "-" : ""}{formatCurrency(Math.abs(Number(account.balance)), currency)}
+                                  <p className={`font-semibold ${account.type === "credit_card" ? "text-red-500" : ""}`}>
+                                    {account.type === "credit_card" ? "-" : ""}{formatCurrency(Math.abs(Number(account.balance)))}
                                   </p>
                                   <p className="text-xs text-muted-foreground">Balance</p>
                                 </div>
@@ -1124,18 +1116,15 @@ export default function AccountsPage() {
                     <div key={m} className="rounded-lg border p-4">
                       <div className="flex items-center justify-between">
                         <p className="font-medium">{m}</p>
-                        <p className="font-semibold text-red-500">-{formatCurrency(Math.abs(monthDebt), currency)}</p>
+                        <p className="font-semibold text-red-500">-{formatCurrency(Math.abs(monthDebt))}</p>
                       </div>
 
                       {purchases.length > 0 && (
                         <div className="mt-3 space-y-2">
                           {purchases.slice(0, 8).map((t: any) => (
-                            <div key={t.id} className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                {t.description || t.category?.name || "Expense"}
-                                {t.account?.name ? <span className="opacity-70"> • {t.account.name}</span> : null}
-                              </span>
-                              <span className="font-medium">{formatCurrency(Number(t.amount || 0), currency)}</span>
+                            <div key={t.id} className="flex items-center justify-between text-sm p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                              <span className="font-medium truncate flex-1">{t.description || t.category?.name || "Credit Card Expense"}</span>
+                              <span className="font-medium">{formatCurrency(Number(t.amount || 0))}</span>
                             </div>
                           ))}
                           {purchases.length > 8 && (
@@ -1143,6 +1132,11 @@ export default function AccountsPage() {
                           )}
                         </div>
                       )}
+
+                      <div className="flex items-center justify-between text-sm pt-2 border-t mt-3">
+                        <p className="font-medium">Total Credit Statement</p>
+                        <p className="font-semibold text-red-500">-{formatCurrency(Math.abs(monthDebt))}</p>
+                      </div>
                     </div>
                   );
                 })}

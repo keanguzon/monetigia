@@ -33,7 +33,6 @@ export default function DashboardPage() {
   const [lastMonthIncome, setLastMonthIncome] = useState(0);
   const [lastMonthExpenses, setLastMonthExpenses] = useState(0);
   const [lastMonthBalance, setLastMonthBalance] = useState(0);
-  const [currency, setCurrency] = useState("PHP");
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<"last7" | "last30" | "thisMonth">("thisMonth");
 
@@ -82,15 +81,7 @@ export default function DashboardPage() {
     const loadData = async () => {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      let userCurrency = "PHP";
       if (user?.id) {
-        const { data: pref } = await supabase
-          .from("user_preferences")
-          .select("currency")
-          .eq("user_id", user.id)
-          .single();
-        if (pref && (pref as any).currency) userCurrency = (pref as any).currency;
-        setCurrency(userCurrency);
 
         // Get accounts
         const { data: accountsData } = await supabase
@@ -107,8 +98,8 @@ export default function DashboardPage() {
             "id, user_id, account_id, category_id, type, amount, description, date, transfer_to_account_id, created_at, category:categories(id,name,color), account:accounts!account_id(id,name,type)"
           )
           .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
           .order("date", { ascending: false })
+          .order("created_at", { ascending: false })
           .limit(3);
 
         if (txErr) {
@@ -220,7 +211,7 @@ export default function DashboardPage() {
   const statCards = [
     {
       title: "Total Balance",
-      value: formatCurrency(currentMoney, currency),
+      value: formatCurrency(currentMoney),
       icon: Wallet,
       description: `Across ${networthAccounts.length || 0} accounts (excluding debt)`,
       color: "text-primary",
@@ -228,7 +219,7 @@ export default function DashboardPage() {
     },
     {
       title: "Income",
-      value: formatCurrency(monthlyIncome, currency),
+      value: formatCurrency(monthlyIncome),
       icon: ArrowDownLeft,
       description: rangeLabel,
       color: "text-green-500",
@@ -236,7 +227,7 @@ export default function DashboardPage() {
     },
     {
       title: "Expenses",
-      value: formatCurrency(monthlyExpenses, currency),
+      value: formatCurrency(monthlyExpenses),
       icon: ArrowUpRight,
       description: rangeLabel,
       color: "text-red-500",
@@ -244,7 +235,7 @@ export default function DashboardPage() {
     },
     {
       title: "Net Savings",
-      value: formatCurrency(monthlyIncome - monthlyExpenses, currency),
+      value: formatCurrency(monthlyIncome - monthlyExpenses),
       icon: TrendingUp,
       description: rangeLabel,
       color: monthlyIncome - monthlyExpenses >= 0 ? "text-green-500" : "text-red-500",
@@ -392,7 +383,7 @@ export default function DashboardPage() {
                         }`}
                     >
                       {transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : ""}
-                      {formatCurrency(Number(transaction.amount), currency)}
+                      {formatCurrency(Number(transaction.amount))}
                     </span>
                   </div>
                 ))}

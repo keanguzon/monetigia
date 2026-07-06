@@ -31,7 +31,6 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
   const [description, setDescription] = useState("");
   const [transferToAccountId, setTransferToAccountId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const [currency, setCurrency] = useState("PHP");
   const [debtPaymentMonth, setDebtPaymentMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [debtByMonthForPaymentTarget, setDebtByMonthForPaymentTarget] = useState<Record<string, number>>({});
   const [isDebtMonthLoading, setIsDebtMonthLoading] = useState(false);
@@ -72,13 +71,6 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
   const loadData = async (preferredAccountId?: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user?.id) return;
-
-    const { data: pref } = await supabase
-      .from("user_preferences")
-      .select("currency")
-      .eq("user_id", user.id)
-      .single();
-    if (pref && (pref as any).currency) setCurrency((pref as any).currency);
 
     const { data: accountsData } = await sb.from("accounts").select("*").eq("user_id", user.id).order("name");
     const accountsList = (accountsData ?? []) as any[];
@@ -122,11 +114,9 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
   const effectiveAccountId = type === "expense" && isPayLater ? payLaterAccountId : accountId;
   const selectedAccount = effectiveAccountId ? getAccount(effectiveAccountId) : null;
   const selectedAccountBalance = Number(selectedAccount?.balance ?? 0);
-  const selectedAccountCurrency = selectedAccount?.currency || currency;
 
   const transferToAccount = transferToAccountId ? getAccount(transferToAccountId) : null;
   const transferToBalance = Number(transferToAccount?.balance ?? 0);
-  const transferToCurrency = transferToAccount?.currency || currency;
   const isDebtPayment = type === "transfer" && transferToAccount?.type === "credit_card";
 
   useEffect(() => {
@@ -267,7 +257,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
           if (currentDebt - amt < 0) {
             toast({
               title: "Payment too large",
-              description: `This would make your debt negative. Current debt: ${formatCurrency(currentDebt, accMeta?.currency || currency)}.`,
+              description: `This would make your debt negative. Current debt: ${formatCurrency(currentDebt)}.`,
               variant: "destructive",
             });
             return;
@@ -305,7 +295,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
             if (amt - monthDebt > 1e-9) {
               toast({
                 title: "Payment too large",
-                description: `Max for ${label} is ${formatCurrency(monthDebt, dstMeta?.currency || currency)}.`,
+                description: `Max for ${label} is ${formatCurrency(monthDebt)}.`,
                 variant: "destructive",
               });
               return;
@@ -325,7 +315,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
           if (currentDebt - amt < 0) {
             toast({
               title: "Payment too large",
-              description: `You can only pay up to ${formatCurrency(currentDebt, dstMeta?.currency || currency)} for this debt account.`,
+              description: `You can only pay up to ${formatCurrency(currentDebt)} for this debt account.`,
               variant: "destructive",
             });
             return;
@@ -601,7 +591,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                     : accounts.filter((a: any) => a?.type !== "credit_card")
                   ).map((a: any) => (
                     <option value={a.id} key={a.id}>
-                      {a.name} - {a.currency}
+                      {a.name}
                     </option>
                   ))}
                 </select>

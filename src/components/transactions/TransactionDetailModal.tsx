@@ -19,7 +19,6 @@ interface TransactionDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   transaction: any;
-  currency: string;
   onRequestDelete?: (tx: any) => void;
 }
 
@@ -27,8 +26,7 @@ export default function TransactionDetailModal({
   isOpen,
   onClose,
   transaction,
-  currency
-  , onRequestDelete
+  onRequestDelete
 }: TransactionDetailModalProps) {
   if (!isOpen || !transaction) return null;
 
@@ -66,8 +64,7 @@ export default function TransactionDetailModal({
           </div>
           <h3 className="text-xl font-bold capitalize mb-1">{transaction.type} Details</h3>
           <p className="text-2xl font-black tracking-tight">
-            {transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : ""}
-            {formatCurrency(Number(transaction.amount), currency)}
+            {formatCurrency(Number(transaction.amount))}
           </p>
         </div>
 

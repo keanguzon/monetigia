@@ -19,7 +19,6 @@ export default function AddAccountForm() {
   const [name, setName] = useState("");
   const [type, setType] = useState<"cash" | "bank" | "credit_card" | "e_wallet" | "investment">("e_wallet");
   const [balance, setBalance] = useState("0");
-  const [currency, setCurrency] = useState("PHP");
   const [color, setColor] = useState("#22c55e");
   const [icon, setIcon] = useState<string>(EWalletIcons[0]);
   const [isLoading, setIsLoading] = useState(false);
@@ -67,7 +66,7 @@ export default function AddAccountForm() {
         name,
         type,
         balance: Number(balance || 0),
-        currency,
+        currency: "PHP",
         color,
         icon: icon || null,
       });
@@ -115,11 +114,6 @@ export default function AddAccountForm() {
           </p>
         )}
         <Input value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" />
-      </div>
-
-      <div>
-        <label className="text-sm font-medium">Currency</label>
-        <Input value={currency} onChange={(e) => setCurrency(e.target.value)} />
       </div>
 
       <div>

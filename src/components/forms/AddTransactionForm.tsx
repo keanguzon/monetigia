@@ -402,7 +402,7 @@ export default function AddTransactionForm() {
             ? accounts.filter((a) => a.type === "credit_card")
             : accounts.filter((a) => a.type !== "credit_card")
           ).map((a) => (
-            <option value={a.id} key={a.id}>{a.name} ({a.currency})</option>
+            <option value={a.id} key={a.id}>{a.name}</option>
           ))}
         </select>
         {type === "expense" && isPayLater && accounts.filter((a) => a.type === "credit_card").length === 0 && (
