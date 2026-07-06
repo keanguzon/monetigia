@@ -24,6 +24,7 @@ import {
   Landmark,
   CreditCard,
   Lock,
+  Download,
 } from "lucide-react";
 import { getRememberMePreference, saveRememberMePreference } from "@/lib/session-preferences";
 import { Aurora } from "./Aurora";
@@ -132,11 +133,11 @@ function LandingPageInner() {
           </Link>
           <nav className="flex items-center gap-4">
             <ModeToggle />
-            <a href="#cockpit">
-              <Button size="sm" className="text-sm bg-primary text-primary-foreground hover:bg-primary/90 font-bold transition-all duration-200 shadow-lg shadow-primary/20">
-                Sign In
+            <Link href="/mobile-app">
+              <Button size="sm" className="text-sm bg-primary text-primary-foreground hover:bg-primary/90 font-bold flex items-center gap-1.5 transition-all duration-200 shadow-lg shadow-primary/20">
+                Get App <Download className="h-4 w-4" />
               </Button>
-            </a>
+            </Link>
           </nav>
         </div>
       </header>
@@ -274,6 +275,27 @@ function LandingPageInner() {
                       </svg>
                       Continue with Facebook
                     </Button>
+
+                    <div className="relative py-2">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-border/60" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground font-semibold tracking-wider">or</span>
+                      </div>
+                    </div>
+
+                    <Link href="/mobile-app" className="block w-full">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={isLoading}
+                        className="h-11 w-full bg-secondary text-secondary-foreground hover:bg-secondary/80 font-bold flex items-center justify-center gap-2 transition-all duration-200"
+                      >
+                        <Smartphone className="h-4 w-4" />
+                        Download Android APK
+                      </Button>
+                    </Link>
                   </div>
 
                   <p className="text-center text-xs text-muted-foreground leading-normal">
