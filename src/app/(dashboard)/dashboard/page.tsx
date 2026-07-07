@@ -22,18 +22,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAccounts, useRecentTransactions, useDashboardStats } from "@/hooks/use-data";
 
 export default function DashboardPage() {
-  const supabase = createClient();
-  const sb = supabase as any;
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [monthlyIncome, setMonthlyIncome] = useState(0);
-  const [monthlyExpenses, setMonthlyExpenses] = useState(0);
-  const [lastMonthIncome, setLastMonthIncome] = useState(0);
-  const [lastMonthExpenses, setLastMonthExpenses] = useState(0);
-  const [lastMonthBalance, setLastMonthBalance] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<"last7" | "last30" | "thisMonth">("thisMonth");
 
   const rangeLabel = useMemo(() => {
@@ -77,122 +68,25 @@ export default function DashboardPage() {
     };
   };
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) {
+  const { currentStart, currentEnd, previousStart, previousEnd } = getDateRange(dateRange);
 
-        // Get accounts
-        const { data: accountsData } = await supabase
-          .from("accounts")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-        setAccounts(accountsData ?? []);
+  const { data: accounts = [], isLoading: isLoadingAccounts } = useAccounts();
+  const { data: transactions = [], isLoading: isLoadingTx } = useRecentTransactions();
+  const { data: stats, isLoading: isLoadingStats } = useDashboardStats(currentStart, currentEnd, previousStart, previousEnd);
 
-        // Get recent transactions (newest first)
-        const { data: transactionsData, error: txErr } = await sb
-          .from("transactions")
-          .select(
-            "id, user_id, account_id, category_id, type, amount, description, date, transfer_to_account_id, created_at, category:categories(id,name,color), account:accounts!account_id(id,name,type)"
-          )
-          .eq("user_id", user.id)
-          .order("date", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(3);
-
-        if (txErr) {
-          console.error("Failed to load recent transactions", txErr);
-          setTransactions([]);
-        } else {
-          setTransactions(transactionsData ?? []);
-        }
-
-        const { currentStart, currentEnd, previousStart, previousEnd } = getDateRange(dateRange);
-
-        const { data: monthTransactionsData } = await supabase
-          .from("transactions")
-          .select("type, amount, account_id, transfer_to_account_id")
-          .eq("user_id", user.id)
-          .gte("date", currentStart)
-          .lte("date", currentEnd);
-
-        const { data: lastMonthTransactionsData } = await supabase
-          .from("transactions")
-          .select("type, amount, account_id, transfer_to_account_id")
-          .eq("user_id", user.id)
-          .gte("date", previousStart)
-          .lte("date", previousEnd);
-
-        const monthTransactions = (monthTransactionsData ?? []) as any[];
-        const lastMonthTransactions = (lastMonthTransactionsData ?? []) as any[];
-        const accountTypeById = new Map<string, string>();
-        (accountsData || []).forEach((a: any) => {
-          if (a?.id) accountTypeById.set(a.id, a.type);
-        });
-        const isCredit = (accountId?: string | null) => {
-          if (!accountId) return false;
-          return accountTypeById.get(accountId) === "credit_card";
-        };
-
-        // Match Reports "cashflow" logic:
-        // - Income counts only when it hits non-credit accounts.
-        // - Expenses are spending from non-credit accounts.
-        // - Debt payments are transfers from non-credit -> credit_card.
-        const income = monthTransactions
-          .filter((t) => t.type === "income" && !isCredit(t.account_id))
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const expenses = monthTransactions
-          .filter((t) => t.type === "expense" && !isCredit(t.account_id))
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const debtPayments = monthTransactions
-          .filter(
-            (t) =>
-              t.type === "transfer" &&
-              !isCredit(t.account_id) &&
-              isCredit(t.transfer_to_account_id)
-          )
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const lastIncome = lastMonthTransactions
-          .filter((t) => t.type === "income" && !isCredit(t.account_id))
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const lastExpenses = lastMonthTransactions
-          .filter((t) => t.type === "expense" && !isCredit(t.account_id))
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const lastDebtPayments = lastMonthTransactions
-          .filter(
-            (t) =>
-              t.type === "transfer" &&
-              !isCredit(t.account_id) &&
-              isCredit(t.transfer_to_account_id)
-          )
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        setMonthlyIncome(income || 0);
-        setMonthlyExpenses((expenses + debtPayments) || 0);
-        setLastMonthIncome(lastIncome || 0);
-        setLastMonthExpenses((lastExpenses + lastDebtPayments) || 0);
-        
-        // Calculate last month's balance (current balance minus this month's net change)
-        const thisMonthNet = income - (expenses + debtPayments);
-        setLastMonthBalance(currentMoney - thisMonthNet);
-      }
-      setLoading(false);
-    };
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange]);
+  const loading = isLoadingAccounts || isLoadingTx || isLoadingStats;
+  const monthlyIncome = stats?.monthlyIncome || 0;
+  const monthlyExpenses = stats?.monthlyExpenses || 0;
+  const lastMonthIncome = stats?.lastMonthIncome || 0;
+  const lastMonthExpenses = stats?.lastMonthExpenses || 0;
 
   const networthAccounts = accounts.filter(
     (a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false
   );
   const currentMoney = networthAccounts.reduce((sum, acc) => sum + Number(acc.balance), 0) || 0;
+  
+  const thisMonthNet = monthlyIncome - monthlyExpenses;
+  const lastMonthBalance = currentMoney - thisMonthNet;
   
   // Calculate percentage changes
   const calculatePercentChange = (current: number, previous: number) => {

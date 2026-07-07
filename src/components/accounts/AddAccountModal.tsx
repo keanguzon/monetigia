@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { X, Plus } from "lucide-react";
 import { parseNonNegativeAmount, sanitizeColor } from "@/lib/utils";
 import type { Database } from "@/types/database";
+import { useAccounts } from "@/hooks/use-data";
 
 interface AccountOption {
   type: "cash" | "bank" | "credit_card" | "e_wallet" | "investment";
@@ -45,6 +46,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
   const supabase = createClient();
   const router = useRouter();
   const { toast } = useToast();
+  const { mutate: mutateAccounts } = useAccounts();
 
   const [selectedAccount, setSelectedAccount] = useState<AccountOption | null>(null);
   const [balance, setBalance] = useState("");
@@ -164,6 +166,8 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
       setInterestRate("");
 
       onClose();
+      // Optimistically trigger global SWR cache refresh
+      mutateAccounts();
       router.refresh();
     } catch (err) {
       toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });

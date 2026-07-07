@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import type { Account, Category } from "@/types/database";
+import { useAccounts, useCategories } from "@/hooks/use-data";
 import { isValidUuid, parsePositiveAmount } from "@/lib/utils";
 
 export default function AddTransactionForm() {
@@ -14,8 +15,8 @@ export default function AddTransactionForm() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { data: accounts = [], mutate: mutateAccounts } = useAccounts();
+  const { data: categories = [] } = useCategories();
 
   const [accountId, setAccountId] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
@@ -39,27 +40,17 @@ export default function AddTransactionForm() {
   const isDebtPayment = type === "transfer" && transferToAccount?.type === "credit_card";
 
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id) return;
-
-      const { data: accountsData } = await supabase.from("accounts").select("*").eq("user_id", user.id).order("name");
-      const accountsList = (accountsData ?? []) as Account[];
-      setAccounts(accountsList);
-
-      const { data: catsData } = await supabase.from("categories").select("*").order("name");
-      const catsList = (catsData ?? []) as Category[];
-      setCategories(catsList);
-
-      if (accountsList.length > 0) setAccountId(accountsList[0]?.id ?? "");
-      if (catsList.length > 0) setCategoryId(catsList[0]?.id ?? "");
-
-      const firstCredit = accountsList.find((a) => a.type === "credit_card");
+    if (accounts.length > 0 && !accountId) {
+      setAccountId(accounts[0]?.id ?? "");
+    }
+    if (categories.length > 0 && !categoryId) {
+      setCategoryId(categories[0]?.id ?? "");
+    }
+    if (accounts.length > 0 && !payLaterAccountId) {
+      const firstCredit = accounts.find((a) => a.type === "credit_card");
       if (firstCredit) setPayLaterAccountId(firstCredit.id);
-    };
-
-    load();
-  }, []);
+    }
+  }, [accounts, categories]);
 
   useEffect(() => {
     if (type !== "expense") {
