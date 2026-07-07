@@ -38,7 +38,7 @@ export function useRecentTransactions() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("transactions")
       .select("id, user_id, account_id, category_id, type, amount, description, date, transfer_to_account_id, created_at, category:categories(id,name,color), account:accounts!account_id(id,name,type)")
       .eq("user_id", user.id)

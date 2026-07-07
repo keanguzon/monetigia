@@ -236,7 +236,7 @@ export default function DashboardPage() {
           <CardContent>
             {transactions && transactions.length > 0 ? (
               <div className="space-y-4">
-                {transactions.map((transaction, index) => (
+                {transactions.map((transaction: any, index: number) => (
                   <div
                     key={transaction.id}
                     className="flex items-center justify-between hover:bg-secondary/50 p-2 rounded-lg transition-all duration-200 hover:scale-[1.01] cursor-pointer data-transition"
