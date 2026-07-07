@@ -13,7 +13,8 @@ export function useAccounts() {
       .from("accounts")
       .select("*")
       .eq("user_id", user.id)
-      .order("name");
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: true });
       
     if (error) throw error;
     return data || [];

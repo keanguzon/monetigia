@@ -260,14 +260,14 @@ export default function AccountsPage() {
         .select("*")
         .eq("user_id", user.id)
         .order("display_order", { ascending: true })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: true });
 
       if (error) {
         const { data: fallbackData, error: fallbackErr } = await supabase
           .from("accounts")
           .select("*")
           .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: true });
 
         if (fallbackErr) {
           console.error("Failed to load accounts", fallbackErr);
