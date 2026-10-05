@@ -246,9 +246,11 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
           {/* Target Amount & Savings Allocation (2 columns) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                Target Amount (₱)
-              </label>
+              <div className="flex items-center min-h-[26px] mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Target Amount (₱)
+                </label>
+              </div>
               <Input
                 type="number"
                 step="0.01"
@@ -261,12 +263,12 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
             </div>
 
             <div>
-              <div className="flex items-center justify-between gap-3 mb-1.5">
+              <div className="flex w-full items-center justify-between gap-3 min-h-[26px] mb-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
                   Savings Target
                 </label>
                 {/* Cadence Segmented Pill */}
-                <div className="inline-flex items-center rounded-md bg-muted/60 p-0.5 text-[10px] font-medium gap-0.5 shrink-0">
+                <div className="inline-flex items-center rounded-md bg-muted/60 p-0.5 text-[10px] font-medium gap-0.5 shrink-0 ml-auto">
                   <button
                     type="button"
                     onClick={() => handleFrequencyChange("monthly")}
