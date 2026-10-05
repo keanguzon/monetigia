@@ -14,6 +14,7 @@ export async function middleware(request: NextRequest) {
     "/transactions",
     "/accounts",
     "/categories",
+    "/goals",
     "/reports",
     "/settings",
   ];
@@ -79,6 +80,7 @@ export const config = {
     "/transactions/:path*",
     "/accounts/:path*",
     "/categories/:path*",
+    "/goals/:path*",
     "/reports/:path*",
     "/settings/:path*",
     "/login",

@@ -68,11 +68,7 @@
     @apply bg-background;
   }
 
-  @media (min-width: 1024px) {
-    html {
-      zoom: 1.1;
-    }
-  }
+
 
   body {
     @apply bg-background text-foreground;

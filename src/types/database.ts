@@ -132,6 +132,7 @@ export interface Database {
           user_id: string;
           account_id: string;
           category_id: string | null;
+          goal_id: string | null;
           type: "income" | "expense" | "transfer";
           amount: number;
           description: string | null;
@@ -145,6 +146,7 @@ export interface Database {
           user_id: string;
           account_id: string;
           category_id?: string | null;
+          goal_id?: string | null;
           type: "income" | "expense" | "transfer";
           amount: number;
           description?: string | null;
@@ -158,6 +160,7 @@ export interface Database {
           user_id?: string;
           account_id?: string;
           category_id?: string | null;
+          goal_id?: string | null;
           type?: "income" | "expense" | "transfer";
           amount?: number;
           description?: string | null;
@@ -215,6 +218,10 @@ export interface Database {
           color: string | null;
           icon: string | null;
           is_completed: boolean;
+          is_priority: boolean;
+          category: string;
+          allocation_per_cycle: number;
+          allocation_frequency: "monthly" | "kinsenas" | string | null;
           created_at: string;
           updated_at: string;
         };
@@ -228,6 +235,10 @@ export interface Database {
           color?: string | null;
           icon?: string | null;
           is_completed?: boolean;
+          is_priority?: boolean;
+          category?: string;
+          allocation_per_cycle?: number;
+          allocation_frequency?: "monthly" | "kinsenas" | string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -241,6 +252,10 @@ export interface Database {
           color?: string | null;
           icon?: string | null;
           is_completed?: boolean;
+          is_priority?: boolean;
+          category?: string;
+          allocation_per_cycle?: number;
+          allocation_frequency?: "monthly" | "kinsenas" | string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -293,4 +308,6 @@ export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
 export type Budget = Database["public"]["Tables"]["budgets"]["Row"];
 export type Goal = Database["public"]["Tables"]["goals"]["Row"];
+export type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
+export type GoalUpdate = Database["public"]["Tables"]["goals"]["Update"];
 export type UserPreference = Database["public"]["Tables"]["user_preferences"]["Row"];

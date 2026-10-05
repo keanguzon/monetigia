@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   Wallet,
   Tags,
+  Target,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/accounts", label: "Wallets", icon: Wallet },
   { href: "/categories", label: "Categories", icon: Tags },
+  { href: "/goals", label: "Goals", icon: Target },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
