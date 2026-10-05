@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { X, Target, Flame, Sparkles } from "lucide-react";
+import { X, Target, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { parsePositiveAmount, parseNonNegativeAmount, sanitizeColor } from "@/lib/utils";
+import { parsePositiveAmount, parseNonNegativeAmount, sanitizeColor, formatCurrency } from "@/lib/utils";
 import type { Goal } from "@/types/database";
 import { useGoals } from "@/hooks/use-goals";
 
@@ -44,6 +44,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [allocationPerCycle, setAllocationPerCycle] = useState("");
+  const [frequency, setFrequency] = useState<"monthly" | "kinsenas">("monthly");
   const [targetDate, setTargetDate] = useState("");
   const [category, setCategory] = useState("lifestyle");
   const [isPriority, setIsPriority] = useState(false);
@@ -59,6 +60,9 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
           ? String(editingGoal.allocation_per_cycle)
           : "0"
       );
+      setFrequency(
+        editingGoal.allocation_frequency === "kinsenas" ? "kinsenas" : "monthly"
+      );
       setTargetDate(editingGoal.target_date || "");
       setCategory(editingGoal.category || "lifestyle");
       setIsPriority(Boolean(editingGoal.is_priority));
@@ -67,6 +71,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
       setName("");
       setTargetAmount("");
       setAllocationPerCycle("");
+      setFrequency("monthly");
       setTargetDate("");
       setCategory("lifestyle");
       setIsPriority(false);
@@ -75,6 +80,28 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
   }, [editingGoal, isOpen]);
 
   if (!isOpen) return null;
+
+  const handleFrequencyChange = (nextFreq: "monthly" | "kinsenas") => {
+    if (nextFreq === frequency) return;
+    const currentNum = parseNonNegativeAmount(allocationPerCycle);
+    if (currentNum !== null && currentNum > 0) {
+      if (nextFreq === "kinsenas") {
+        // from monthly to kinsenas: divide by 2
+        setAllocationPerCycle(String(Math.round((currentNum / 2) * 100) / 100));
+      } else {
+        // from kinsenas to monthly: multiply by 2
+        setAllocationPerCycle(String(Math.round((currentNum * 2) * 100) / 100));
+      }
+    }
+    setFrequency(nextFreq);
+  };
+
+  const parsedAllocNum = parseNonNegativeAmount(allocationPerCycle) || 0;
+  const liveEquivalent = parsedAllocNum > 0
+    ? frequency === "monthly"
+      ? `≈ ${formatCurrency(parsedAllocNum / 2)} every kinsenas (cutoff)`
+      : `≈ ${formatCurrency(parsedAllocNum * 2)} per month`
+    : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,7 +144,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
       if (parsedAllocation === null) {
         toast({
           title: "Invalid allocation",
-          description: "Monthly savings target must be a non-negative number.",
+          description: "Savings target must be a non-negative number.",
           variant: "destructive",
         });
         return;
@@ -127,6 +154,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
         name: trimmedName,
         target_amount: parsedTarget,
         allocation_per_cycle: parsedAllocation,
+        allocation_frequency: frequency,
         target_date: targetDate || null,
         category,
         is_priority: isPriority,
@@ -184,7 +212,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
                 {editingGoal ? "Edit Goal" : "New Goal / Sinking Fund"}
               </h2>
               <p className="text-xs text-muted-foreground">
-                Track your savings targets with per-kinsenas projections
+                Track your savings targets with flexible monthly or kinsenas projections
               </p>
             </div>
           </div>
@@ -215,7 +243,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
             />
           </div>
 
-          {/* Target Amount & Monthly Allocation (2 columns) */}
+          {/* Target Amount & Savings Allocation (2 columns) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
@@ -233,19 +261,47 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                Monthly Target (₱)
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Savings Target
+                </label>
+                {/* Cadence Segmented Pill */}
+                <div className="flex rounded-md bg-muted/60 p-0.5 text-[11px] font-medium">
+                  <button
+                    type="button"
+                    onClick={() => handleFrequencyChange("monthly")}
+                    className={`rounded px-1.5 py-0.5 transition-all ${
+                      frequency === "monthly"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleFrequencyChange("kinsenas")}
+                    className={`rounded px-1.5 py-0.5 transition-all ${
+                      frequency === "kinsenas"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Kinsenas
+                  </button>
+                </div>
+              </div>
+
               <Input
                 type="number"
                 step="0.01"
                 min="0"
                 value={allocationPerCycle}
                 onChange={(e) => setAllocationPerCycle(e.target.value)}
-                placeholder="2000 (per month)"
+                placeholder={frequency === "monthly" ? "3000 (per month)" : "1500 (per cutoff)"}
               />
               <span className="block mt-1 text-[10px] text-muted-foreground">
-                Target amount you plan to save each month
+                {liveEquivalent ? liveEquivalent : frequency === "monthly" ? "Target amount saved every month" : "Target amount saved every payday"}
               </span>
             </div>
           </div>
@@ -304,7 +360,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
 
           {/* Priority Checkbox */}
           <div className="pt-2">
-            <label className="flex items-center gap-2.5 cursor-pointer rounded-lg border border-border/50 p-3 hover:bg-muted/40 transition-colors">
+            <label className="flex items-center gap-2.5 cursor-pointer rounded-lg border border-border/30 bg-muted/20 p-3 hover:bg-muted/40 transition-colors">
               <input
                 type="checkbox"
                 checked={isPriority}

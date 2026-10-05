@@ -36,21 +36,26 @@ export default function GoalsPage() {
   const {
     totalTarget,
     totalSaved,
-    totalAllocation,
+    totalMonthlyAllocation,
+    totalKinsenasAllocation,
     activeGoals,
     completedGoals,
     globalProgress,
   } = useMemo(() => {
     let targetSum = 0;
     let savedSum = 0;
-    let allocSum = 0;
+    let totalMonthlyAlloc = 0;
     const active: GoalWithProgress[] = [];
     const completed: GoalWithProgress[] = [];
 
     goals.forEach((g) => {
       targetSum += Number(g.target_amount) || 0;
       savedSum += Number(g.saved) || 0;
-      allocSum += Number(g.allocation_per_cycle) || 0;
+      const isKinsenas = g.allocation_frequency === "kinsenas";
+      const alloc = Number(g.allocation_per_cycle) || 0;
+      const monthlyAlloc = isKinsenas ? alloc * 2 : alloc;
+      totalMonthlyAlloc += monthlyAlloc;
+
       if (g.is_completed) {
         completed.push(g);
       } else {
@@ -58,12 +63,14 @@ export default function GoalsPage() {
       }
     });
 
+    const totalKinsenasAlloc = totalMonthlyAlloc / 2;
     const globalProg = targetSum > 0 ? (savedSum / targetSum) * 100 : 0;
 
     return {
       totalTarget: targetSum,
       totalSaved: savedSum,
-      totalAllocation: allocSum,
+      totalMonthlyAllocation: totalMonthlyAlloc,
+      totalKinsenasAllocation: totalKinsenasAlloc,
       activeGoals: active,
       completedGoals: completed,
       globalProgress: globalProg,
@@ -186,18 +193,23 @@ export default function GoalsPage() {
             </div>
           </div>
 
-          {/* Column 3: Monthly Target */}
+          {/* Column 3: Savings Target (Dual Cadence) */}
           <div className="space-y-1 sm:pl-8 pt-4 sm:pt-0">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
-              <span>Monthly Target</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
+                <span>Savings Target</span>
+              </div>
+              <span className="text-[11px] font-mono text-muted-foreground font-medium">
+                ≈ {formatCurrency(totalKinsenasAllocation)}/ks
+              </span>
             </div>
             <div className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums tracking-tight text-amber-600 dark:text-amber-400 pt-1">
-              {formatCurrency(totalAllocation)}
+              {formatCurrency(totalMonthlyAllocation)}
               <span className="text-xs font-normal text-muted-foreground ml-1">/mo</span>
             </div>
             <p className="text-xs text-muted-foreground pt-0.5">
-              Planned savings allocated each month
+              Planned savings allocated across all active goals
             </p>
           </div>
         </div>
