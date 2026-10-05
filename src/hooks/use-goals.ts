@@ -9,18 +9,58 @@ export interface GoalWithProgress extends Goal {
   progressPercent: number;
 }
 
-export function getProjection(goal: GoalWithProgress): { months: number; projectedDate: string | null } {
-  if (goal.allocation_per_cycle <= 0 || goal.saved >= goal.target_amount) {
-    return { months: 0, projectedDate: null };
+export interface ProjectionResult {
+  count: number;
+  unit: "month" | "months" | "payday" | "paydays";
+  projectedDate: string | null;
+  monthlyAmount: number;
+  kinsenasAmount: number;
+}
+
+export function getProjection(goal: GoalWithProgress): ProjectionResult {
+  const isKinsenas = goal.allocation_frequency === "kinsenas";
+  const allocation = Number(goal.allocation_per_cycle) || 0;
+  const target = Number(goal.target_amount) || 0;
+  const saved = Number(goal.saved) || 0;
+
+  const monthlyAmount = isKinsenas ? allocation * 2 : allocation;
+  const kinsenasAmount = isKinsenas ? allocation : allocation / 2;
+
+  if (allocation <= 0 || saved >= target) {
+    return {
+      count: 0,
+      unit: isKinsenas ? "paydays" : "months",
+      projectedDate: null,
+      monthlyAmount,
+      kinsenasAmount,
+    };
   }
-  const remaining = Math.max(0, goal.target_amount - goal.saved);
-  const months = Math.ceil(remaining / goal.allocation_per_cycle);
-  const projected = new Date();
-  projected.setMonth(projected.getMonth() + months);
-  return {
-    months,
-    projectedDate: projected.toISOString().slice(0, 10),
-  };
+
+  const remaining = Math.max(0, target - saved);
+
+  if (isKinsenas) {
+    const paydays = Math.ceil(remaining / allocation);
+    const projected = new Date();
+    projected.setDate(projected.getDate() + paydays * 15);
+    return {
+      count: paydays,
+      unit: paydays === 1 ? "payday" : "paydays",
+      projectedDate: projected.toISOString().slice(0, 10),
+      monthlyAmount,
+      kinsenasAmount,
+    };
+  } else {
+    const months = Math.ceil(remaining / allocation);
+    const projected = new Date();
+    projected.setMonth(projected.getMonth() + months);
+    return {
+      count: months,
+      unit: months === 1 ? "month" : "months",
+      projectedDate: projected.toISOString().slice(0, 10),
+      monthlyAmount,
+      kinsenasAmount,
+    };
+  }
 }
 
 export function useGoals() {

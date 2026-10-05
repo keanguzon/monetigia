@@ -166,7 +166,7 @@ export function GoalCard({
             <div className="space-y-0.5">
               <span className="flex items-center gap-1 text-[11px] font-medium text-foreground">
                 <Clock className="h-3 w-3 text-muted-foreground" />
-                ~{projection.months} {projection.months === 1 ? "month" : "months"} ({formatCurrency(goal.allocation_per_cycle)}/mo)
+                ~{projection.count} {projection.unit} ({formatCurrency(projection.monthlyAmount)}/mo · {formatCurrency(projection.kinsenasAmount)}/ks)
               </span>
               {formattedProjectedDate && (
                 <span className="block text-[10px] text-muted-foreground">
@@ -175,7 +175,7 @@ export function GoalCard({
               )}
             </div>
           ) : (
-            <span className="text-[11px] italic text-muted-foreground">No monthly target set</span>
+            <span className="text-[11px] italic text-muted-foreground">No allocation set</span>
           )}
         </div>
 
