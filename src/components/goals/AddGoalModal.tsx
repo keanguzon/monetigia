@@ -261,16 +261,16 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
                   Savings Target
                 </label>
                 {/* Cadence Segmented Pill */}
-                <div className="flex rounded-md bg-muted/60 p-0.5 text-[11px] font-medium">
+                <div className="inline-flex items-center rounded-md bg-muted/60 p-0.5 text-[10px] font-medium gap-0.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => handleFrequencyChange("monthly")}
-                    className={`rounded px-1.5 py-0.5 transition-all ${
+                    className={`rounded px-2 py-0.5 transition-all ${
                       frequency === "monthly"
                         ? "bg-background text-foreground shadow-xs font-semibold"
                         : "text-muted-foreground hover:text-foreground"
@@ -281,7 +281,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
                   <button
                     type="button"
                     onClick={() => handleFrequencyChange("kinsenas")}
-                    className={`rounded px-1.5 py-0.5 transition-all ${
+                    className={`rounded px-2 py-0.5 transition-all ${
                       frequency === "kinsenas"
                         ? "bg-background text-foreground shadow-xs font-semibold"
                         : "text-muted-foreground hover:text-foreground"
