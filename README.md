@@ -41,11 +41,6 @@
 - **Transaction Spec Sheet:** Filter, search, and categorize entries with custom color badges and notes.
 - **Fast Optimistic Updates:** Powered by SWR for instant client-side UI feedback and background revalidation.
 
-### 🎨 Anti-Slop Design System
-- **Editorial Typography:** Styled with Manrope and Bricolage Grotesque.
-- **Clean Contrast & Hairline Borders:** Replaced heavy outlines and card-in-card containers with breathable, high-contrast layouts.
-- **Native Dark & Light Mode:** Tailored theme palette with zero flicker and synced transitions.
-
 ---
 
 ## Tech Stack
