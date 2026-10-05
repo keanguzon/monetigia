@@ -152,123 +152,57 @@ export default function CategoriesPage() {
   return (
     <>
       <div className="space-y-6 animate-in fade-in duration-500">
-        {/* Header - Redesigned for Mobile */}
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="space-y-1">
-              <h2 className="text-3xl font-bold tracking-tight">Categories</h2>
-              <p className="text-muted-foreground">
-                Organize your transactions with categories
-              </p>
-            </div>
-            {/* Button visible only on desktop */}
-            <Button onClick={() => setIsModalOpen(true)} className="hidden sm:flex transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Category
-            </Button>
+        {/* Header - Clean Editorial Hierarchy */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Categories</h1>
+            <p className="text-sm text-muted-foreground">
+              Organize your income and expense streams
+            </p>
           </div>
-          {/* Button visible only on mobile - below description */}
-          <Button onClick={() => setIsModalOpen(true)} className="w-full sm:hidden transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg">
+          <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             Add Category
           </Button>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Income Categories */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ArrowDownLeft className="h-5 w-5 text-green-500" />
-                Income Categories
-              </CardTitle>
-              <CardDescription>Categories for your income sources</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {!isLoading && incomeCategories.map((category) => (
-                  <div
-                    key={category.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-[transform,background-color,border-color,box-shadow] duration-200 ease-in-out hover:scale-[1.02] hover:shadow-md"
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-                      <div
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: category.color || "#22c55e" }}
-                      />
-                      {editingCategoryId === category.id ? (
-                        <div onClick={(e) => e.stopPropagation()} className="w-full">
-                          <Input
-                            value={editingCategoryName}
-                            onChange={(e) => setEditingCategoryName(e.target.value)}
-                            className="h-7 text-sm px-2 w-[150px]"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveCategoryName(category.id);
-                              if (e.key === "Escape") setEditingCategoryId(null);
-                            }}
-                            onBlur={() => saveCategoryName(category.id)}
-                          />
-                        </div>
-                      ) : (
-                        <span className="font-medium truncate">{category.name}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEditingCategory(category.id, category.name);
-                        }}
-                        className="p-1 rounded hover:bg-blue-500/10 transition-colors"
-                        title="Rename category"
-                      >
-                        <Edit2 className="h-4 w-4 text-blue-500" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteCategory(category.id);
-                        }}
-                        className="p-1 rounded hover:bg-red-500/10 transition-colors"
-                        title="Delete category"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+        <div className="grid gap-5 md:grid-cols-2">
+          {/* Income Categories Register */}
+          <div className="rounded-xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between border-b border-border/40 px-4 py-3 sm:px-5 sm:py-3.5 bg-muted/20">
+              <div className="flex items-center gap-2">
+                <ArrowDownLeft className="h-4 w-4 text-emerald-500" />
+                <h2 className="text-sm font-semibold tracking-tight text-foreground">Income Categories</h2>
               </div>
-            </CardContent>
-          </Card>
+              <span className="text-xs font-mono text-muted-foreground/80">
+                {incomeCategories.length} {incomeCategories.length === 1 ? "category" : "categories"}
+              </span>
+            </div>
 
-          {/* Expense Categories */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ArrowUpRight className="h-5 w-5 text-red-500" />
-                Expense Categories
-              </CardTitle>
-              <CardDescription>Categories for your expenses</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {!isLoading && expenseCategories.map((category) => (
+            <div className="divide-y divide-border/30 flex-1">
+              {isLoading ? (
+                <div className="p-4 space-y-3">
+                  <div className="h-5 bg-muted/40 rounded animate-pulse w-3/4" />
+                  <div className="h-5 bg-muted/40 rounded animate-pulse w-1/2" />
+                  <div className="h-5 bg-muted/40 rounded animate-pulse w-2/3" />
+                </div>
+              ) : incomeCategories.length > 0 ? (
+                incomeCategories.map((category) => (
                   <div
                     key={category.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-[transform,background-color,border-color,box-shadow] duration-200 ease-in-out hover:scale-[1.02] hover:shadow-md"
+                    className="group flex items-center justify-between px-4 py-2.5 sm:py-3 hover:bg-muted/40 transition-colors"
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
                       <div
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: category.color || "#ef4444" }}
+                        className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-background"
+                        style={{ backgroundColor: category.color || "#10b981" }}
                       />
                       {editingCategoryId === category.id ? (
                         <div onClick={(e) => e.stopPropagation()} className="w-full">
                           <Input
                             value={editingCategoryName}
                             onChange={(e) => setEditingCategoryName(e.target.value)}
-                            className="h-7 text-sm px-2 w-[150px]"
+                            className="h-7 text-xs sm:text-sm px-2 w-[160px] font-medium"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Enter") saveCategoryName(category.id);
@@ -278,36 +212,128 @@ export default function CategoriesPage() {
                           />
                         </div>
                       ) : (
-                        <span className="font-medium truncate">{category.name}</span>
+                        <span className="text-xs sm:text-sm font-medium truncate text-foreground">
+                          {category.name}
+                        </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           startEditingCategory(category.id, category.name);
                         }}
-                        className="p-1 rounded hover:bg-blue-500/10 transition-colors"
+                        className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
                         title="Rename category"
                       >
-                        <Edit2 className="h-4 w-4 text-blue-500" />
+                        <Edit2 className="h-3.5 w-3.5" />
                       </button>
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteCategory(category.id);
                         }}
-                        className="p-1 rounded hover:bg-red-500/10 transition-colors"
+                        className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         title="Delete category"
                       >
-                        <Trash2 className="h-4 w-4 text-red-500" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
-                ))}
+                ))
+              ) : (
+                <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+                  No income categories yet
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Expense Categories Register */}
+          <div className="rounded-xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between border-b border-border/40 px-4 py-3 sm:px-5 sm:py-3.5 bg-muted/20">
+              <div className="flex items-center gap-2">
+                <ArrowUpRight className="h-4 w-4 text-rose-500" />
+                <h2 className="text-sm font-semibold tracking-tight text-foreground">Expense Categories</h2>
               </div>
-            </CardContent>
-          </Card>
+              <span className="text-xs font-mono text-muted-foreground/80">
+                {expenseCategories.length} {expenseCategories.length === 1 ? "category" : "categories"}
+              </span>
+            </div>
+
+            <div className="divide-y divide-border/30 flex-1">
+              {isLoading ? (
+                <div className="p-4 space-y-3">
+                  <div className="h-5 bg-muted/40 rounded animate-pulse w-3/4" />
+                  <div className="h-5 bg-muted/40 rounded animate-pulse w-1/2" />
+                  <div className="h-5 bg-muted/40 rounded animate-pulse w-2/3" />
+                </div>
+              ) : expenseCategories.length > 0 ? (
+                expenseCategories.map((category) => (
+                  <div
+                    key={category.id}
+                    className="group flex items-center justify-between px-4 py-2.5 sm:py-3 hover:bg-muted/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-background"
+                        style={{ backgroundColor: category.color || "#f43f5e" }}
+                      />
+                      {editingCategoryId === category.id ? (
+                        <div onClick={(e) => e.stopPropagation()} className="w-full">
+                          <Input
+                            value={editingCategoryName}
+                            onChange={(e) => setEditingCategoryName(e.target.value)}
+                            className="h-7 text-xs sm:text-sm px-2 w-[160px] font-medium"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveCategoryName(category.id);
+                              if (e.key === "Escape") setEditingCategoryId(null);
+                            }}
+                            onBlur={() => saveCategoryName(category.id)}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-xs sm:text-sm font-medium truncate text-foreground">
+                          {category.name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditingCategory(category.id, category.name);
+                        }}
+                        className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                        title="Rename category"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteCategory(category.id);
+                        }}
+                        className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        title="Delete category"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+                  No expense categories yet
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

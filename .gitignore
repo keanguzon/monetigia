@@ -41,6 +41,22 @@ next-env.d.ts
 /prisma/*.db
 /prisma/*.db-journal
 
-# Skill MD
+# Agent Customizations & Workspaces
+.agents/
+.superpowers/
+AGENTS.md
+GEMINI.md
 SKILL.md
+skills-lock.json
+
+# Documentation & Specs
+docs/
+
+# Database & Migrations
+supabase/
+
+# Verification & Test Scripts
+scripts/
+
+
 

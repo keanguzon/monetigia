@@ -3,10 +3,10 @@
 import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency, isValidUuid } from "@/lib/utils";
+import { setStoredAccountOrder, sortAccountsWithFallback } from "@/lib/account-order";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,26 +15,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Plus, Wallet, CreditCard, Landmark, Smartphone, TrendingUp, GripVertical, Edit2, Trash2, LayoutGrid, List } from "lucide-react";
+import { ChevronDown, Plus, Wallet, Edit2, LayoutGrid, List } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { motion, AnimatePresence } from "framer-motion";
-
-const accountTypeIcons = {
-  cash: Wallet,
-  bank: Landmark,
-  credit_card: CreditCard,
-  e_wallet: Smartphone,
-  investment: TrendingUp,
-};
-
-const accountTypeLabels = {
-  cash: "Cash",
-  bank: "Bank Account",
-  credit_card: "Credit Card",
-  e_wallet: "E-Wallet",
-  investment: "Investment",
-};
+import { WalletTileCard } from "@/components/accounts/WalletTileCard";
+import { WalletLedgerView } from "@/components/accounts/WalletLedgerView";
+import { DebtScheduleSection } from "@/components/accounts/DebtScheduleSection";
 
 const AddAccountModal = dynamic(() => import("@/components/accounts/AddAccountModal"), {
   ssr: false,
@@ -279,6 +266,8 @@ export default function AccountsPage() {
         accountsList = data || [];
       }
 
+      // Apply resilient fallback sorting using localStorage order if display_order is unpopulated
+      accountsList = sortAccountsWithFallback(accountsList, user.id);
       setAccounts(accountsList);
 
       // Load credit-card (SpayLater) debt from transactions
@@ -452,14 +441,25 @@ export default function AccountsPage() {
       return;
     }
 
-    const updates = accounts.map((acc, idx) =>
-      sb.from("accounts")
-        .update({ display_order: idx })
-        .eq("id", acc.id)
-        .eq("user_id", user.id)
-    );
+    // 1. Immediately cache the user-ordered account IDs in localStorage for instant local persistence
+    const orderedIds = accounts.map((acc) => acc.id);
+    setStoredAccountOrder(user.id, orderedIds);
 
-    await Promise.all(updates);
+    // 2. Best-effort update display_order in Supabase accounts table
+    try {
+      const updates = accounts.map((acc, idx) =>
+        sb.from("accounts")
+          .update({ display_order: idx })
+          .eq("id", acc.id)
+          .eq("user_id", user.id)
+      );
+
+      await Promise.allSettled(updates);
+    } catch (err) {
+      console.warn("Could not sync display_order to remote database:", err);
+    }
+
+    toast({ title: "Order saved", description: "Your wallet order has been updated." });
     setIsEditingOrder(false);
   };
 
@@ -524,6 +524,23 @@ export default function AccountsPage() {
     return currentMoney - selectedDebt;
   }, [currentMoney, previewAfterPay, selectedDebt]);
 
+  const defaultCreditAccountId = useMemo(() => {
+    return accounts.find((a) => a?.type === "credit_card")?.id;
+  }, [accounts]);
+
+  const handlePayDebt = (accountId?: string) => {
+    const targetId = accountId || defaultCreditAccountId;
+    if (targetId) {
+      setDefaultTransactionAccountId(targetId);
+    }
+    setIsAddTransactionOpen(true);
+  };
+
+  const handleSelectAccount = (accountId: string) => {
+    setDefaultTransactionAccountId(accountId);
+    setIsAddTransactionOpen(true);
+  };
+
   return (
     <>
       <div className="space-y-6 animate-in fade-in duration-500">
@@ -549,601 +566,299 @@ export default function AccountsPage() {
           </Button>
         </div>
 
-        {/* Current Total Balance Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Current Total Balance</CardTitle>
-            <CardDescription>Excluding debt accounts</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-4xl font-bold text-primary">
-                {formatCurrency(currentMoney)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                This excludes credit card/debt account balances
-              </p>
-            </div>
-
-            <div className="rounded-lg border p-4 space-y-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    Debt selected ({selectedMonthsDetailLabel})
-                  </p>
-                  <span className="font-semibold text-red-500">
-                    {isDebtLoading ? "Loading..." : `-${formatCurrency(Math.abs(selectedDebt))}`}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant={previewAfterPay ? "default" : "outline"}
-                    onClick={() => setPreviewAfterPay((v) => !v)}
-                    disabled={isDebtLoading}
-                    title="Preview if you pay the selected debt"
-                  >
-                    {previewAfterPay ? "Preview: after paying" : "Preview: off"}
-                  </Button>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" variant="outline" disabled={isDebtLoading || sortedMonths.length === 0}>
-                        {isAllMonthsSelected ? "All months" : selectedMonthsLabel}
-                        <ChevronDown className="ml-2 h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel>Debt months</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuCheckboxItem
-                        checked={isAllMonthsSelected}
-                        onSelect={(e) => e.preventDefault()}
-                        onCheckedChange={(checked) => {
-                          const next = checked === true;
-                          if (next) {
-                            setSelectedDebtMonths(sortedMonths);
-                            return;
-                          }
-                          // Keep at least one month selected; fall back to latest month.
-                          setSelectedDebtMonths(sortedMonths.length > 0 ? [sortedMonths[0]] : []);
-                        }}
-                        className="border-l-2 border-transparent data-[state=checked]:border-primary"
-                      >
-                        All months
-                      </DropdownMenuCheckboxItem>
-                      <DropdownMenuSeparator />
-                      {sortedMonths.map((m) => (
-                        <DropdownMenuCheckboxItem
-                          key={m}
-                          checked={selectedDebtMonths.includes(m)}
-                          onSelect={(e) => e.preventDefault()}
-                          onCheckedChange={(checked) => {
-                            const next = checked === true;
-                            setSelectedDebtMonths((prev) => {
-                              const prevSet = new Set(prev && prev.length > 0 ? prev : sortedMonths);
-
-                              if (next) prevSet.add(m);
-                              else prevSet.delete(m);
-
-                              if (prevSet.size === 0) return sortedMonths;
-                              if (prevSet.size === sortedMonths.length) return sortedMonths;
-
-                              return sortedMonths.filter((x) => prevSet.has(x));
-                            });
-                          }}
-                          className="border-l-2 border-transparent data-[state=checked]:border-primary"
-                        >
-                          {m}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-
-              {previewAfterPay && (
-                <div className="pt-3 border-t">
-                  <p className="text-sm text-muted-foreground mb-1">Money after paying selected debt</p>
-                  <div className={`text-2xl font-bold mt-1 ${previewMoney < 0 ? 'text-red-500' : 'text-primary'}`}>
-                    {formatCurrency(previewMoney)}
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Accounts Card with Reordering */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Wallets</CardTitle>
-                <CardDescription>Your financial wallets and accounts</CardDescription>
-              </div>
+        {/* ─── Editorial Balance Masthead (No nested card-in-card) ─── */}
+        <div className="rounded-2xl border border-border/70 bg-card/60 p-5 sm:p-7 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 rounded-lg border border-input bg-background p-1">
-                  <button
-                    type="button"
-                    onClick={() => setWalletView("details")}
-                    className={`h-8 w-8 rounded-md transition-all duration-200 ${walletView === "details"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent"
-                      }`}
-                    aria-label="Details view"
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Liquid Assets & Net Worth
+                </span>
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+              <div className="flex flex-wrap items-baseline gap-2.5">
+                <p className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums tracking-tight text-foreground">
+                  {formatCurrency(previewAfterPay ? previewMoney : currentMoney)}
+                </p>
+                {previewAfterPay && (
+                  <span className="text-xs font-mono text-muted-foreground font-medium">
+                    (reflecting -{formatCurrency(Math.abs(selectedDebt))} debt deduction)
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Aggregated balance across {accounts.filter((a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false).length} accounts (excluding credit card debt).
+              </p>
+            </div>
+
+            {/* Inline Debt Deduction Bar */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 lg:pt-0">
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-2.5 py-1.5 text-xs">
+                <span className="text-muted-foreground">Outstanding Debt:</span>
+                <span className="font-mono tabular-nums font-bold text-rose-500">
+                  {isDebtLoading ? "..." : `-${formatCurrency(Math.abs(selectedDebt))}`}
+                </span>
+              </div>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 text-xs font-medium bg-background" disabled={isDebtLoading || sortedMonths.length === 0}>
+                    {isAllMonthsSelected ? "All months" : selectedMonthsLabel}
+                    <ChevronDown className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Filter by Month</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={isAllMonthsSelected}
+                    onSelect={(e) => e.preventDefault()}
+                    onCheckedChange={(checked) => {
+                      const next = checked === true;
+                      if (next) {
+                        setSelectedDebtMonths(sortedMonths);
+                        return;
+                      }
+                      setSelectedDebtMonths(sortedMonths.length > 0 ? [sortedMonths[0]] : []);
+                    }}
+                    className="border-l-2 border-transparent data-[state=checked]:border-primary"
                   >
-                    <List className="h-4 w-4 mx-auto" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWalletView("tiles")}
-                    className={`h-8 w-8 rounded-md transition-all duration-200 ${walletView === "tiles"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent"
-                      }`}
-                    aria-label="Tiles view"
-                  >
-                    <LayoutGrid className="h-4 w-4 mx-auto" />
-                  </button>
-                </div>
-                {!isEditingOrder ? (
+                    All months
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                  {sortedMonths.map((m) => (
+                    <DropdownMenuCheckboxItem
+                      key={m}
+                      checked={selectedDebtMonths.includes(m)}
+                      onSelect={(e) => e.preventDefault()}
+                      onCheckedChange={(checked) => {
+                        const next = checked === true;
+                        setSelectedDebtMonths((prev) => {
+                          const prevSet = new Set(prev && prev.length > 0 ? prev : sortedMonths);
+
+                          if (next) prevSet.add(m);
+                          else prevSet.delete(m);
+
+                          if (prevSet.size === 0) return sortedMonths;
+                          if (prevSet.size === sortedMonths.length) return sortedMonths;
+
+                          return sortedMonths.filter((x) => prevSet.has(x));
+                        });
+                      }}
+                      className="border-l-2 border-transparent data-[state=checked]:border-primary"
+                    >
+                      {m}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button
+                size="sm"
+                variant={previewAfterPay ? "secondary" : "outline"}
+                onClick={() => setPreviewAfterPay((v) => !v)}
+                disabled={isDebtLoading}
+                className="h-8 text-xs font-medium"
+              >
+                {previewAfterPay ? "Deduct Debt: Active" : "Deduct Debt: Off"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Wallets & Accounts Section (No outer card, Dual-View: Tiles & Ledger) ─── */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-border/40">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                <span>Wallets & Accounts</span>
+                {accounts && accounts.length > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-mono font-medium bg-muted text-muted-foreground">
+                    {accounts.length}
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Liquid repositories, savings vaults, and active credit facilities
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* View Switcher: Details vs Tiles */}
+              <div className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-muted/30 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setWalletView("tiles")}
+                  className={`h-7 px-2.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
+                    walletView === "tiles"
+                      ? "bg-background text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-label="Tiles view"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Tiles</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWalletView("details")}
+                  className={`h-7 px-2.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
+                    walletView === "details"
+                      ? "bg-background text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-label="Details ledger view"
+                >
+                  <List className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Ledger</span>
+                </button>
+              </div>
+
+              {!isEditingOrder ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsEditingOrder(true)}
+                  disabled={!(accounts && accounts.length > 1)}
+                  className="h-8 text-xs font-medium"
+                  title={accounts && accounts.length > 1 ? "Reorder your accounts" : "Add at least two accounts to reorder"}
+                >
+                  <Edit2 className="h-3.5 w-3.5 mr-1.5" />
+                  Edit Order
+                </Button>
+              ) : (
+                <div className="flex gap-2">
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setIsEditingOrder(true)}
-                    disabled={!(accounts && accounts.length > 1)}
-                    title={accounts && accounts.length > 1 ? "Reorder your accounts" : "Add at least two accounts to reorder"}
+                    className="h-8 text-xs font-medium"
+                    onClick={() => {
+                      setIsEditingOrder(false);
+                      loadAccounts();
+                    }}
                   >
-                    <Edit2 className="h-4 w-4 mr-2" />
-                    Edit Order
+                    Cancel
                   </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setIsEditingOrder(false);
-                        loadAccounts();
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={saveAccountOrder}
-                    >
-                      Save Order
-                    </Button>
-                  </div>
-                )}
-              </div>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs font-semibold"
+                    onClick={saveAccountOrder}
+                  >
+                    Save Order
+                  </Button>
+                </div>
+              )}
+
+              <Button
+                size="sm"
+                onClick={() => setIsModalOpen(true)}
+                className="h-8 text-xs font-semibold gap-1.5 shadow-sm"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Wallet
+              </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            {!isLoading && accounts && accounts.length > 0 ? (
-              <AnimatePresence mode="wait">
-                {walletView === "tiles" ? (
-                  <motion.div
-                    key="tiles"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                  >
-                    {accounts.map((account, index) => {
-                      const Icon = accountTypeIcons[account.type as keyof typeof accountTypeIcons] || Wallet;
-                      return (
-                        <Card
-                          key={account.id}
-                          draggable={isEditingOrder}
-                          onDragStart={() => handleDragStart(index)}
-                          onDragOver={(e) => handleDragOver(e, index)}
-                          onDragEnd={handleDragEnd}
-                          onClick={() => {
-                            if (!isEditingOrder && account.type !== "credit_card") {
-                              setDefaultTransactionAccountId(account.id);
-                              setIsAddTransactionOpen(true);
-                            }
-                          }}
-                          className={
-                            isEditingOrder
-                              ? "cursor-move transition-all duration-200 card-lift"
-                              : account.type === "credit_card"
-                                ? "transition-all duration-200 card-lift"
-                                : "cursor-pointer card-lift"
-                          }
-                        >
-                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            {editingAccountId === account.id ? (
-                              <div className="flex items-center gap-2 pr-2 w-full" onClick={(e) => e.stopPropagation()}>
-                                <Input
-                                  value={editingAccountName}
-                                  onChange={(e) => setEditingAccountName(e.target.value)}
-                                  className="h-7 text-sm px-2 flex-1 min-w-[100px]"
-                                  autoFocus
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") saveAccountName(account.id);
-                                    if (e.key === "Escape") setEditingAccountId(null);
-                                  }}
-                                  onBlur={() => saveAccountName(account.id)}
-                                />
-                              </div>
-                            ) : (
-                              <CardTitle className="text-sm font-medium truncate pr-2">
-                                {account.name}
-                              </CardTitle>
-                            )}
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {isEditingOrder ? <GripVertical className="h-5 w-5 text-muted-foreground" /> : (
-                                <div className="flex items-center">
-                                  {isCustomAccount(account) && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        startEditingAccount(account.id, account.name);
-                                      }}
-                                      className="p-1 rounded hover:bg-blue-500/10 transition-colors mr-1"
-                                      title="Rename wallet"
-                                    >
-                                      <Edit2 className="h-4 w-4 text-blue-500" />
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setAccountToDelete(account.id);
-                                    }}
-                                    className="p-1 rounded hover:bg-destructive/10 transition-colors"
-                                    title="Delete wallet"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </button>
-                                </div>
-                              )}
-                              <div
-                                className="p-2 rounded-full transition-all duration-200 hover:scale-110"
-                                style={{ backgroundColor: `${account.color}20` }}
-                              >
-                                {account.icon ? (
-                                  <img
-                                    src={`/logos/${normalizeLogoFilename(account.icon)}`}
-                                    alt={account.name}
-                                    className="h-5 w-5"
-                                  />
-                                ) : (
-                                  <Icon className="h-4 w-4" style={{ color: account.color || "#22c55e" }} />
-                                )}
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="text-2xl font-bold">
-                              {account.type === "credit_card" ? "-" : ""}{formatCurrency(Math.abs(Number(account.balance)))}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {accountTypeLabels[account.type as keyof typeof accountTypeLabels]}
-                            </p>
-                            {account?.type !== "credit_card" && (
-                              <div
-                                className="mt-2 flex items-center gap-2"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  id={`networth-${account.id}`}
-                                  checked={account.include_in_networth !== false}
-                                  onChange={() => toggleIncludeInNetworth(account.id)}
-                                  className="h-4 w-4 cursor-pointer"
-                                />
-                                <label
-                                  htmlFor={`networth-${account.id}`}
-                                  className="text-xs text-muted-foreground cursor-pointer select-none"
-                                >
-                                  Include in Net Worth
-                                </label>
-                              </div>
-                            )}
-                            {account?.is_savings ? (
-                              <div
-                                className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <span>Interest:</span>
-                                <Input
-                                  inputMode="decimal"
-                                  type="number"
-                                  step="0.01"
-                                  min={0}
-                                  className="h-7 w-20 px-2 text-xs"
-                                  value={interestRateDraft[account.id] ?? String(Number(account?.interest_rate || 0))}
-                                  onChange={(e) =>
-                                    setInterestRateDraft((prev) => ({
-                                      ...prev,
-                                      [account.id]: e.target.value,
-                                    }))
-                                  }
-                                  onBlur={() => saveInterestRate(account.id)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      (e.currentTarget as HTMLInputElement).blur();
-                                    }
-                                  }}
-                                  aria-label="Interest rate percent per year"
-                                />
-                                <span>%/yr</span>
-                              </div>
-                            ) : null}
-                            {account?.type === "credit_card" && Number(account.balance) > 0 ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="mt-2 w-full text-xs hover:bg-primary hover:text-primary-foreground"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDefaultTransactionAccountId(account.id);
-                                  setIsAddTransactionOpen(true);
-                                }}
-                              >
-                                Pay Debt
-                              </Button>
-                            ) : null}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="list"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="space-y-3"
-                  >
-                    {accounts.map((account, index) => {
-                      const Icon = accountTypeIcons[account.type as keyof typeof accountTypeIcons] || Wallet;
-                      return (
-                        <Card
-                          key={account.id}
-                          draggable={isEditingOrder}
-                          onDragStart={() => handleDragStart(index)}
-                          onDragOver={(e) => handleDragOver(e, index)}
-                          onDragEnd={handleDragEnd}
-                          onClick={() => {
-                            if (!isEditingOrder && account.type !== "credit_card") {
-                              setDefaultTransactionAccountId(account.id);
-                              setIsAddTransactionOpen(true);
-                            }
-                          }}
-                          className={
-                            isEditingOrder
-                              ? "cursor-move transition-all duration-200"
-                              : account.type === "credit_card"
-                                ? "transition-all duration-200"
-                                : "cursor-pointer"
-                          }
-                        >
-                          <CardContent className="p-4 space-y-3">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div
-                                  className="p-2 rounded-full"
-                                  style={{ backgroundColor: `${account.color}20` }}
-                                >
-                                  {account.icon ? (
-                                    <img
-                                      src={`/logos/${normalizeLogoFilename(account.icon)}`}
-                                      alt={account.name}
-                                      className="h-5 w-5"
-                                    />
-                                  ) : (
-                                    <Icon className="h-4 w-4" style={{ color: account.color || "#22c55e" }} />
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  {editingAccountId === account.id ? (
-                                    <div className="flex items-center gap-2 mb-1" onClick={(e) => e.stopPropagation()}>
-                                      <Input
-                                        value={editingAccountName}
-                                        onChange={(e) => setEditingAccountName(e.target.value)}
-                                        className="h-7 text-sm px-2 w-[150px]"
-                                        autoFocus
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter") saveAccountName(account.id);
-                                          if (e.key === "Escape") setEditingAccountId(null);
-                                        }}
-                                        onBlur={() => saveAccountName(account.id)}
-                                      />
-                                    </div>
-                                  ) : (
-                                    <p className="font-semibold truncate">{account.name}</p>
-                                  )}
-                                  <p className="text-xs text-muted-foreground">
-                                    {accountTypeLabels[account.type as keyof typeof accountTypeLabels]}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {isEditingOrder ? <GripVertical className="h-5 w-5 text-muted-foreground" /> : (
-                                  <div className="flex items-center">
-                                    {isCustomAccount(account) && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          startEditingAccount(account.id, account.name);
-                                        }}
-                                        className="p-1 rounded hover:bg-blue-500/10 transition-colors mr-1"
-                                        title="Rename wallet"
-                                      >
-                                        <Edit2 className="h-4 w-4 text-blue-500" />
-                                      </button>
-                                    )}
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setAccountToDelete(account.id);
-                                      }}
-                                      className="p-1 rounded hover:bg-destructive/10 transition-colors"
-                                      title="Delete wallet"
-                                    >
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </button>
-                                  </div>
-                                )}
-                                <div className="text-right">
-                                  <p className={`font-semibold ${account.type === "credit_card" ? "text-red-500" : ""}`}>
-                                    {account.type === "credit_card" ? "-" : ""}{formatCurrency(Math.abs(Number(account.balance)))}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">Balance</p>
-                                </div>
-                              </div>
-                            </div>
+          </div>
 
-                            <div className="flex flex-wrap items-center gap-4" onClick={(e) => e.stopPropagation()}>
-                              {account?.type !== "credit_card" && (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    id={`networth-row-${account.id}`}
-                                    checked={account.include_in_networth !== false}
-                                    onChange={() => toggleIncludeInNetworth(account.id)}
-                                    className="h-4 w-4 cursor-pointer"
-                                  />
-                                  <label
-                                    htmlFor={`networth-row-${account.id}`}
-                                    className="text-xs text-muted-foreground cursor-pointer select-none"
-                                  >
-                                    Include in Net Worth
-                                  </label>
-                                </div>
-                              )}
-                              {account?.is_savings ? (
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <span>Interest:</span>
-                                  <Input
-                                    inputMode="decimal"
-                                    type="number"
-                                    step="0.01"
-                                    min={0}
-                                    className="h-7 w-20 px-2 text-xs"
-                                    value={interestRateDraft[account.id] ?? String(Number(account?.interest_rate || 0))}
-                                    onChange={(e) =>
-                                      setInterestRateDraft((prev) => ({
-                                        ...prev,
-                                        [account.id]: e.target.value,
-                                      }))
-                                    }
-                                    onBlur={() => saveInterestRate(account.id)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        (e.currentTarget as HTMLInputElement).blur();
-                                      }
-                                    }}
-                                    aria-label="Interest rate percent per year"
-                                  />
-                                  <span>%/yr</span>
-                                </div>
-                              ) : null}
-                              {account?.type === "credit_card" && Number(account.balance) > 0 ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-xs hover:bg-primary hover:text-primary-foreground"
-                                  onClick={() => {
-                                    setDefaultTransactionAccountId(account.id);
-                                    setIsAddTransactionOpen(true);
-                                  }}
-                                >
-                                  Pay Debt
-                                </Button>
-                              ) : null}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            ) : !isLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Wallet className="h-12 w-12 text-muted-foreground/50 mb-4 animate-pulse" />
-                <p className="text-lg font-medium">No wallets yet</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Add your first wallet to start tracking
-                </p>
-                <Button onClick={() => setIsModalOpen(true)} className="transition-all hover:scale-105">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Wallet
-                </Button>
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <CardSkeleton />
-                <CardSkeleton />
-                <CardSkeleton />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          {/* Wallets Content: Tiles, Ledger, Empty, or Loading */}
+          {!isLoading && accounts && accounts.length > 0 ? (
+            <AnimatePresence mode="wait">
+              {walletView === "tiles" ? (
+                <motion.div
+                  key="tiles"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  className="grid grid-cols-2 gap-2.5 sm:gap-3.5 md:grid-cols-3 lg:grid-cols-4"
+                >
+                  {accounts.map((account, index) => (
+                    <WalletTileCard
+                      key={account.id}
+                      account={account}
+                      index={index}
+                      isEditingOrder={isEditingOrder}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => handleSelectAccount(account.id)}
+                      editingAccountId={editingAccountId}
+                      editingAccountName={editingAccountName}
+                      setEditingAccountName={setEditingAccountName}
+                      startEditingAccount={startEditingAccount}
+                      saveAccountName={saveAccountName}
+                      setEditingAccountId={setEditingAccountId}
+                      setAccountToDelete={setAccountToDelete}
+                      toggleIncludeInNetworth={toggleIncludeInNetworth}
+                      interestRateDraft={interestRateDraft}
+                      setInterestRateDraft={setInterestRateDraft}
+                      saveInterestRate={saveInterestRate}
+                      onPayDebt={handlePayDebt}
+                    />
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="ledger"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <WalletLedgerView
+                    accounts={accounts}
+                    isEditingOrder={isEditingOrder}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragEnd={handleDragEnd}
+                    onSelectAccount={handleSelectAccount}
+                    editingAccountId={editingAccountId}
+                    editingAccountName={editingAccountName}
+                    setEditingAccountName={setEditingAccountName}
+                    startEditingAccount={startEditingAccount}
+                    saveAccountName={saveAccountName}
+                    setEditingAccountId={setEditingAccountId}
+                    setAccountToDelete={setAccountToDelete}
+                    toggleIncludeInNetworth={toggleIncludeInNetworth}
+                    interestRateDraft={interestRateDraft}
+                    setInterestRateDraft={setInterestRateDraft}
+                    saveInterestRate={saveInterestRate}
+                    onPayDebt={handlePayDebt}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          ) : !isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 rounded-xl border border-dashed border-border/60 bg-card/20 text-center">
+              <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="text-base font-semibold text-foreground">No wallets configured</p>
+              <p className="text-xs text-muted-foreground max-w-sm mb-4 mt-1">
+                Add your bank accounts, digital e-wallets, or cash on hand to track your net worth and expenses.
+              </p>
+              <Button onClick={() => setIsModalOpen(true)} size="sm" className="font-semibold gap-1.5">
+                <Plus className="h-4 w-4" />
+                Add Your First Wallet
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 md:grid-cols-3 lg:grid-cols-4">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          )}
+        </div>
 
-        {/* PayLater / Debt Monthly Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle>PayLater / Debt (Monthly)</CardTitle>
-            <CardDescription>
-              Tracks purchases recorded under your PayLater/Debt accounts (type: Credit Card). Your cash stays unchanged until you record payments.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isDebtLoading ? (
-              <div className="flex items-center justify-center py-6">
-                <div className="inline-block h-7 w-7 animate-spin rounded-full border-4 border-solid border-current border-r-transparent text-green-500 motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
-              </div>
-            ) : sortedMonths.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No credit-card transactions found yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {sortedMonths.map((m) => {
-                  const monthDebt = Math.max(0, Number(debtByMonth[m] || 0));
-                  const purchases = (expenseItemsByMonth[m] || []).filter((t: any) => t?.type === "expense");
-                  return (
-                    <div key={m} className="rounded-lg border p-4">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium">{m}</p>
-                        <p className="font-semibold text-red-500">-{formatCurrency(Math.abs(monthDebt))}</p>
-                      </div>
-
-                      {purchases.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          {purchases.slice(0, 8).map((t: any) => (
-                            <div key={t.id} className="flex items-center justify-between text-sm p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-                              <span className="font-medium truncate flex-1">{t.description || t.category?.name || "Credit Card Expense"}</span>
-                              <span className="font-medium">{formatCurrency(Number(t.amount || 0))}</span>
-                            </div>
-                          ))}
-                          {purchases.length > 8 && (
-                            <p className="text-xs text-muted-foreground">Showing 8 of {purchases.length} items</p>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between text-sm pt-2 border-t mt-3">
-                        <p className="font-medium">Total Credit Statement</p>
-                        <p className="font-semibold text-red-500">-{formatCurrency(Math.abs(monthDebt))}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* ─── PayLater & Credit Schedule (No outer card, hairline statement ledger) ─── */}
+        <DebtScheduleSection
+          isDebtLoading={isDebtLoading}
+          sortedMonths={sortedMonths}
+          debtByMonth={debtByMonth}
+          expenseItemsByMonth={expenseItemsByMonth}
+          onPayDebt={handlePayDebt}
+          defaultCreditAccountId={defaultCreditAccountId}
+        />
       </div >
 
       {/* Add Wallet Modal */}

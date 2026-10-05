@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { REMEMBER_ME_KEY, TAB_SESSION_KEY } from "@/lib/session-preferences";
+import { REMEMBER_ME_KEY, TAB_SESSION_KEY, TAB_SESSION_COOKIE } from "@/lib/session-preferences";
 
 const protectedRoutes = [
   "/dashboard",
@@ -29,6 +29,7 @@ export function AuthSessionManager() {
       const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) !== "0";
       if (rememberMe) {
         sessionStorage.setItem(TAB_SESSION_KEY, "1");
+        document.cookie = `${TAB_SESSION_COOKIE}=1; path=/; SameSite=Lax`;
         return;
       }
 

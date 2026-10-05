@@ -1,142 +1,123 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import QRCode from "react-qr-code";
 import { Download, ChevronLeft, ShieldCheck, Smartphone, Zap, Code2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Aurora } from "@/components/landing/Aurora";
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 
-const DARK_COLORS = ["#22c589", "#139a67", "#022416"];
-const LIGHT_COLORS = ["#a7f3d0", "#34d399", "#16a36f"];
 const APK_URL = "https://github.com/keanguzon/monetigia-mobile/releases/latest/download/monetigia.apk";
 
 export default function MobileAppPage() {
-  const [mounted, setMounted] = useState(false);
-  const { resolvedTheme } = useTheme();
-  
-  useEffect(() => setMounted(true), []);
-  const isDark = !mounted ? true : resolvedTheme === "dark";
-
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-300 overflow-x-hidden relative select-none">
-      {/* ─── Aurora Background ─── */}
-      <div className="absolute inset-0 w-full h-full min-h-screen z-0 overflow-hidden pointer-events-none">
-        <Aurora
-          colorStops={isDark ? DARK_COLORS : LIGHT_COLORS}
-          amplitude={0.8}
-          blend={0.35}
-          speed={0.3}
-          className={`absolute inset-0 h-full w-full pointer-events-none transition-all duration-500 ${
-            isDark ? "opacity-60 mix-blend-screen" : "opacity-[0.22] mix-blend-multiply"
-          }`}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/20" />
-      </div>
-
+    <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-200">
       {/* ─── Header ─── */}
-      <header className="relative z-50 w-full bg-transparent pt-6">
-        <div className="container mx-auto flex h-16 items-center px-4 md:px-8">
-          <Link href="/" className="flex items-center space-x-2 text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronLeft className="h-5 w-5" />
-            <span className="font-semibold text-sm">Back to Home</span>
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-background">
+        <div className="container mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>Back to Home</span>
           </Link>
+          <ModeToggle />
         </div>
       </header>
 
-      <main className="flex-1 relative z-10 container mx-auto px-4 md:px-8 py-12 max-w-6xl">
-        <div className="grid gap-12 lg:grid-cols-2 items-start">
-          
-          {/* Left Column: Hero & Info */}
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-sm text-primary font-medium">
-                <Smartphone className="h-4 w-4" />
+      <main className="flex-1 landing-surface-radial py-12 md:py-16">
+        <div className="container mx-auto max-w-5xl px-4 sm:px-6">
+          <div className="grid gap-12 lg:grid-cols-2 items-start">
+            
+            {/* Left Column: Hero & Info */}
+            <div className="space-y-6">
+              <div className="inline-flex items-center gap-2 rounded-md bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <Smartphone className="h-3.5 w-3.5" />
                 <span>Available for Android</span>
               </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-tight font-heading">
-                Trace your wealth from anywhere.
-              </h1>
-              <p className="text-lg text-muted-foreground max-w-md">
-                Monitor your balances, manage transactions, and stick to your budget securely from your phone.
-              </p>
-            </div>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <a href={APK_URL} className="w-full sm:w-auto">
-                <Button size="lg" className="w-full h-14 px-8 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-lg flex items-center gap-2 shadow-lg shadow-primary/20">
-                  <Download className="h-5 w-5" />
-                  Download APK
-                </Button>
-              </a>
-            </div>
-
-            {/* Feature Highlights */}
-            <div className="grid gap-4 sm:grid-cols-2 pt-6 border-t border-border/40">
-              <div className="space-y-2">
-                <ShieldCheck className="h-6 w-6 text-primary" />
-                <h3 className="font-bold">OAuth Secured</h3>
-                <p className="text-sm text-muted-foreground">Sign in securely via Google or Facebook. No passwords stored.</p>
-              </div>
-              <div className="space-y-2">
-                <Zap className="h-6 w-6 text-primary" />
-                <h3 className="font-bold">Instant Sync</h3>
-                <p className="text-sm text-muted-foreground">Changes made on your phone reflect instantly on the web.</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: QR Code & OTA Card */}
-          <div className="space-y-6">
-            <Card className="border-border/40 bg-card/60 backdrop-blur-md shadow-2xl overflow-hidden">
-              <CardHeader className="border-b border-border/40 bg-muted/30 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Smartphone className="h-5 w-5 text-primary" />
-                  Quick Install
-                </CardTitle>
-                <CardDescription>Scan this QR code with your phone's camera to download directly.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex justify-center py-8">
-                <div className="bg-white p-4 rounded-xl shadow-inner">
-                  <QRCode 
-                    value={APK_URL}
-                    size={200}
-                    level="H"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/40 bg-card/60 backdrop-blur-md">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Code2 className="h-5 w-5 text-primary" />
-                  In-App OTA Updates
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  APK releases are for native changes. We use <strong>Over-The-Air (OTA) updates</strong> for standard improvements.
+              <div className="space-y-3">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight font-heading text-foreground leading-tight">
+                  Trace your wealth from anywhere.
+                </h1>
+                <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+                  Monitor multi-wallet balances, record transactions on the go, and track SpayLater installment dates directly from your smartphone.
                 </p>
-                <div className="space-y-2 text-sm border-l-2 border-primary/40 pl-4">
-                  <p className="font-medium text-foreground">How updates work:</p>
-                  <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
-                    <li>App checks for updates on launch.</li>
-                    <li>New code bundles download silently in the background.</li>
-                    <li>The next time you open the app, it runs the new code!</li>
-                  </ol>
-                </div>
-                <div className="rounded bg-muted/50 p-3 text-xs text-muted-foreground flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                  You never have to download a new APK unless we add new native features!
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
 
+              <div className="pt-2">
+                <a href={APK_URL} className="inline-block w-full sm:w-auto">
+                  <Button size="lg" className="w-full sm:w-auto h-12 px-6 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold flex items-center justify-center gap-2">
+                    <Download className="h-4 w-4" />
+                    <span>Download APK Directly</span>
+                  </Button>
+                </a>
+              </div>
+
+              {/* Feature Highlights */}
+              <div className="grid gap-4 sm:grid-cols-2 pt-6 border-t border-border">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>OAuth Secured</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Sign in securely via Google or Facebook. No banking passwords are ever stored.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
+                    <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <span>Instant Cloud Sync</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Changes made on your phone reflect in real time on the web dashboard.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: QR Code & OTA Card */}
+            <div className="space-y-6">
+              <Card className="border border-border bg-card shadow-sm">
+                <CardHeader className="border-b border-border bg-muted/20 pb-4">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-primary" />
+                    <span>Quick Install</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Scan with your mobile camera to begin downloading the APK.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center py-6">
+                  <div className="bg-white p-3 rounded-lg border border-border/80 shadow-sm">
+                    <QRCode value={APK_URL} size={180} level="H" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border border-border bg-card shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <Code2 className="h-4 w-4 text-primary" />
+                    <span>Over-The-Air (OTA) Updates</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    The mobile app supports automatic in-app updates. When bug fixes or feature improvements are released, the app updates automatically in the background.
+                  </p>
+                  <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground flex items-center gap-2 border border-border">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>You only need to re-download if a new native Android release is required.</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+          </div>
         </div>
       </main>
     </div>

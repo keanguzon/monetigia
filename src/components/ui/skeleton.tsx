@@ -18,17 +18,25 @@ export function CardSkeleton() {
   );
 }
 
-export function TableSkeleton({ rows = 5 }: { rows?: number }) {
+export function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="space-y-3">
+    <div className="divide-y divide-border/30">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4">
-          <Skeleton className="h-12 w-12 rounded-full" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-1/3" />
-            <Skeleton className="h-3 w-1/2" />
+        <div
+          key={i}
+          className="flex items-center justify-between px-4 py-3.5 sm:px-5 sm:py-4"
+        >
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 pr-3">
+            <Skeleton className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg shrink-0" />
+            <div className="min-w-0 space-y-1.5 flex-1">
+              <Skeleton className="h-4 sm:h-4.5 w-32 sm:w-48" />
+              <Skeleton className="h-3 w-44 sm:w-60" />
+            </div>
           </div>
-          <Skeleton className="h-4 w-20" />
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <Skeleton className="h-4 sm:h-5 w-16 sm:w-20" />
+            <Skeleton className="h-8 w-8 rounded-md" />
+          </div>
         </div>
       ))}
     </div>

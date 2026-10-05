@@ -89,10 +89,10 @@ export function Sidebar({
                 onClick={onClose}
                 className={cn(
                   "flex items-center rounded-lg px-3 py-2 text-sm font-medium",
-                  "transition-[transform,background-color,color,box-shadow] duration-200 ease-in-out",
+                  "transition-colors duration-150",
                   isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:scale-[1.02]"
+                    ? "bg-primary text-primary-foreground font-semibold"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 <item.icon className={cn("h-5 w-5 transition-[margin,color,fill] duration-200 ease-in-out", !isCollapsed && "mr-3")} />

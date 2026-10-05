@@ -2,6 +2,8 @@ import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import type { Account, Category, Transaction } from "@/types/database";
 
+import { sortAccountsWithFallback } from "@/lib/account-order";
+
 const supabase = createClient();
 
 export function useAccounts() {
@@ -9,6 +11,7 @@ export function useAccounts() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
     
+    let accountsList: Account[] = [];
     const { data, error } = await supabase
       .from("accounts")
       .select("*")
@@ -16,8 +19,20 @@ export function useAccounts() {
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: true });
       
-    if (error) throw error;
-    return data || [];
+    if (error) {
+      const { data: fallbackData, error: fallbackErr } = await supabase
+        .from("accounts")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      if (fallbackErr) throw fallbackErr;
+      accountsList = (fallbackData || []) as Account[];
+    } else {
+      accountsList = (data || []) as Account[];
+    }
+
+    return sortAccountsWithFallback(accountsList, user.id);
   });
 }
 

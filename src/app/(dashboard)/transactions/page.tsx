@@ -3,11 +3,9 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, isValidUuid } from "@/lib/utils";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search } from "lucide-react";
-import Tooltip from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -134,106 +132,96 @@ export default function TransactionsPage() {
     <>
       <div className="space-y-6">
         <div className="space-y-4">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Transactions</h2>
-            <p className="text-muted-foreground">
-              View and manage your transactions
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Transactions</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                View and manage your complete financial history
+              </p>
+            </div>
+            <Button
+              onClick={() => setIsModalOpen(true)}
+              className="h-8 text-xs font-semibold gap-1.5 w-full sm:w-auto shadow-sm"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Transaction</span>
+            </Button>
           </div>
 
-          {/* Filter and Add buttons - stacked on mobile, inline on desktop */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant={filter === "all" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter("all")}
-              >
-                All
-              </Button>
-              <Button
-                variant={filter === "expense" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter("expense")}
-              >
-                Expense
-              </Button>
-              <Button
-                variant={filter === "income" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter("income")}
-              >
-                Income
-              </Button>
-              <Button
-                variant={filter === "transfer" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter("transfer")}
-              >
-                Transfer
-              </Button>
+          {/* Filter Chips & Search Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              {(["all", "expense", "income", "transfer"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFilter(type)}
+                  className={`h-7 px-3 rounded-lg text-xs font-medium capitalize transition-all ${
+                    filter === type
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
             </div>
-            <div className="flex flex-1 items-center space-x-2 sm:max-w-xs ml-auto w-full sm:w-auto">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search transactions..."
-                  className="pl-8 h-9"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search transactions..."
+                className="pl-8 h-8 text-xs bg-card/60"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-            <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto mt-2 sm:mt-0">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Transaction
-            </Button>
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Transactions</CardTitle>
-            <CardDescription>Your complete transaction history</CardDescription>
-            <div className="pt-2 text-sm text-muted-foreground">
-              Showing: <span className="font-medium text-foreground">{filterLabel}</span>
-            </div>
-          </CardHeader>
-          <CardContent>
+        {/* Hallmark F3 Tabular Spec Sheet Ledger */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
+            <span>
+              Showing {searchFilteredTransactions.length} {filterLabel.toLowerCase()}{" "}
+              {searchFilteredTransactions.length === 1 ? "entry" : "entries"}
+            </span>
+          </div>
+
+          <div className="rounded-xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden">
             {!isLoading && searchFilteredTransactions && searchFilteredTransactions.length > 0 ? (
-              <div className="space-y-4">
-                {searchFilteredTransactions.map((transaction, index) => (
+              <div className="divide-y divide-border/30">
+                {searchFilteredTransactions.map((transaction) => (
                   <div
                     key={transaction.id}
-                    className="flex items-center justify-between p-4 rounded-lg border gap-3 transition-all duration-200 hover:scale-[1.01] hover:shadow-md"
+                    onClick={() => setSelectedTransaction(transaction)}
+                    className="flex items-center justify-between px-4 py-3.5 sm:px-5 sm:py-4 hover:bg-muted/30 transition-colors cursor-pointer group"
                   >
-                    <div
-                      onClick={() => setSelectedTransaction(transaction)}
-                      className="flex items-center space-x-4 flex-1 min-w-0 cursor-pointer hover:bg-accent/50 transition-colors rounded-lg -m-2 p-2"
-                    >
+                    <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 pr-3">
                       <div
-                        className={`p-3 rounded-full transition-all duration-200 flex-shrink-0 ${transaction.type === "income"
-                            ? "bg-green-500/10"
+                        className={`p-2.5 rounded-lg shrink-0 ${
+                          transaction.type === "income"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                             : transaction.type === "expense"
-                              ? "bg-red-500/10"
-                              : "bg-blue-500/10"
-                          }`}
+                              ? "bg-rose-500/10 text-rose-500"
+                              : "bg-blue-500/10 text-blue-500"
+                        }`}
                       >
                         {transaction.type === "income" ? (
-                          <ArrowDownLeft className="h-5 w-5 text-green-500" />
+                          <ArrowDownLeft className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                         ) : transaction.type === "expense" ? (
-                          <ArrowUpRight className="h-5 w-5 text-red-500" />
+                          <ArrowUpRight className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                         ) : (
-                          <ArrowLeftRight className="h-5 w-5 text-blue-500" />
+                          <ArrowLeftRight className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                         )}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">
+                      <div className="min-w-0">
+                        <p className="text-sm sm:text-base font-semibold text-foreground truncate tracking-tight">
                           {transaction.description || transaction.category?.name || (transaction.type === "transfer" ? "Transfer" : "Transaction")}
                         </p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground truncate">
-                          <span>{transaction.account?.name}</span>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground truncate mt-0.5">
+                          <span className="font-medium text-foreground/80">{transaction.account?.name}</span>
                           {transaction.category?.name && (
                             <>
                               <span>•</span>
@@ -246,57 +234,59 @@ export default function TransactionsPage() {
                               <span>Transfer</span>
                             </>
                           )}
+                          <span>•</span>
+                          <span className="font-mono">{formatDate(transaction.date)}</span>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                       <div className="text-right">
-                        <p
-                          className={`font-semibold text-sm sm:text-base whitespace-nowrap ${transaction.type === "income"
-                              ? "text-green-500"
+                        <span
+                          className={`text-sm sm:text-base font-bold font-mono tabular-nums tracking-tight ${
+                            transaction.type === "income"
+                              ? "text-emerald-600 dark:text-emerald-400"
                               : transaction.type === "expense"
-                                ? "text-red-500"
+                                ? "text-rose-500"
                                 : "text-blue-500"
-                            }`}
+                          }`}
                         >
                           {transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : ""}
                           {formatCurrency(Number(transaction.amount))}
-                        </p>
-                        <p className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                          {formatDate(transaction.date)}
-                        </p>
+                        </span>
                       </div>
-                    </div>
-                    <Tooltip content={transaction?.id ? "Delete transaction\nRevert balances" : "Cannot delete this transaction"}>
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setDeleteConfirm(transaction);
                         }}
-                        className="p-2 hover:bg-red-100 dark:hover:bg-red-950 rounded-lg transition-colors text-red-500 hover:text-red-700 flex-shrink-0"
+                        className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md"
                         title={transaction?.id ? "Delete transaction" : ""}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                    </Tooltip>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : !isLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <ArrowLeftRight className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-lg font-medium">No transactions found</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Try changing the filter or add a transaction
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <ArrowLeftRight className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm font-semibold text-foreground">No transactions found</p>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-4">
+                  Try adjusting your filter or search query.
                 </p>
-                <Button onClick={() => setIsModalOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button size="sm" onClick={() => setIsModalOpen(true)} className="h-8 text-xs font-semibold gap-1.5">
+                  <Plus className="h-3.5 w-3.5" />
                   Add Transaction
                 </Button>
               </div>
             ) : (
               <TableSkeleton rows={8} />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Delete Confirmation Modal */}

@@ -344,7 +344,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
             <div>
               <h4 className="text-sm font-semibold text-muted-foreground uppercase mb-3">PayLater / Debt</h4>
               <p className="text-xs text-muted-foreground mb-3">
-                Track your buy-now-pay-later purchases. Your cash won't decrease until you record a payment.
+                Track your buy-now-pay-later purchases. Your cash won&apos;t decrease until you record a payment.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {accountOptions
@@ -506,7 +506,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                         Include in Total Net Worth
                       </label>
                       <p className="text-xs text-muted-foreground">
-                        Uncheck if you don't want this account counted in your total net worth
+                        Uncheck if you don&apos;t want this account counted in your total net worth
                       </p>
                     </div>
                   </div>

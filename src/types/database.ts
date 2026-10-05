@@ -53,6 +53,7 @@ export interface Database {
           is_savings: boolean;
           interest_rate: number;
           include_in_networth: boolean;
+          display_order?: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -69,6 +70,7 @@ export interface Database {
           is_savings?: boolean;
           interest_rate?: number;
           include_in_networth?: boolean;
+          display_order?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -85,6 +87,7 @@ export interface Database {
           is_savings?: boolean;
           interest_rate?: number;
           include_in_networth?: boolean;
+          display_order?: number | null;
           created_at?: string;
           updated_at?: string;
         };

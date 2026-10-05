@@ -62,6 +62,7 @@ CREATE TABLE public.accounts (
   is_savings BOOLEAN DEFAULT FALSE,
   interest_rate DECIMAL(5, 2) DEFAULT 0,
   include_in_networth BOOLEAN DEFAULT TRUE,
+  display_order INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
