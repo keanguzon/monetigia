@@ -268,28 +268,30 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
                   Savings Target
                 </label>
                 {/* Cadence Segmented Pill */}
-                <div className="inline-flex items-center rounded-md bg-muted/60 p-0.5 text-[10px] font-medium gap-0.5 shrink-0 ml-auto">
+                <div className="inline-flex items-center rounded-md bg-muted/60 p-0.5 text-[10px] font-semibold gap-0.5 shrink-0 ml-auto">
                   <button
                     type="button"
                     onClick={() => handleFrequencyChange("monthly")}
+                    title="Monthly"
                     className={`rounded px-2 py-0.5 transition-all ${
                       frequency === "monthly"
-                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        ? "bg-background text-foreground shadow-xs font-bold"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    Monthly
+                    M
                   </button>
                   <button
                     type="button"
                     onClick={() => handleFrequencyChange("kinsenas")}
+                    title="Semi-Monthly (Kinsenas / Cutoff)"
                     className={`rounded px-2 py-0.5 transition-all ${
                       frequency === "kinsenas"
-                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        ? "bg-background text-foreground shadow-xs font-bold"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    Kinsenas
+                    SM
                   </button>
                 </div>
               </div>
@@ -303,7 +305,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
                 placeholder={frequency === "monthly" ? "3000 (per month)" : "1500 (per cutoff)"}
               />
               <span className="block mt-1 text-[10px] text-muted-foreground">
-                {liveEquivalent ? liveEquivalent : frequency === "monthly" ? "Target amount saved every month" : "Target amount saved every payday"}
+                {liveEquivalent ? liveEquivalent : frequency === "monthly" ? "Target amount saved every month (Monthly)" : "Target amount saved every cutoff (Semi-Monthly / Kinsenas)"}
               </span>
             </div>
           </div>
