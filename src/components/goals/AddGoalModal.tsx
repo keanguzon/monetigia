@@ -117,7 +117,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
       if (parsedAllocation === null) {
         toast({
           title: "Invalid allocation",
-          description: "Kinsenas allocation must be a non-negative number.",
+          description: "Monthly savings target must be a non-negative number.",
           variant: "destructive",
         });
         return;
@@ -208,14 +208,14 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Salamin with Grado, Japan 2028, Maya EF"
+              placeholder="e.g. Phone, Laptop, Emergency Fund, Travel"
               maxLength={60}
               required
               autoFocus
             />
           </div>
 
-          {/* Target Amount & Kinsenas Allocation (2 columns) */}
+          {/* Target Amount & Monthly Allocation (2 columns) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
@@ -234,7 +234,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                Kinsenas Allocation (₱)
+                Monthly Target (₱)
               </label>
               <Input
                 type="number"
@@ -242,10 +242,10 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
                 min="0"
                 value={allocationPerCycle}
                 onChange={(e) => setAllocationPerCycle(e.target.value)}
-                placeholder="1500 (per payday)"
+                placeholder="2000 (per month)"
               />
               <span className="block mt-1 text-[10px] text-muted-foreground">
-                Used to project time to reach target
+                Target amount you plan to save each month
               </span>
             </div>
           </div>

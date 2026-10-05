@@ -9,16 +9,16 @@ export interface GoalWithProgress extends Goal {
   progressPercent: number;
 }
 
-export function getProjection(goal: GoalWithProgress): { paydays: number; projectedDate: string | null } {
+export function getProjection(goal: GoalWithProgress): { months: number; projectedDate: string | null } {
   if (goal.allocation_per_cycle <= 0 || goal.saved >= goal.target_amount) {
-    return { paydays: 0, projectedDate: null };
+    return { months: 0, projectedDate: null };
   }
   const remaining = Math.max(0, goal.target_amount - goal.saved);
-  const paydays = Math.ceil(remaining / goal.allocation_per_cycle);
+  const months = Math.ceil(remaining / goal.allocation_per_cycle);
   const projected = new Date();
-  projected.setDate(projected.getDate() + paydays * 15);
+  projected.setMonth(projected.getMonth() + months);
   return {
-    paydays,
+    months,
     projectedDate: projected.toISOString().slice(0, 10),
   };
 }
