@@ -221,6 +221,7 @@ export interface Database {
           is_priority: boolean;
           category: string;
           allocation_per_cycle: number;
+          allocation_frequency: "monthly" | "kinsenas" | string | null;
           created_at: string;
           updated_at: string;
         };
@@ -237,6 +238,7 @@ export interface Database {
           is_priority?: boolean;
           category?: string;
           allocation_per_cycle?: number;
+          allocation_frequency?: "monthly" | "kinsenas" | string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -253,6 +255,7 @@ export interface Database {
           is_priority?: boolean;
           category?: string;
           allocation_per_cycle?: number;
+          allocation_frequency?: "monthly" | "kinsenas" | string | null;
           created_at?: string;
           updated_at?: string;
         };
