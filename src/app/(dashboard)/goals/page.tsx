@@ -160,7 +160,7 @@ export default function GoalsPage() {
               <Target className="h-3.5 w-3.5 text-primary" />
               <span>Total Target</span>
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums tracking-tight text-foreground pt-1">
+            <div className="text-2xl sm:text-3xl font-extrabold font-heading tabular-nums tracking-tight text-foreground pt-1">
               {formatCurrency(totalTarget)}
             </div>
             <p className="text-xs text-muted-foreground pt-0.5">
@@ -175,11 +175,11 @@ export default function GoalsPage() {
                 <Coins className="h-3.5 w-3.5 text-emerald-500" />
                 <span>Total Funded</span>
               </div>
-              <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                 {globalProgress.toFixed(0)}%
               </span>
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 pt-1">
+            <div className="text-2xl sm:text-3xl font-extrabold font-heading tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 pt-1">
               {formatCurrency(totalSaved)}
             </div>
             {/* Sleek Progress Track */}
@@ -200,11 +200,11 @@ export default function GoalsPage() {
                 <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
                 <span>Savings Target</span>
               </div>
-              <span className="text-[11px] font-mono text-muted-foreground font-medium">
+              <span className="text-[11px] tabular-nums text-muted-foreground font-medium">
                 ≈ {formatCurrency(totalKinsenasAllocation)}/ks
               </span>
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums tracking-tight text-amber-600 dark:text-amber-400 pt-1">
+            <div className="text-2xl sm:text-3xl font-extrabold font-heading tabular-nums tracking-tight text-amber-600 dark:text-amber-400 pt-1">
               {formatCurrency(totalMonthlyAllocation)}
               <span className="text-xs font-normal text-muted-foreground ml-1">/mo</span>
             </div>

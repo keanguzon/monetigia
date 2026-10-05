@@ -61,18 +61,18 @@ export function GoalCard({
 
   return (
     <div
-      className={`group relative flex flex-col justify-between rounded-xl border p-4.5 transition-all duration-200 ${
+      className={`group relative flex flex-col justify-between rounded-xl border p-4 sm:p-5 transition-all duration-200 ${
         goal.is_completed
-          ? "border-border/40 bg-card/40 opacity-75 hover:opacity-100"
-          : "border-border/60 bg-card/70 hover:border-border hover:shadow-sm"
+          ? "border-border/30 bg-card/30 opacity-75 hover:opacity-100"
+          : "border-border/40 bg-card/50 hover:bg-card/75 hover:border-border/70 hover:shadow-xs"
       }`}
     >
       <div>
         {/* Header row: Name, Category Pill, Priority */}
         <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="space-y-1 min-w-0">
+          <div className="space-y-1.5 min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold text-base leading-snug tracking-tight truncate">
+              <h3 className="font-semibold text-base leading-snug tracking-tight truncate text-foreground">
                 {goal.name}
               </h3>
               {goal.is_priority && (
@@ -104,7 +104,7 @@ export function GoalCard({
           </div>
 
           {/* Quick Actions */}
-          <div className="flex items-center gap-1 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5 shrink-0 opacity-80 sm:opacity-40 group-hover:opacity-100 transition-opacity">
             <Button
               variant="ghost"
               size="icon"
@@ -126,19 +126,23 @@ export function GoalCard({
           </div>
         </div>
 
-        {/* Progress Bar */}
-        <div className="my-3 space-y-1.5">
-          <div className="flex justify-between items-baseline text-xs">
-            <span className="font-mono tabular-nums text-foreground font-medium">
-              {formatCurrency(goal.saved)}
-              <span className="text-muted-foreground font-normal"> / {formatCurrency(goal.target_amount)}</span>
-            </span>
-            <span className="font-mono tabular-nums text-xs font-semibold text-foreground">
-              {goal.progressPercent.toFixed(0)}%
+        {/* Progress Bar & Amounts */}
+        <div className="my-3.5 space-y-2">
+          <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-base sm:text-lg font-bold tracking-tight text-foreground tabular-nums">
+                {formatCurrency(goal.saved)}
+              </span>
+              <span className="text-xs text-muted-foreground font-medium tabular-nums">
+                / {formatCurrency(goal.target_amount)}
+              </span>
+            </div>
+            <span className="text-xs font-bold tabular-nums text-foreground">
+              {clampedPercent.toFixed(0)}%
             </span>
           </div>
 
-          <div className="h-2 w-full rounded-full bg-muted/60 overflow-hidden">
+          <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-300 ${
                 goal.is_completed
@@ -156,13 +160,13 @@ export function GoalCard({
       </div>
 
       {/* Footer: Projection & Complete Toggle */}
-      <div className="mt-2 pt-3 border-t border-border/30 flex items-center justify-between text-xs text-muted-foreground">
-        <div className="min-w-0">
+      <div className="mt-2 pt-3 border-t border-border/30 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <div className="min-w-0 flex-1">
           {goal.is_completed ? (
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5 text-xs">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Fully funded!
             </span>
-          ) : goal.allocation_per_cycle > 0 ? (
+          ) : Number(goal.allocation_per_cycle) > 0 ? (
             <div className="space-y-0.5">
               <span className="flex items-center gap-1 text-[11px] font-medium text-foreground">
                 <Clock className="h-3 w-3 text-muted-foreground" />
@@ -175,14 +179,16 @@ export function GoalCard({
               )}
             </div>
           ) : (
-            <span className="text-[11px] italic text-muted-foreground">No allocation set</span>
+            <span className="text-[11px] text-muted-foreground/70">
+              No target cadence set
+            </span>
           )}
         </div>
 
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+          className="h-7 px-2.5 text-xs gap-1.5 text-muted-foreground hover:text-foreground shrink-0 rounded-lg"
           onClick={() => onToggleComplete(goal.id, !goal.is_completed)}
         >
           {goal.is_completed ? (
