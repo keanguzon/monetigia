@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import type { Account, Category } from "@/types/database";
 import { useAccounts, useCategories } from "@/hooks/use-data";
+import { useGoals } from "@/hooks/use-goals";
 import { isValidUuid, parsePositiveAmount } from "@/lib/utils";
 
 export default function AddTransactionForm() {
@@ -17,9 +18,11 @@ export default function AddTransactionForm() {
 
   const { data: accounts = [], mutate: mutateAccounts } = useAccounts();
   const { data: categories = [] } = useCategories();
+  const { goals = [], mutate: mutateGoals } = useGoals();
 
   const [accountId, setAccountId] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
+  const [goalId, setGoalId] = useState<string>("");
   const [type, setType] = useState<"income" | "expense" | "transfer">("expense");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -56,6 +59,9 @@ export default function AddTransactionForm() {
     if (type !== "expense") {
       setIsPayLater(false);
       setInstallments(1);
+    }
+    if (type === "income") {
+      setGoalId("");
     }
   }, [type]);
 
@@ -179,6 +185,7 @@ export default function AddTransactionForm() {
             user_id: user.id,
             account_id: effectiveAccountId,
             category_id: categoryId || null,
+            goal_id: goalId || null,
             type,
             amount: installmentAmount,
             description: `${description} (Installment ${i + 1}/${installments})`,
@@ -235,10 +242,12 @@ export default function AddTransactionForm() {
           }
           return `Debt - ${label}`;
         })();
+        const effectiveGoalId = (type === "expense" || type === "transfer") && goalId ? goalId : null;
         const { error, data: inserted } = await supabase.from("transactions").insert({
           user_id: user.id,
           account_id: effectiveAccountId,
           category_id: categoryId || null,
+          goal_id: effectiveGoalId,
           type,
           amount: amt,
           description: finalDescription,
@@ -458,6 +467,29 @@ export default function AddTransactionForm() {
           ))}
         </select>
       </div>
+
+      {(type === "expense" || type === "transfer") && (
+        <div>
+          <label className="text-sm font-medium">Goal (Optional)</label>
+          <select
+            className="mt-1 w-full rounded-md border px-3 py-2 bg-background"
+            value={goalId}
+            onChange={(e) => setGoalId(e.target.value)}
+          >
+            <option value="">No goal</option>
+            {goals
+              .filter((g) => !g.is_completed)
+              .map((g) => (
+                <option value={g.id} key={g.id}>
+                  {g.name} ({Math.round(g.progressPercent)}%)
+                </option>
+              ))}
+          </select>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Tagging this transaction contributes towards your goal target.
+          </p>
+        </div>
+      )}
 
       <div>
         <label className="text-sm font-medium">Amount</label>
