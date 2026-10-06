@@ -43,9 +43,13 @@ next-env.d.ts
 /prisma/*.db-journal
 
 # Agent Customizations & Workspaces
-.agents/
-.superpowers/
-AGENTS.md
+.agents/**/node_modules/
+.agents/**/__pycache__/
+.agents/**/*.pyc
+.superpowers/*
+!.superpowers/sdd/
+.superpowers/sdd/*
+!.superpowers/sdd/2026-10-06-goal-reservations/
 GEMINI.md
 SKILL.md
 skills-lock.json
