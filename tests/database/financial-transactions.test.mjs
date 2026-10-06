@@ -150,12 +150,63 @@ test('simultaneous reserve and expense serialize without overbooking', async (t)
     const f = await setup(t);
     const d = draft(f);
     const q = requireSuccess(await quote(f, d));
-    const results = await Promise.all([apply(f, { kind: 'transaction', draft: d }, q), apply(f, {
-            kind: 'reserve', goalId: f.owner.goal.id, accountId: f.owner.account.id, amount: '5000.00'
-        })]);
-    assert.equal(results.filter(r => !r.error).length, 1);
+    const transactionRequestId = randomUUID();
+    const reserveRequestId = randomUUID();
+    const [transactionResult, reserveResult] = await Promise.all([
+        apply(f, { kind: 'transaction', draft: d }, q, transactionRequestId),
+        apply(f, { kind: 'reserve', goalId: f.owner.goal.id, accountId: f.owner.account.id, amount: '5000.00' }, null, reserveRequestId),
+    ]);
+    assert.equal(Number(!transactionResult.error) + Number(!reserveResult.error), 1);
+    const persisted = await rows(f);
     const s = await snap(f);
-    assert.ok(Number(s.wallets[0].available) >= 0);
+    const wallet = s.wallets.find(w => w.accountId === f.owner.account.id);
+    assert.ok(wallet);
+    assert.equal(persisted[0].length, 1);
+
+    if (!transactionResult.error) {
+        const result = requireSuccess(transactionResult);
+        assert.equal(reserveResult.error?.message, 'INSUFFICIENT_AVAILABLE');
+        assert.equal(wallet.actual, '2000.00');
+        assert.equal(wallet.reserved, '0.00');
+        assert.equal(wallet.available, '2000.00');
+        assert.equal(s.goals[0].reserved, '0.00');
+        assert.equal(s.goals[0].spent, '0.00');
+        assert.equal(persisted[1].length, 1);
+        assert.equal(persisted[1][0].id, result.operationId);
+        assert.equal(persisted[1][0].request_id, transactionRequestId);
+        assert.equal(persisted[1][0].command.kind, 'transaction');
+        assert.deepEqual(result.transactionIds, persisted[3].map(tx => tx.id));
+        assert.equal(result.transactionIds.length, 1);
+        assert.equal(persisted[3][0].amount, 28000);
+        assert.equal(persisted[3][0].account_id, f.owner.account.id);
+        assert.equal(persisted[3][0].type, 'expense');
+        assert.equal(persisted[2].length, 0);
+        assert.equal(persisted[1].some(op => op.request_id === reserveRequestId), false);
+    }
+    else {
+        assert.equal(transactionResult.error.message, 'STALE_QUOTE');
+        const result = requireSuccess(reserveResult);
+        assert.equal(wallet.actual, '30000.00');
+        assert.equal(wallet.reserved, '5000.00');
+        assert.equal(wallet.available, '25000.00');
+        assert.equal(s.goals[0].reserved, '5000.00');
+        assert.equal(s.goals[0].spent, '0.00');
+        assert.equal(persisted[1].length, 1);
+        assert.equal(persisted[1][0].id, result.operationId);
+        assert.equal(persisted[1][0].request_id, reserveRequestId);
+        assert.deepEqual(result.transactionIds, []);
+        assert.equal(persisted[2].length, 1);
+        assert.equal(persisted[2][0].operation_id, result.operationId);
+        assert.equal(persisted[2][0].goal_id, f.owner.goal.id);
+        assert.equal(persisted[2][0].account_id, f.owner.account.id);
+        assert.equal(persisted[2][0].kind, 'reserve');
+        assert.equal(persisted[2][0].reserved_delta, 5000);
+        assert.equal(persisted[2][0].spent_delta, 0);
+        assert.equal(persisted[2][0].transaction_id, null);
+        assert.equal(persisted[3].length, 0);
+        assert.equal(persisted[1].some(op => op.request_id === transactionRequestId), false);
+        assert.equal(persisted[2].some(event => event.operation_id === transactionResult.data?.operationId), false);
+    }
 });
 test('credit installments distribute centavos and book debt once; debt goal payment spends once', async (t) => {
     const f = await setup(t);

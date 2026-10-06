@@ -59,3 +59,11 @@ Existing Task 3 reservation tests reapply migration 003 in their setup and leave
 Antislop delivery gate: PASS for this backend-only change; no UI, generated marketing claims, visual assets, or code-comment boilerplate were introduced. New SQL comments explain the private lane, request identity, and stale release validation.
 
 The controller will conduct independent review and the final application/lint/build checkpoint. No build was requested from this implementer.
+
+## Acceptance coverage follow-up
+
+Strengthened the simultaneous reserve/expense integration test to assert both winner-dependent persisted outcomes. The expense winner must leave actual/reserved/available at 2,000.00/0.00/2,000.00 with one linked operation and one stored expense matching the returned transaction ID; the reserve winner must leave 30,000.00/5,000.00/25,000.00 with one linked reserve event at +5,000.00 and no transaction. Each losing request is checked for absent operation/event rows, and the losing transaction path must return `STALE_QUOTE` while the losing reserve path returns `INSUFFICIENT_AVAILABLE`.
+
+Focused verification command: `node .superpowers/local-db/run-test.mjs --test-concurrency=1 tests/database/financial-transactions.test.mjs`
+
+Output: tests 12, pass 12, fail 0, cancelled 0, skipped 0, todo 0; duration 3213.1998 ms. The simultaneous reserve/expense test passed (168.1963 ms).
