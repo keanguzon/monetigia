@@ -1,3 +1,4 @@
+// Legacy tagged contributions remain in use until the finance reader and modal cutover.
 export function contributionGoalId(type: string, goalId: string | null | undefined) {
   return (type === "expense" || type === "transfer") && goalId ? goalId : null;
 }

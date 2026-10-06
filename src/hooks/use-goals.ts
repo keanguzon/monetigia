@@ -1,5 +1,6 @@
 import useSWR from "swr";
 import { goalFunding } from "@/lib/goal-funding";
+import { parseMoney, projectGoal, type ProjectionResult } from "@/lib/goals/summary";
 import { createClient } from "@/lib/supabase/client";
 import type { Goal, GoalInsert, GoalUpdate } from "@/types/database";
 
@@ -10,13 +11,7 @@ export interface GoalWithProgress extends Goal {
   progressPercent: number;
 }
 
-export interface ProjectionResult {
-  count: number;
-  unit: "month" | "months" | "payday" | "paydays";
-  projectedDate: string | null;
-  monthlyAmount: number;
-  kinsenasAmount: number;
-}
+export type { ProjectionResult } from "@/lib/goals/summary";
 
 export function getProjection(goal: GoalWithProgress): ProjectionResult {
   const isKinsenas = goal.allocation_frequency === "kinsenas";
@@ -24,44 +19,19 @@ export function getProjection(goal: GoalWithProgress): ProjectionResult {
   const target = Number(goal.target_amount) || 0;
   const saved = Number(goal.saved) || 0;
 
-  const monthlyAmount = isKinsenas ? allocation * 2 : allocation;
-  const kinsenasAmount = isKinsenas ? allocation : allocation / 2;
-
-  if (allocation <= 0 || saved >= target) {
+  if (allocation <= 0 || target <= 0 || saved >= target) {
     return {
       count: 0,
       unit: isKinsenas ? "paydays" : "months",
       projectedDate: null,
-      monthlyAmount,
-      kinsenasAmount,
+      monthlyAmount: isKinsenas ? allocation * 2 : allocation,
+      kinsenasAmount: isKinsenas ? allocation : allocation / 2,
     };
   }
 
-  const remaining = Math.max(0, target - saved);
-
-  if (isKinsenas) {
-    const paydays = Math.ceil(remaining / allocation);
-    const projected = new Date();
-    projected.setDate(projected.getDate() + paydays * 15);
-    return {
-      count: paydays,
-      unit: paydays === 1 ? "payday" : "paydays",
-      projectedDate: projected.toISOString().slice(0, 10),
-      monthlyAmount,
-      kinsenasAmount,
-    };
-  } else {
-    const months = Math.ceil(remaining / allocation);
-    const projected = new Date();
-    projected.setMonth(projected.getMonth() + months);
-    return {
-      count: months,
-      unit: months === 1 ? "month" : "months",
-      projectedDate: projected.toISOString().slice(0, 10),
-      monthlyAmount,
-      kinsenasAmount,
-    };
-  }
+  // The legacy reader still sums floats; this adapter lasts until decimal snapshot cutover.
+  return projectGoal({ target: parseMoney(target.toFixed(2)), progressAmount: parseMoney(saved.toFixed(2)),
+    allocationPerCycle: parseMoney(allocation.toFixed(2)), allocationFrequency: goal.allocation_frequency }, new Date());
 }
 
 export function useGoals() {

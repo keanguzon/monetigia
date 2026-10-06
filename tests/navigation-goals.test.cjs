@@ -1,11 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const ts = require('typescript');
-function load(path) {
+function load(pathname) {
   const module = { exports: {} };
-  const code = ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-  new Function('module', 'exports', 'require', code)(module, module.exports, require);
+  const code = ts.transpileModule(fs.readFileSync(pathname, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const localRequire = name => name.startsWith('.') ? load(path.resolve(path.dirname(pathname), name) + '.ts') : require(name);
+  new Function('module', 'exports', 'require', code)(module, module.exports, localRequire);
   return module.exports;
 }
 test('navigation ignores same route, fragments, external links and modified clicks', () => {
@@ -19,13 +21,16 @@ test('navigation ignores same route, fragments, external links and modified clic
     assert.equal(navigationDestination('/accounts', current, event), null);
   }
 });
-test('only expense and transfer contributions affect a goal, with exact saved progress', () => {
-  const { contributionGoalId, goalFunding } = load('src/lib/goal-funding.ts');
-  assert.equal(contributionGoalId('income', 'phone'), null);
-  assert.equal(contributionGoalId('expense', ''), null);
-  assert.equal(contributionGoalId('transfer', 'phone'), 'phone');
-  const tx = [{ goal_id: 'phone', type: 'expense', amount: 200 }, { goal_id: 'phone', type: 'transfer', amount: 300 }, { goal_id: 'phone', type: 'income', amount: 900 }, { goal_id: 'other', type: 'expense', amount: 500 }];
-  assert.deepEqual(goalFunding('phone', 5000, tx), { saved: 500, progressPercent: 10 });
-  assert.deepEqual(goalFunding('empty', 0, tx), { saved: 0, progressPercent: 0 });
-  assert.deepEqual(goalFunding('phone', 5000, [1,2,3].map(() => ({ goal_id: 'phone', type: 'expense', amount: 100 }))), { saved: 300, progressPercent: 6 });
+test('allocation events preserve combined progress and never infer legacy funding', () => {
+  const { summarizeGoal } = load('src/lib/goals/summary.ts');
+  const goalId = '10000000-0000-4000-8000-000000000001';
+  const accountId = '20000000-0000-4000-8000-000000000001';
+  const base = { id: goalId, user_id: goalId, goal_id: goalId, account_id: accountId, operation_id: goalId, transaction_id: null, reversal_of: null, created_at: '2026-10-06T00:00:00Z' };
+  const events = [
+    { ...base, kind: 'reserve', reserved_delta: '3000.00', spent_delta: '0.00' },
+    { ...base, kind: 'spend', reserved_delta: '-2000.00', spent_delta: '2000.00' },
+  ];
+  assert.deepEqual(summarizeGoal(goalId, '3000.00', events), { goalId, reserved: '1000.00', spent: '2000.00', progressAmount: '3000.00', remaining: '0.00', progressPercent: 100, walletReservations: [{ accountId, amount: '1000.00' }], legacyTaggedAmount: null });
+  assert.equal(summarizeGoal(goalId, '5000.00', []).progressAmount, '0.00');
+  assert.throws(() => summarizeGoal(goalId, '5000.00', [{ goal_id: goalId, type: 'expense', amount: 5000 }]));
 });
