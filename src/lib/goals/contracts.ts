@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Goal, GoalAllocationEvent } from "@/types/database";
 
 export type Money = string;
+export const MAX_INSTALLMENTS = 12;
 const id = z.string().uuid();
 const safeCentavos = (amount: string) => Number.isSafeInteger(Number(amount.replace(".", "")));
 export const MoneySchema = z.string().regex(/^(0|[1-9]\d*)\.\d{2}$/).refine(safeCentavos, "Amount exceeds safe centavo range");
@@ -29,7 +30,7 @@ export const TransactionDraftSchema = z.object({
   type: z.enum(["income", "expense", "transfer"]), accountId: id,
   transferToAccountId: id.nullable(), categoryId: id.nullable(), goalId: id.nullable(),
   amount: PositiveMoneySchema, description: z.string().nullable(), date,
-  installments: z.object({ count: z.number().int().positive().safe() }).nullable(),
+  installments: z.object({ count: z.number().int().positive().safe().max(MAX_INSTALLMENTS) }).nullable(),
   reservationMoves: z.array(ReservationMoveSchema),
 });
 export type TransactionDraft = z.infer<typeof TransactionDraftSchema>;

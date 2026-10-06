@@ -1,5 +1,5 @@
 import { AllocationEventSchema, MoneySchema, PositiveMoneySchema, SignedMoneySchema,
-  type AllocationEvent, type GoalTotals, type Money } from "./contracts";
+  MAX_INSTALLMENTS, type AllocationEvent, type GoalTotals, type Money } from "./contracts";
 
 export function parseMoney(input: string): Money {
   if (typeof input !== "string" || !/^\d+(\.\d{1,2})?$/.test(input)) throw new Error("Enter a nonnegative decimal amount with at most two decimal places");
@@ -25,7 +25,9 @@ function addCentavos(left: number, right: number): number {
 
 export function splitInstallments(amount: Money, count: number): Money[] {
   const total = toMinorUnits(MoneySchema.parse(amount));
-  if (!Number.isSafeInteger(count) || count <= 0 || count > 0xffffffff) throw new Error("Installment count must be a positive array length");
+  if (!Number.isSafeInteger(count) || count <= 0 || count > MAX_INSTALLMENTS) {
+    throw new Error(`Installment count must be between 1 and ${MAX_INSTALLMENTS}`);
+  }
   if (total < count) throw new Error("Each installment must contain at least one centavo");
   const divisor = BigInt(count);
   const base = Number(BigInt(total) / divisor);
