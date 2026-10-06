@@ -1,5 +1,7 @@
 # Goals reservations: Tasks 1–2 checkpoint
 
+Historical October 6 checkpoint. The latest work is recorded in [Tasks 3–4 checkpoint](TASK_3_4_CHECKPOINT.md).
+
 Execution stops after Task 2 at the user's request. Tasks 3–11 remain pending. Work is local on `codex/goal-reservations`, based on beta `6f17870`, in `C:/Users/PC/.codex/worktrees/goal-reservations/monetigia`. No push, merge, deployment, or live database migration was performed.
 
 ## Delivered scope
