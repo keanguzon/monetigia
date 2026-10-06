@@ -365,7 +365,16 @@ export interface Database {
       };
     };
     Views: {};
-    Functions: {};
+    Functions: {
+      goal_finance_snapshot: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      goal_finance_apply: {
+        Args: { p_request_id: string; p_command: Json; p_quote?: Json | null };
+        Returns: Json;
+      };
+    };
     Enums: {};
   };
 }

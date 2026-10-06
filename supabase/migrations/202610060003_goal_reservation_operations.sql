@@ -1,0 +1,153 @@
+BEGIN;
+CREATE OR REPLACE FUNCTION public.goal_finance_snapshot()
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+DECLARE
+  v_owner uuid := auth.uid();
+  v_result jsonb;
+BEGIN
+  IF v_owner IS NULL THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+  WITH owned_goals AS (
+    SELECT * FROM public.goals WHERE user_id=v_owner
+  ), owned_accounts AS (
+    SELECT * FROM public.accounts WHERE user_id=v_owner
+  ), allocations AS (
+    SELECT e.goal_id,e.account_id,sum(e.reserved_delta) AS reserved,sum(e.spent_delta) AS spent
+    FROM public.goal_allocation_events e
+    JOIN owned_goals g ON g.id=e.goal_id
+    JOIN owned_accounts a ON a.id=e.account_id
+    WHERE e.user_id=v_owner GROUP BY e.goal_id,e.account_id
+  ), totals AS (
+    SELECT goal_id,sum(reserved) AS reserved,sum(spent) AS spent,
+      coalesce(jsonb_agg(jsonb_build_object('accountId',account_id,'amount',round(reserved,2)::text)
+        ORDER BY account_id) FILTER (WHERE reserved>0),'[]'::jsonb) AS wallets
+    FROM allocations GROUP BY goal_id
+  ), legacy AS (
+    SELECT t.goal_id,sum(t.amount) AS amount FROM public.transactions t
+    JOIN owned_goals g ON g.id=t.goal_id
+    WHERE t.user_id=v_owner AND g.review_state='needs_review' AND t.type IN ('expense','transfer')
+    GROUP BY t.goal_id
+  ), goal_rows AS (
+    SELECT g.id,to_jsonb(g) || jsonb_build_object(
+      'target_amount',round(g.target_amount,2)::text,
+      'current_amount',round(coalesce(g.current_amount,0),2)::text,
+      'allocation_per_cycle',round(coalesce(g.allocation_per_cycle,0),2)::text,
+      'goalId',g.id,'reserved',round(coalesce(t.reserved,0),2)::text,
+      'spent',round(coalesce(t.spent,0),2)::text,
+      'progressAmount',round(coalesce(t.reserved,0)+coalesce(t.spent,0),2)::text,
+      'remaining',round(greatest(0,g.target_amount-coalesce(t.reserved,0)-coalesce(t.spent,0)),2)::text,
+      'progressPercent',CASE WHEN g.target_amount>0 THEN least(100,
+        (coalesce(t.reserved,0)+coalesce(t.spent,0))/g.target_amount*100) ELSE 0 END,
+      'walletReservations',coalesce(t.wallets,'[]'::jsonb),
+      'legacyTaggedAmount',CASE WHEN g.review_state='needs_review' THEN round(coalesce(l.amount,0),2)::text ELSE NULL END
+    ) AS data FROM owned_goals g LEFT JOIN totals t ON t.goal_id=g.id LEFT JOIN legacy l ON l.goal_id=g.id
+  ), wallet_rows AS (
+    SELECT a.id,jsonb_build_object('accountId',a.id,'actual',round(coalesce(a.balance,0),2)::text,
+      'reserved',round(coalesce(sum(e.reserved),0),2)::text,
+      'available',round(coalesce(a.balance,0)-coalesce(sum(e.reserved),0),2)::text) AS data
+    FROM owned_accounts a LEFT JOIN allocations e ON e.account_id=a.id GROUP BY a.id,a.balance
+  )
+  SELECT jsonb_build_object('goals',coalesce((SELECT jsonb_agg(data ORDER BY id) FROM goal_rows),'[]'::jsonb),
+    'wallets',coalesce((SELECT jsonb_agg(data ORDER BY id) FROM wallet_rows),'[]'::jsonb)) INTO v_result;
+  RETURN v_result;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.goal_finance_apply(p_request_id uuid,p_command jsonb,p_quote jsonb DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+DECLARE
+  v_owner uuid := auth.uid();
+  v_kind text;
+  v_goal uuid;
+  v_destination uuid;
+  v_account uuid;
+  v_amount numeric;
+  v_hash text;
+  v_previous public.financial_operations%ROWTYPE;
+  v_wallet public.accounts%ROWTYPE;
+  v_source public.goals%ROWTYPE;
+  v_target public.goals%ROWTYPE;
+  v_reserved numeric;
+  v_operation uuid;
+  v_result jsonb;
+BEGIN
+  IF v_owner IS NULL THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+  IF p_request_id IS NULL OR p_command IS NULL OR jsonb_typeof(p_command)<>'object' OR p_quote IS NOT NULL THEN
+    RAISE EXCEPTION 'INVALID_STATE';
+  END IF;
+  v_kind := p_command->>'kind';
+  IF v_kind IS NULL OR v_kind NOT IN ('reserve','release','reallocate') THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+  IF NOT p_command ?& ARRAY['kind','goalId','accountId','amount']
+    OR EXISTS(SELECT 1 FROM jsonb_object_keys(p_command) k WHERE k NOT IN ('kind','goalId','accountId','amount','destinationGoalId'))
+    OR (v_kind='reallocate' AND NOT p_command ? 'destinationGoalId')
+    OR (v_kind<>'reallocate' AND p_command ? 'destinationGoalId')
+    OR jsonb_typeof(p_command->'kind')<>'string'
+    OR jsonb_typeof(p_command->'goalId')<>'string'
+    OR jsonb_typeof(p_command->'accountId')<>'string'
+    OR jsonb_typeof(p_command->'amount')<>'string'
+    OR (v_kind='reallocate' AND jsonb_typeof(p_command->'destinationGoalId')<>'string')
+    OR (p_command->>'amount') !~ '^(0|[1-9][0-9]{0,12})\.[0-9]{2}$' THEN
+    RAISE EXCEPTION 'INVALID_STATE';
+  END IF;
+  BEGIN
+    v_goal := (p_command->>'goalId')::uuid;
+    v_account := (p_command->>'accountId')::uuid;
+    IF v_kind='reallocate' THEN v_destination := (p_command->>'destinationGoalId')::uuid; END IF;
+  EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'INVALID_STATE';
+  END;
+  v_amount := (p_command->>'amount')::numeric;
+  IF v_amount<=0 OR v_amount>=10000000000000 THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+  v_hash := encode(sha256(convert_to(p_command::text,'UTF8')),'hex');
+
+  PERFORM id FROM public.users WHERE id=v_owner FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+  SELECT * INTO v_previous FROM public.financial_operations WHERE user_id=v_owner AND request_id=p_request_id;
+  IF FOUND THEN
+    IF v_previous.command_hash<>v_hash OR v_previous.command<>p_command THEN RAISE EXCEPTION 'REQUEST_CONFLICT'; END IF;
+    IF v_previous.completed_at IS NULL OR v_previous.result IS NULL THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    RETURN v_previous.result || jsonb_build_object('replayed',true);
+  END IF;
+
+  PERFORM id FROM public.goals WHERE user_id=v_owner AND id IN (v_goal,v_destination) ORDER BY id FOR UPDATE;
+  PERFORM id FROM public.accounts WHERE user_id=v_owner AND id=v_account ORDER BY id FOR UPDATE;
+  SELECT * INTO v_wallet FROM public.accounts WHERE user_id=v_owner AND id=v_account;
+  IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+  SELECT * INTO v_source FROM public.goals WHERE user_id=v_owner AND id=v_goal;
+  IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+  IF v_wallet.type='credit_card' OR v_wallet.currency IS DISTINCT FROM 'PHP' OR v_wallet.is_active IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'NOT_ALLOWED';
+  END IF;
+  IF v_source.review_state<>'confirmed' THEN RAISE EXCEPTION 'NEEDS_REVIEW'; END IF;
+  IF v_source.status<>'active' OR v_source.archived_at IS NOT NULL THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+  IF v_kind='reallocate' THEN
+    SELECT * INTO v_target FROM public.goals WHERE user_id=v_owner AND id=v_destination;
+    IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+    IF v_target.review_state<>'confirmed' THEN RAISE EXCEPTION 'NEEDS_REVIEW'; END IF;
+    IF v_target.status<>'active' OR v_target.archived_at IS NOT NULL OR v_goal=v_destination THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+  END IF;
+  IF v_kind='reserve' THEN
+    SELECT coalesce(sum(reserved_delta),0) INTO v_reserved FROM public.goal_allocation_events WHERE user_id=v_owner AND account_id=v_account;
+    IF coalesce(v_wallet.balance,0)-v_reserved<v_amount THEN RAISE EXCEPTION 'INSUFFICIENT_AVAILABLE'; END IF;
+  ELSE
+    SELECT coalesce(sum(reserved_delta),0) INTO v_reserved FROM public.goal_allocation_events WHERE user_id=v_owner AND goal_id=v_goal AND account_id=v_account;
+    IF v_reserved<v_amount THEN RAISE EXCEPTION 'INSUFFICIENT_RESERVATION'; END IF;
+  END IF;
+
+  INSERT INTO public.financial_operations(user_id,request_id,command_hash,command)
+    VALUES(v_owner,p_request_id,v_hash,p_command) RETURNING id INTO v_operation;
+  INSERT INTO public.goal_allocation_events(user_id,goal_id,account_id,operation_id,kind,reserved_delta)
+    VALUES(v_owner,v_goal,v_account,v_operation,
+      CASE v_kind WHEN 'reallocate' THEN 'move_out' ELSE v_kind END,
+      CASE v_kind WHEN 'reserve' THEN v_amount ELSE -v_amount END);
+  IF v_kind='reallocate' THEN
+    INSERT INTO public.goal_allocation_events(user_id,goal_id,account_id,operation_id,kind,reserved_delta)
+      VALUES(v_owner,v_destination,v_account,v_operation,'move_in',v_amount);
+  END IF;
+  v_result := jsonb_build_object('operationId',v_operation,'transactionIds','[]'::jsonb,'replayed',false);
+  UPDATE public.financial_operations SET result=v_result,completed_at=now() WHERE id=v_operation AND user_id=v_owner;
+  RETURN v_result;
+END $$;
+REVOKE ALL ON FUNCTION public.goal_finance_snapshot() FROM PUBLIC,anon;
+REVOKE ALL ON FUNCTION public.goal_finance_apply(uuid,jsonb,jsonb) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.goal_finance_snapshot() TO authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.goal_finance_apply(uuid,jsonb,jsonb) TO authenticated,service_role;
+NOTIFY pgrst, 'reload schema';
+COMMIT;
