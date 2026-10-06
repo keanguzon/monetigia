@@ -82,3 +82,10 @@ Task 2: fix round 1/5 (1 addressed, 0 open; commits 80be291..3afa4a6; scoped Lun
 Task 2: complete (commits 8c23f80..3afa4a6, review clean; fresh TSC/tests/database/lint/build checks recorded above).
 Review process note: scoped reviewer appended its verdict to the ignored report despite read-only instructions; no product/index/branch mutation occurred, and controller instructed no further edits. Verdict also returned in final message.
 Requested stopping boundary reached: Tasks 1-2 complete; Tasks 3-11 pending. Preserve worktree, plan workspace, and local test fixtures for resume. No push, merge, deployment, or live database migration.
+User resumed local implementation on 2026-10-07, superseding the prior stop-after-Task2 boundary. Continue Tasks3-11 with task-scoped independent reviews, existing model ceilings, and no remote push/merge/deployment/live migration.
+Task 3: implementing; base4fbf4ba; use Sol medium for security/concurrency SQL work. Existing isolated worktree and disposable local database are reused.
+Ruling: Snapshot goals retain archived entries with archive metadata to resolve historical names; active presentation filters archived/closed entries in later reader/UI tasks - the shared snapshot has one goals array and cannot both erase archived names and retain them for history - consumers must explicitly apply the active filter.
+Task 3: implemented at fff3e0b; reported24/24 real database tests and TSC exit0; independent Sol medium review pending.
+Controller fresh app regression check atfff3e0b: npmtest exit0,47Vitest+2Node, no failures. Task3 independent review pending.
+Task3 cross-task review checks resolved: quote/confirmation belongsTask4; lifecycleTask5; activeUI filteringTasks6-7; directwriter cutoverTask10. Not missing withinTask3 scope.
+Task 3: complete (commits4fbf4ba..fff3e0b, independentSol medium review speccompliant/qualityApproved, nofindings).
