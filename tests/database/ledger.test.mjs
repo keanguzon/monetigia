@@ -80,6 +80,27 @@ test('transaction deletion retains the original event reference', async () => {
   assert.equal(wrongOwner.error?.code, '23503');
 });
 
+test('service role cannot truncate allocation history', async () => {
+  const operation = await insertOperation(fixture);
+  requireSuccess(await fixture.admin.from('goal_allocation_events').insert(eventInput(fixture, operation)));
+  const before = requireSuccess(await fixture.admin.from('goal_allocation_events').select('*').order('id'));
+  const { queryAdmin } = await databaseRuntime();
+  let failure;
+  try {
+    // Either permission failure or the sentinel rolls back this single implicit transaction.
+    await queryAdmin(`DO $$ BEGIN
+      SET LOCAL ROLE service_role;
+      TRUNCATE public.goal_allocation_events;
+      RAISE EXCEPTION 'Allocation TRUNCATE unexpectedly succeeded' USING ERRCODE='P0001';
+    END $$;`);
+  } catch (error) { failure = error; }
+  const after = requireSuccess(await fixture.admin.from('goal_allocation_events').select('*').order('id'));
+  assert.deepEqual(after, before);
+  const denied = failure?.code === '42501'
+    || String(failure?.stderr).includes('permission denied for table goal_allocation_events');
+  assert.equal(denied, true, failure?.message ?? 'TRUNCATE did not fail');
+});
+
 test('one event can be reversed once by the same owner', async () => {
   const operation = await insertOperation(fixture);
   const event = requireSuccess(await fixture.admin.from('goal_allocation_events').insert(eventInput(fixture, operation)).select().single());

@@ -110,6 +110,7 @@ DO $$ BEGIN
 END $$;
 REVOKE ALL ON public.goal_allocation_events,public.financial_operations FROM PUBLIC,anon,authenticated;
 GRANT SELECT ON public.goal_allocation_events,public.financial_operations TO authenticated;
-GRANT ALL ON public.goal_allocation_events,public.financial_operations TO service_role;
+GRANT SELECT,INSERT,UPDATE,DELETE ON public.goal_allocation_events,public.financial_operations TO service_role;
+REVOKE TRUNCATE ON public.goal_allocation_events,public.financial_operations FROM service_role;
 NOTIFY pgrst, 'reload schema';
 COMMIT;
