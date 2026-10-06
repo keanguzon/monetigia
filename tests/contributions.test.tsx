@@ -35,11 +35,13 @@ vi.mock("@/lib/supabase/client", () => {
   return { createClient: () => ({
     auth: {
       getUser: async () => ({ data: { user: { id: db.userId } } }),
+      getSession: async () => ({ data: { session: { user: { id: db.userId }, access_token: "fixture-token" } }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
-    async rpc(name: string) {
-      if (name !== "goal_finance_snapshot") return { data: null, error: null };
-      return { data: {
+    rpc(name: string) {
+      const response = Promise.resolve().then(() => {
+        if (name !== "goal_finance_snapshot") return { data: null, error: null };
+        return { data: {
         goals: goals.map(goal => ({
           ...goal,
           user_id: db.userId,
@@ -70,6 +72,12 @@ vi.mock("@/lib/supabase/client", () => {
         })),
         wallets: [],
       }, error: null };
+      });
+      const builder: any = {
+        setHeader() { return builder; },
+        then(resolve: any, reject: any) { return response.then(resolve, reject); },
+      };
+      return builder;
     },
     from(table: string) {
       let inserted: any = null;

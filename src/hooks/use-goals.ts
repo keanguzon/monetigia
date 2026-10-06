@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGoalFinance } from "@/hooks/use-goal-finance";
 import { applyAndRefreshFinancialCommand } from "@/lib/refresh-financial-data";
-import { parseMoney, projectGoal, type ProjectionResult } from "@/lib/goals/summary";
+import { parseMoney, projectGoal, toMinorUnits, type ProjectionResult } from "@/lib/goals/summary";
 import { createClient } from "@/lib/supabase/client";
 import type { GoalFinanceGoal, Money } from "@/lib/goals/contracts";
 import type { GoalInsert, GoalUpdate } from "@/types/database";
@@ -26,11 +26,17 @@ function moneyFromLegacyDisplay(value: number): Money {
 
 export function getProjection(goal: GoalWithProgress): ProjectionResult {
   const isKinsenas = goal.allocation_frequency === "kinsenas";
-  const allocation = goal.allocation_per_cycle;
-  const target = goal.target_amount;
-  const saved = goal.saved;
+  const exactAmounts = goal.financeAmounts ?? {
+    target: moneyFromLegacyDisplay(goal.target_amount),
+    progress: moneyFromLegacyDisplay(goal.saved),
+    allocationPerCycle: moneyFromLegacyDisplay(goal.allocation_per_cycle),
+  };
+  const allocationCents = toMinorUnits(exactAmounts.allocationPerCycle);
+  const targetCents = toMinorUnits(exactAmounts.target);
+  const progressCents = toMinorUnits(exactAmounts.progress);
+  const allocation = allocationCents / 100;
 
-  if (allocation <= 0 || target <= 0 || saved >= target) {
+  if (allocationCents <= 0 || targetCents <= 0 || progressCents >= targetCents) {
     return {
       count: 0,
       unit: isKinsenas ? "paydays" : "months",
@@ -40,11 +46,6 @@ export function getProjection(goal: GoalWithProgress): ProjectionResult {
     };
   }
 
-  const exactAmounts = goal.financeAmounts ?? {
-    target: moneyFromLegacyDisplay(target),
-    progress: moneyFromLegacyDisplay(saved),
-    allocationPerCycle: moneyFromLegacyDisplay(allocation),
-  };
   return projectGoal({
     target: exactAmounts.target,
     progressAmount: exactAmounts.progress,

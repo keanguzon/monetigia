@@ -39,6 +39,13 @@ export class FinancialCommandError extends Error {
   }
 }
 
+export class SupersededGoalFinanceRequestError extends Error {
+  constructor() {
+    super("The signed-in user changed while the goal snapshot was loading.");
+    this.name = "SupersededGoalFinanceRequestError";
+  }
+}
+
 const requestIdSchema = z.string().uuid();
 
 function readServerError(error: unknown, ambiguousOutcome = false): FinancialCommandError {
@@ -75,10 +82,37 @@ function unknownOutcome(error: unknown): FinancialCommandError {
   return new FinancialCommandError({ message, code: "TRANSPORT_ERROR", outcome: "unknown", cause: error });
 }
 
-export async function fetchGoalFinance(): Promise<GoalFinanceSnapshot> {
-  const { data, error } = await createClient().rpc("goal_finance_snapshot");
+export async function fetchGoalFinance(
+  expectedUserId?: string,
+  isCurrentRequest: () => boolean = () => true,
+): Promise<GoalFinanceSnapshot> {
+  const client = createClient();
+  let requestToken: string | null = null;
+  if (expectedUserId !== undefined) {
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!session || session.user.id !== expectedUserId || !isCurrentRequest()) {
+      throw new SupersededGoalFinanceRequestError();
+    }
+    requestToken = session.access_token;
+  }
+
+  const request = client.rpc("goal_finance_snapshot");
+  const { data, error } = await (requestToken === null
+    ? request
+    : request.setHeader("Authorization", `Bearer ${requestToken}`));
   if (error) throw readServerError(error);
-  return GoalFinanceSnapshotSchema.parse(data);
+  const snapshot = GoalFinanceSnapshotSchema.parse(data);
+
+  if (expectedUserId !== undefined) {
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!session || session.user.id !== expectedUserId || session.access_token !== requestToken || !isCurrentRequest() ||
+      snapshot.goals.some(goal => goal.user_id !== expectedUserId)) {
+      throw new SupersededGoalFinanceRequestError();
+    }
+  }
+  return snapshot;
 }
 
 export async function quoteTransaction(draft: TransactionDraft, releases?: ReleaseLine[]): Promise<TransactionQuote> {

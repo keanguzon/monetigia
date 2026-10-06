@@ -151,6 +151,20 @@ describe("pure cadence projection", () => {
       expect(getProjection({ ...legacy, target_amount: 90071992547400, saved: 0, allocation_per_cycle: 0.01 })).toMatchObject({ count: 9007199254740000, projectedDate: null });
     } finally { vi.useRealTimers(); }
   });
+  test("uses canonical cents when display numbers collapse distinct safe-boundary amounts", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      const target = "90071992547409.91";
+      const progress = "90071992547409.90";
+      const canonical = {
+        target_amount: Number(target), saved: Number(progress), allocation_per_cycle: 0.01,
+        allocation_frequency: "monthly", financeAmounts: { target, progress, allocationPerCycle: "0.01" },
+      } as GoalWithProgress;
+      expect(canonical.saved).toBe(canonical.target_amount);
+      expect(getProjection(canonical)).toMatchObject({ count: 1, monthlyAmount: 0.01 });
+    } finally { vi.useRealTimers(); }
+  });
 });
 
 describe("domain JSON parsing", () => {
