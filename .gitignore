@@ -80,3 +80,5 @@ scripts/
 
 
 
+
+!supabase/migrations/202610060004_goal_transaction_operations.sql

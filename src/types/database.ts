@@ -370,6 +370,10 @@ export interface Database {
         Args: Record<string, never>;
         Returns: Json;
       };
+      goal_transaction_quote: {
+        Args: { p_draft: Json; p_releases?: Json | null };
+        Returns: Json;
+      };
       goal_finance_apply: {
         Args: { p_request_id: string; p_command: Json; p_quote?: Json | null };
         Returns: Json;
