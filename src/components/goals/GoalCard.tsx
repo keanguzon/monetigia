@@ -45,6 +45,7 @@ interface GoalCardProps {
   onEdit: (goal: GoalWithProgress) => void;
   onDelete: (goalId: string) => void;
   onToggleComplete: (goalId: string, completed: boolean) => void;
+  onContribute: (goalId: string) => void;
 }
 
 export function GoalCard({
@@ -52,6 +53,7 @@ export function GoalCard({
   onEdit,
   onDelete,
   onToggleComplete,
+  onContribute,
 }: GoalCardProps) {
   const projection = getProjection(goal);
   const clampedPercent = Math.min(100, Math.max(0, goal.progressPercent));
@@ -158,6 +160,8 @@ export function GoalCard({
           </div>
         </div>
       </div>
+
+      {!goal.is_completed && <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => onContribute(goal.id)}>Add contribution</Button>}
 
       {/* Footer: Projection & Complete Toggle */}
       <div className="mt-2 pt-3 border-t border-border/30 flex items-center justify-between gap-3 text-xs text-muted-foreground">

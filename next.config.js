@@ -1,5 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.MONETIGIA_BUILD_DIR || ".next",
+  async redirects() {
+    return [
+      {
+        source: "/transactions/new",
+        destination: "/transactions",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

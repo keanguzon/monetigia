@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Manrope, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import "./landing.css";
@@ -6,17 +6,33 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { AuthSessionManager } from "@/components/providers/auth-session-manager";
 import { Toaster } from "@/components/ui/toaster";
 import { LoadingBar } from "@/components/ui/loading-bar";
+import { NavigationProvider } from "@/components/layout/navigation-provider";
 import ThemeTransitionOverlay from "@/components/theme/ThemeTransitionOverlay";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage" });
 
+export const viewport: Viewport = {
+  themeColor: "#09090b",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export const metadata: Metadata = {
   title: "Monetigia - Money Tracker",
   description: "Trace the footprints of your wealth with Monetigia. A premium personal finance tracker designed for clarity and control.",
   keywords: ["money tracker", "finance", "expenses", "accounts", "categories"],
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Monetigia",
+  },
   icons: {
     icon: "/logos/main-logo.png",
+    apple: "/logos/main-logo.png",
   },
 };
 
@@ -35,9 +51,11 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <AuthSessionManager />
-          <LoadingBar />
-          <ThemeTransitionOverlay />
-          <div className="min-h-screen animate-fade-in">{children}</div>
+          <NavigationProvider>
+            <LoadingBar />
+            <ThemeTransitionOverlay />
+            <div className="min-h-screen animate-fade-in">{children}</div>
+          </NavigationProvider>
           <Toaster />
         </ThemeProvider>
       </body>

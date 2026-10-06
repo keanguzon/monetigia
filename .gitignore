@@ -9,6 +9,7 @@
 
 # Next.js
 /.next/
+/.next-verification/
 /out/
 
 # Production
@@ -51,6 +52,7 @@ skills-lock.json
 
 # Documentation & Specs
 docs/
+!docs/codex-review/
 
 # Database & Migrations
 supabase/

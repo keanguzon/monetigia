@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useNavigation } from "./navigation-provider";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -29,6 +30,7 @@ interface HeaderProps {
 
 export function Header({ user, onMenuClick }: HeaderProps) {
   const router = useRouter();
+  const { navigate } = useNavigation();
   const supabase = createClient();
   const { toast } = useToast();
 
@@ -97,7 +99,7 @@ export function Header({ user, onMenuClick }: HeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/settings")}>
+            <DropdownMenuItem onClick={() => navigate("/settings")}>
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>

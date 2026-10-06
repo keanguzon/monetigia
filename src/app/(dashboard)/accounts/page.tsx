@@ -18,6 +18,8 @@ import {
 import { ChevronDown, Plus, Wallet, Edit2, LayoutGrid, List } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
+import { summaryPanelClass, summaryAmountClass, pageTitleClass } from "@/components/ui/financial-summary";
 import { motion, AnimatePresence } from "framer-motion";
 import { WalletTileCard } from "@/components/accounts/WalletTileCard";
 import { WalletLedgerView } from "@/components/accounts/WalletLedgerView";
@@ -544,58 +546,50 @@ export default function AccountsPage() {
   return (
     <>
       <div className="space-y-6 animate-in fade-in duration-500">
-        {/* Header - Redesigned for Mobile */}
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="space-y-1">
-              <h2 className="text-3xl font-bold tracking-tight">Wallets</h2>
-              <p className="text-muted-foreground">
-                Manage your financial wallets and accounts
-              </p>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <h1 className={pageTitleClass}>Wallets</h1>
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                {isLoading ? <Skeleton className="h-4 w-14" /> : `${accounts.length} Total`}
+              </span>
             </div>
-            {/* Button visible only on desktop */}
-            <Button onClick={() => setIsModalOpen(true)} className="hidden sm:flex transition-all duration-200 hover:scale-105 hover:shadow-lg">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Wallet
-            </Button>
+            <p className="text-sm text-muted-foreground">
+              Manage your financial wallets and accounts
+            </p>
           </div>
-          {/* Button visible only on mobile - below description */}
-          <Button onClick={() => setIsModalOpen(true)} className="w-full sm:hidden transition-all duration-200 hover:scale-105 hover:shadow-lg">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Wallet
-          </Button>
         </div>
 
         {/* ─── Editorial Balance Masthead (No nested card-in-card) ─── */}
-        <div className="rounded-2xl border border-border/70 bg-card/60 p-5 sm:p-7 shadow-sm">
+        <div className={summaryPanelClass} aria-busy={isLoading}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Liquid Assets & Net Worth
                 </span>
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>
               <div className="flex flex-wrap items-baseline gap-2.5">
-                <p className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums tracking-tight text-foreground">
-                  {formatCurrency(previewAfterPay ? previewMoney : currentMoney)}
-                </p>
+                <div className={`${summaryAmountClass} text-foreground`}>
+                  {isLoading ? <Skeleton className="h-9 w-48" /> : formatCurrency(previewAfterPay ? previewMoney : currentMoney)}
+                </div>
                 {previewAfterPay && (
-                  <span className="text-xs font-mono text-muted-foreground font-medium">
+                  <span className="text-xs tabular-nums text-muted-foreground font-medium">
                     (reflecting -{formatCurrency(Math.abs(selectedDebt))} debt deduction)
                   </span>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Aggregated balance across {accounts.filter((a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false).length} accounts (excluding credit card debt).
-              </p>
+              <div className="text-xs text-muted-foreground">
+                {isLoading ? <Skeleton className="h-4 w-64 max-w-full" /> : <>Aggregated balance across {accounts.filter((a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false).length} accounts (excluding credit card debt).</>}
+              </div>
             </div>
 
             {/* Inline Debt Deduction Bar */}
             <div className="flex flex-wrap items-center gap-2 pt-1 lg:pt-0">
               <div className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-2.5 py-1.5 text-xs">
                 <span className="text-muted-foreground">Outstanding Debt:</span>
-                <span className="font-mono tabular-nums font-bold text-rose-500">
+                <span className="font-heading tabular-nums font-bold text-rose-600 dark:text-rose-400">
                   {isDebtLoading ? "..." : `-${formatCurrency(Math.abs(selectedDebt))}`}
                 </span>
               </div>

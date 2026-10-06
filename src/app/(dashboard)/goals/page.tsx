@@ -17,6 +17,10 @@ import { GoalWithProgress, useGoals } from "@/hooks/use-goals";
 import { GoalCard } from "@/components/goals/GoalCard";
 import { AddGoalModal } from "@/components/goals/AddGoalModal";
 import type { Goal } from "@/types/database";
+import AddTransactionModal from "@/components/transactions/AddTransactionModal";
+import { GoalCardSkeleton } from "@/components/goals/GoalCardSkeleton";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SummarySkeleton, summaryPanelClass } from "@/components/ui/financial-summary";
 
 export default function GoalsPage() {
   const { toast } = useToast();
@@ -31,6 +35,7 @@ export default function GoalsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [contributingGoalId, setContributingGoalId] = useState<string | null>(null);
 
   // Compute summary metrics
   const {
@@ -137,7 +142,7 @@ export default function GoalsPage() {
               Goals & Sinking Funds
             </h1>
             <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-              {activeGoals.length} Active
+              {isLoading ? <Skeleton className="h-4 w-14" /> : `${activeGoals.length} Active`}
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -152,7 +157,7 @@ export default function GoalsPage() {
       </div>
 
       {/* Unified Editorial Masthead (No isolated chunky boxes) */}
-      <div className="rounded-2xl border border-border/40 bg-card/40 p-5 sm:p-7 backdrop-blur-sm shadow-sm">
+      {isLoading ? <SummarySkeleton /> : !isError && <div className={summaryPanelClass}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 divide-y sm:divide-y-0 sm:divide-x divide-border/30">
           {/* Column 1: Total Target */}
           <div className="space-y-1">
@@ -215,15 +220,20 @@ export default function GoalsPage() {
         </div>
       </div>
 
+      }
+      <p className="text-sm text-muted-foreground">
+        Transactions tagged with a goal automatically increase its funded amount. Monthly and kinsenas targets estimate completion only.
+      </p>
+
       {/* Main Content Area */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div role="status" aria-label="Loading goals" className="space-y-4">
+          <Skeleton className="h-4 w-36" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-40 rounded-xl border border-border/30 bg-card/20 animate-pulse p-4"
-            />
+            <GoalCardSkeleton key={i} />
           ))}
+          </div>
         </div>
       ) : isError ? (
         <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-6 text-center text-destructive">
@@ -274,6 +284,7 @@ export default function GoalsPage() {
                     onEdit={handleOpenEditModal}
                     onDelete={handleDeleteGoal}
                     onToggleComplete={handleToggleComplete}
+                    onContribute={setContributingGoalId}
                   />
                 ))}
               </div>
@@ -306,6 +317,7 @@ export default function GoalsPage() {
                       onEdit={handleOpenEditModal}
                       onDelete={handleDeleteGoal}
                       onToggleComplete={handleToggleComplete}
+                      onContribute={setContributingGoalId}
                     />
                   ))}
                 </div>
@@ -316,6 +328,7 @@ export default function GoalsPage() {
       )}
 
       {/* Add / Edit Goal Modal */}
+      <AddTransactionModal isOpen={contributingGoalId !== null} defaultGoalId={contributingGoalId ?? undefined} onClose={() => setContributingGoalId(null)} />
       <AddGoalModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

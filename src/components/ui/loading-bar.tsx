@@ -1,40 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useNavigation } from "@/components/layout/navigation-provider";
 
 export function LoadingBar() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const pathname = usePathname();
-
-  useEffect(() => {
-    setIsLoading(true);
-    setProgress(0);
-
-    // Simulate loading progress
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => setIsLoading(false), 200);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, [pathname]);
-
-  if (!isLoading) return null;
+  const { pendingHref } = useNavigation();
+  if (!pendingHref) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-transparent">
-      <div
-        className="h-full bg-gradient-to-r from-primary via-green-400 to-primary transition-all duration-300 ease-out"
-        style={{ width: `${progress}%` }}
-      />
+    <div role="status" className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-1 bg-primary/20">
+      <span className="sr-only">Loading page</span>
+      <div className="h-full w-full animate-pulse bg-primary motion-reduce:animate-none" />
     </div>
   );
 }

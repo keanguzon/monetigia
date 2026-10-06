@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { NavigationLink as Link } from "@/components/layout/navigation-link";
+import { useNavigation } from "@/components/layout/navigation-provider";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -40,6 +42,7 @@ export function Sidebar({
   onCollapsedChange,
 }: SidebarProps) {
   const pathname = usePathname();
+  const { pendingHref } = useNavigation();
 
   return (
     <>
@@ -88,16 +91,20 @@ export function Sidebar({
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                aria-busy={pendingHref === item.href}
+                aria-label={isCollapsed ? item.label : undefined}
                 onClick={onClose}
                 className={cn(
                   "flex items-center rounded-lg px-3 py-2 text-sm font-medium",
-                  "transition-colors duration-150",
+                  "transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  pendingHref === item.href && "bg-muted text-foreground",
                   isActive
                     ? "bg-primary text-primary-foreground font-semibold"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <item.icon className={cn("h-5 w-5 transition-[margin,color,fill] duration-200 ease-in-out", !isCollapsed && "mr-3")} />
+                {pendingHref === item.href ? <Loader2 className={cn("h-5 w-5 animate-spin motion-reduce:animate-none", !isCollapsed && "mr-3")} /> : <item.icon className={cn("h-5 w-5 transition-[margin,color,fill] duration-200 ease-in-out", !isCollapsed && "mr-3")} />}
                 {!isCollapsed && <span className="transition-[opacity,color] duration-300 ease-in-out opacity-100">{item.label}</span>}
               </Link>
             );

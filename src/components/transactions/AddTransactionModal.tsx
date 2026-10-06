@@ -7,14 +7,19 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { X, ArrowUpRight, ArrowDownLeft, ArrowLeftRight } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { GoalSelector } from "@/components/goals/GoalSelector";
+import { contributionGoalId } from "@/lib/goal-funding";
+import { refreshFinancialData } from "@/lib/refresh-financial-data";
+import * as Dialog from "@radix-ui/react-dialog";
 
 interface AddTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultAccountId?: string;
+  defaultGoalId?: string;
 }
 
-export default function AddTransactionModal({ isOpen, onClose, defaultAccountId }: AddTransactionModalProps) {
+export default function AddTransactionModal({ isOpen, onClose, defaultAccountId, defaultGoalId }: AddTransactionModalProps) {
   const supabase = createClient();
   const sb = supabase as any;
   const router = useRouter();
@@ -25,12 +30,15 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
 
   const [accountId, setAccountId] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
+  const [goalId, setGoalId] = useState("");
   const [type, setType] = useState<"income" | "expense" | "transfer">("expense");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState("");
   const [transferToAccountId, setTransferToAccountId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [dataError, setDataError] = useState("");
   const [debtPaymentMonth, setDebtPaymentMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [debtByMonthForPaymentTarget, setDebtByMonthForPaymentTarget] = useState<Record<string, number>>({});
   const [isDebtMonthLoading, setIsDebtMonthLoading] = useState(false);
@@ -43,10 +51,25 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
   const debtAccounts = accounts.filter((a: any) => a?.type === "credit_card");
 
   useEffect(() => {
+    let cancelled = false;
     if (isOpen) {
-      loadData(defaultAccountId);
+      setIsDataLoading(true);
+      setDataError("");
+      setAccountId("");
+      setAccounts([]);
+      setGoalId(defaultGoalId || "");
+      setType("expense");
+      setAmount("");
+      setDescription("");
+      setIsPayLater(false);
+      setInstallments(1);
+      setTransferToAccountId("");
+      loadData(defaultAccountId, () => !cancelled)
+        .catch(() => { if (!cancelled) setDataError("Could not load accounts. Close and reopen to try again."); })
+        .finally(() => { if (!cancelled) setIsDataLoading(false); });
     }
-  }, [isOpen, defaultAccountId]);
+    return () => { cancelled = true; };
+  }, [isOpen, defaultAccountId, defaultGoalId]);
 
   useEffect(() => {
     // Auto-select first matching category when type changes
@@ -68,16 +91,19 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
     }
   }, [type]);
 
-  const loadData = async (preferredAccountId?: string) => {
+  const loadData = async (preferredAccountId: string | undefined, isCurrent: () => boolean) => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.id) return;
+    if (!isCurrent()) return;
+    if (!user?.id) throw new Error("Not signed in");
 
-    const { data: accountsData } = await sb.from("accounts").select("*").eq("user_id", user.id).order("name");
+    const { data: accountsData, error: accountsError } = await sb.from("accounts").select("*").eq("user_id", user.id).order("name");
     const accountsList = (accountsData ?? []) as any[];
-    setAccounts(accountsList);
 
-    const { data: catsData } = await sb.from("categories").select("*").order("name");
+    const { data: catsData, error: categoriesError } = await sb.from("categories").select("*").order("name");
+    if (!isCurrent()) return;
+    if (accountsError || categoriesError) throw accountsError || categoriesError;
     const catsList = (catsData ?? []) as any[];
+    setAccounts(accountsList);
     setCategories(catsList);
 
     if (accountsList.length > 0) {
@@ -100,7 +126,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
         }
       } else {
         const firstNonCredit = accountsList.find((a: any) => a?.type !== "credit_card");
-        setAccountId(firstNonCredit?.id ?? accountsList[0]?.id ?? "");
+        setAccountId(defaultGoalId ? "" : firstNonCredit?.id ?? accountsList[0]?.id ?? "");
       }
     }
     if (catsList.length > 0) setCategoryId(catsList[0]?.id ?? "");
@@ -212,6 +238,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDataLoading || isLoading || dataError) return;
     setIsLoading(true);
 
     try {
@@ -369,6 +396,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
             user_id: user.id,
             account_id: effectiveAccountId,
             category_id: categoryId || null,
+            goal_id: contributionGoalId(type, goalId),
             type,
             amount: installmentAmount,
             description: `${description} (Installment ${i + 1}/${installments})`,
@@ -406,6 +434,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
           user_id: user.id,
           account_id: effectiveAccountId,
           category_id: type === "transfer" ? null : (categoryId || null),
+          goal_id: contributionGoalId(type, goalId),
           type,
           amount: amt,
           description: finalDescription,
@@ -457,6 +486,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
         }
       }
 
+      await refreshFinancialData();
       toast({
         title: "Transaction added",
         description: isPayLater && installments > 1
@@ -486,16 +516,17 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in duration-200" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl animate-in slide-in-from-bottom-4 duration-300"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open && !isLoading) onClose(); }}>
+      <Dialog.Portal>
+      <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+      <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" onEscapeKeyDown={(event) => { if (isLoading) event.preventDefault(); }} onPointerDownOutside={(event) => { if (isLoading) event.preventDefault(); }}>
         {/* Modal Header */}
         <div className="flex items-center justify-between p-6 border-b dark:border-slate-700">
-          <h3 className="text-xl font-semibold">Add Transaction</h3>
+          <Dialog.Title className="text-xl font-semibold">Add Transaction</Dialog.Title>
           <button
             onClick={onClose}
+            disabled={isLoading}
+            aria-label="Close transaction form"
             className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200 hover:rotate-90"
           >
             <X className="h-5 w-5" />
@@ -503,7 +534,8 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-6">
+          {dataError && <p role="alert" className="px-6 pt-4 text-sm text-destructive">{dataError}</p>}
+          <fieldset disabled={isDataLoading || isLoading} className="p-6 space-y-6 min-w-0">
             {/* Transaction Type Selector */}
             <div>
               <label className="block text-sm font-medium mb-3">Transaction Type</label>
@@ -586,6 +618,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                   className="w-full px-4 py-3 border rounded-lg dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-primary transition-all"
                   required
                 >
+                  <option value="">Select a wallet</option>
                   {(isPayLater && type === "expense"
                     ? accounts.filter((a: any) => a?.type === "credit_card")
                     : accounts.filter((a: any) => a?.type !== "credit_card")
@@ -756,6 +789,8 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
             </div>
 
             {/* Date */}
+            {(type === "expense" || type === "transfer") && <GoalSelector value={goalId} onChange={setGoalId} disabled={isLoading} />}
+
             <div>
               <label htmlFor="date" className="block text-sm font-medium mb-2">Date</label>
               <input
@@ -780,27 +815,29 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId 
                 placeholder="Enter description"
               />
             </div>
-          </div>
+          </fieldset>
 
           {/* Modal Footer */}
           <div className="flex gap-3 p-6 border-t dark:border-slate-700">
             <button
               type="button"
               onClick={onClose}
+              disabled={isLoading}
               className="flex-1 px-4 py-3 border rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isLoading || accounts.length === 0}
+              disabled={isLoading || isDataLoading || !!dataError || accounts.length === 0}
               className="flex-1 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium hover:shadow-lg"
             >
-              {isLoading ? "Adding..." : "Add Transaction"}
+              {isLoading ? "Adding..." : isDataLoading ? "Loading accounts..." : "Add Transaction"}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

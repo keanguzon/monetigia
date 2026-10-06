@@ -11,8 +11,8 @@ import {
   ArrowRight,
   ChevronDown,
 } from "lucide-react";
-import Link from "next/link";
-import { StatCardSkeleton } from "@/components/ui/skeleton";
+import { NavigationLink as Link } from "@/components/layout/navigation-link";
+import { SummarySkeleton, summaryPanelClass, summaryAmountClass, pageTitleClass } from "@/components/ui/financial-summary";
 import { CountUpNumber } from "@/components/ui/count-up";
 import {
   DropdownMenu,
@@ -139,17 +139,12 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h2>
+          <h2 className={pageTitleClass}>Dashboard</h2>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Your financial overview at a glance.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-        </div>
+        <SummarySkeleton columns={4} />
       </div>
     );
   }
@@ -158,7 +153,7 @@ export default function DashboardPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h2>
+          <h2 className={pageTitleClass}>Dashboard</h2>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Your financial overview at a glance.
           </p>
@@ -182,11 +177,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Grid: 2-Columns on mobile, 4-columns on desktop */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
+      <div className={summaryPanelClass}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
         {statCards.map((stat) => (
           <div
             key={stat.title}
-            className="flex flex-col justify-between rounded-xl border border-border/50 bg-card/60 backdrop-blur-sm p-3.5 sm:p-4 hover:border-border transition-all duration-200"
+            className="min-w-0 flex flex-col justify-between border-t border-border/30 pt-5 first:border-0 first:pt-0 sm:border-t-0 sm:pt-0 sm:even:border-l sm:even:pl-8 lg:[&:not(:first-child)]:border-l lg:[&:not(:first-child)]:pl-8"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
@@ -196,11 +192,11 @@ export default function DashboardPage() {
             </div>
 
             <div className="my-2">
-              <div className={`text-base sm:text-xl lg:text-2xl font-bold font-mono tabular-nums tracking-tight truncate ${stat.color}`}>
+              <div className={`${summaryAmountClass} break-words ${stat.color}`}>
                 {stat.value}
               </div>
               <p
-                className={`text-[10px] sm:text-xs font-mono font-medium mt-0.5 ${
+                className={`text-xs tabular-nums font-medium mt-0.5 ${
                   stat.change >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500"
                 }`}
               >
@@ -214,6 +210,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      </div>
       {/* Recent Transactions: Clean Open Hairline Register (No outer card) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between pb-2 border-b border-border/40">

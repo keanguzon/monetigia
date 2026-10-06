@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import { goalFunding } from "@/lib/goal-funding";
 import { createClient } from "@/lib/supabase/client";
 import type { Goal, GoalInsert, GoalUpdate } from "@/types/database";
 
@@ -89,18 +90,9 @@ export function useGoals() {
       if (goalsRes.error) throw goalsRes.error;
       if (txRes.error) throw txRes.error;
 
-      const savedByGoal = new Map<string, number>();
-      (txRes.data || []).forEach((tx) => {
-        if (tx.goal_id && (tx.type === "expense" || tx.type === "transfer")) {
-          const current = savedByGoal.get(tx.goal_id) || 0;
-          savedByGoal.set(tx.goal_id, current + Number(tx.amount || 0));
-        }
-      });
-
       const goalsList: GoalWithProgress[] = (goalsRes.data || []).map((goal) => {
-        const saved = savedByGoal.get(goal.id) || 0;
         const target = Number(goal.target_amount) || 0;
-        const progressPercent = target > 0 ? (saved / target) * 100 : 0;
+        const { saved, progressPercent } = goalFunding(goal.id, target, txRes.data || []);
         const isAutoCompleted = target > 0 && saved >= target;
         const isCompleted = goal.is_completed || isAutoCompleted;
 
