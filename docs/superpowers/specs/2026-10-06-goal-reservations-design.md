@@ -80,6 +80,8 @@ An installment purchase is not saved cash and cannot consume a cash reservation 
 
 Split installment amounts in integer centavos, assigning remainder centavos to the earliest rows so they sum exactly to the total. Book the total debt once. Do not change current reporting rules or the existing installment dates. Remove the Wallets fetch-time balance write; fetching data must not overwrite an atomic debt update. Before cutover, audit any legacy debt discrepancy and report it for a separate confirmed correction instead of guessing opening balances.
 
+Retain the current modal's maximum of 12 installments in the schema, split helper, and eventual atomic transaction writer. Reject excessive counts before allocating an array; reject totals that would create zero-centavo installment rows.
+
 ## Storage and authoritative operations
 
 Add an append-only `goal_allocation_events` table, owned by a user and linked to a goal and wallet. Each event has exact signed `reserved_delta` and `spent_delta`, an operation reference, a kind, timestamp, optional transaction reference, and optional reversal reference. Spending contributes `(-amount, +amount)`; release contributes `(-amount, 0)`; reserve contributes `(+amount, 0)`; reservation moves use paired events. Closed goals cannot receive new reservations.
