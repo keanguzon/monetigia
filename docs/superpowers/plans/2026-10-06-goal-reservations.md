@@ -197,13 +197,13 @@ Define `AllocationEvent` from the new database row, including `reserved_delta`, 
 
 **Interfaces:** produce the client exports above and `useGoalFinance(userId: string | null)` returning `{ data, isLoading, error, refresh }`. SWR key: `["goalFinance", userId]`; history key: `["goalHistory", userId, goalId]`. `useGoals` consumes this snapshot and preserves existing metadata CRUD with lifecycle writes routed through commands.
 
-- [ ] Write failing adapter tests for canonical money serialization, schema rejection of malformed RPC results, named errors, and the same UUID on retry. Test `fetchGoalFinance` is read-only and never updates a fully funded goal.
-- [ ] Write refresh tests: success and idempotent replay revalidate goal snapshot/history plus existing account, recent transaction, and dashboard keys; failed commands do not mutate cached amounts. Signing out clears user-specific snapshots. Never reuse another user's cached wallet data.
-- [ ] Test Review Focus 2: committed mutation plus failed revalidation returns a saved outcome with a refresh error, not a failed financial save. Keep `applyFinancialCommand` and refresh separate so an error in the latter cannot cause a new request UUID.
+- [x] Write failing adapter tests for canonical money serialization, schema rejection of malformed RPC results, named errors, and the same UUID on retry. Test `fetchGoalFinance` is read-only and never updates a fully funded goal.
+- [x] Write refresh tests: success and idempotent replay revalidate goal snapshot/history plus existing account, recent transaction, and dashboard keys; failed commands do not mutate cached amounts. Signing out clears user-specific snapshots. Never reuse another user's cached wallet data.
+- [x] Test Review Focus 2: committed mutation plus failed revalidation returns a saved outcome with a refresh error, not a failed financial save. Keep `applyFinancialCommand` and refresh separate so an error in the latter cannot cause a new request UUID.
 
   Pin `retry recovers committed operation`: `expect(second.operationId).toBe(first.operationId)` and `expect(second.replayed).toBe(true)`.
-- [ ] Run `npx vitest run tests/goal-finance-client.test.ts tests/goal-finance-hooks.test.tsx`; expect red. Implement parsing with existing Zod, replace tagged-transaction sums in `use-goals`, and remove the fetch-time auto-completion write. Keep metadata edits and projection callers compatible through explicit updated types.
-- [ ] Run focused tests and `npx tsc --noEmit`; expect exit 0. Commit: `feat: share authoritative goal and wallet financial snapshots`.
+- [x] Run `npx vitest run tests/goal-finance-client.test.ts tests/goal-finance-hooks.test.tsx`; expect red. Implement parsing with existing Zod, replace tagged-transaction sums in `use-goals`, and remove the fetch-time auto-completion write. Keep metadata edits and projection callers compatible through explicit updated types.
+- [x] Run focused tests and `npx tsc --noEmit`; expect exit 0. Commit: `feat: share authoritative goal and wallet financial snapshots`.
 
 ## Task 7: Goal actions, lifecycle presentation, and history
 
