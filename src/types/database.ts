@@ -218,6 +218,10 @@ export interface Database {
           color: string | null;
           icon: string | null;
           is_completed: boolean;
+          status: "active" | "completed" | "cancelled";
+          review_state: "needs_review" | "confirmed";
+          completed_at: string | null;
+          archived_at: string | null;
           is_priority: boolean;
           category: string;
           allocation_per_cycle: number;
@@ -235,6 +239,10 @@ export interface Database {
           color?: string | null;
           icon?: string | null;
           is_completed?: boolean;
+          status?: "active" | "completed" | "cancelled";
+          review_state?: "needs_review" | "confirmed";
+          completed_at?: string | null;
+          archived_at?: string | null;
           is_priority?: boolean;
           category?: string;
           allocation_per_cycle?: number;
@@ -252,6 +260,10 @@ export interface Database {
           color?: string | null;
           icon?: string | null;
           is_completed?: boolean;
+          status?: "active" | "completed" | "cancelled";
+          review_state?: "needs_review" | "confirmed";
+          completed_at?: string | null;
+          archived_at?: string | null;
           is_priority?: boolean;
           category?: string;
           allocation_per_cycle?: number;
@@ -259,6 +271,63 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
+      };
+      financial_operations: {
+        Row: {
+          id: string;
+          user_id: string;
+          request_id: string;
+          command_hash: string;
+          command: Json;
+          result: Json | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          request_id: string;
+          command_hash: string;
+          command: Json;
+          result?: Json | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          result?: Json | null;
+          completed_at?: string | null;
+        };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
+      };
+      goal_allocation_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          goal_id: string;
+          account_id: string;
+          operation_id: string;
+          kind: "reserve" | "release" | "spend" | "move_in" | "move_out" | "legacy_spent" | "reversal";
+          reserved_delta: string | number;
+          spent_delta: string | number;
+          transaction_id: string | null;
+          reversal_of: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          goal_id: string;
+          account_id: string;
+          operation_id: string;
+          kind: "reserve" | "release" | "spend" | "move_in" | "move_out" | "legacy_spent" | "reversal";
+          reserved_delta?: string;
+          spent_delta?: string;
+          transaction_id?: string | null;
+          reversal_of?: string | null;
+          created_at?: string;
+        };
+        Update: never;
         Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
       user_preferences: {
@@ -310,4 +379,6 @@ export type Budget = Database["public"]["Tables"]["budgets"]["Row"];
 export type Goal = Database["public"]["Tables"]["goals"]["Row"];
 export type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
 export type GoalUpdate = Database["public"]["Tables"]["goals"]["Update"];
+export type GoalAllocationEvent = Database["public"]["Tables"]["goal_allocation_events"]["Row"];
+export type FinancialOperation = Database["public"]["Tables"]["financial_operations"]["Row"];
 export type UserPreference = Database["public"]["Tables"]["user_preferences"]["Row"];

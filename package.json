@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/navigation-goals.test.cjs && vitest run",
+    "test:db": "node --test --test-concurrency=1 tests/database/*.test.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
