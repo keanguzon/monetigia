@@ -23,7 +23,7 @@ export async function refreshFinancialData(userId?: string, mutateCache: ScopedM
       return key === "goals" || key === "accounts" || key === "recentTransactions" || key.startsWith("dashboardStats-");
     }
     if (!Array.isArray(key)) return false;
-    if (key[0] === "goalFinance" || key[0] === "goalHistory") return userId === undefined || key[1] === userId;
+    if (key[0] === "goalFinance" || key[0] === "goalHistory" || key[0] === "goalWalletMetadata") return userId === undefined || key[1] === userId;
     return false;
   };
   const rememberMatchingKey = (key: unknown) => {

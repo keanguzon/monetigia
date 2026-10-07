@@ -64,7 +64,7 @@ function toDisplayGoal(goal: GoalFinanceGoal): GoalWithProgress {
     financeAmounts: { target: goal.target_amount, progress: goal.progressAmount, allocationPerCycle: goal.allocation_per_cycle },
     saved,
     progressPercent: goal.progressPercent,
-    is_completed: goal.status === "completed" || goal.is_completed,
+    is_completed: goal.status === "completed",
   };
 }
 
@@ -150,6 +150,9 @@ export function useGoals() {
 
   return {
     goals,
+    userId,
+    financeSnapshot: finance.data,
+    refresh: finance.refresh,
     isLoading: userIsLoading || finance.isLoading,
     isError: userError ?? finance.error,
     createGoal,

@@ -212,7 +212,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
                 {editingGoal ? "Edit Goal" : "New Goal / Sinking Fund"}
               </h2>
               <p className="text-xs text-muted-foreground">
-                Track your savings targets with flexible monthly or kinsenas projections
+                Monthly and kinsenas targets estimate completion; they do not reserve money.
               </p>
             </div>
           </div>

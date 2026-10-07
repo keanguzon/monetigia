@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
-import { fetchGoalFinance } from "@/lib/goals/client";
+import { fetchGoalFinance, fetchGoalHistory, fetchGoalWalletMetadata } from "@/lib/goals/client";
 import type { GoalFinanceSnapshot } from "@/lib/goals/contracts";
 import { refreshFinancialData } from "@/lib/refresh-financial-data";
 import { createClient } from "@/lib/supabase/client";
@@ -39,7 +39,7 @@ export function useGoalFinance(userId: string | null) {
   useEffect(() => {
     if (userId !== null) return;
     void mutateCache(
-      cacheKey => Array.isArray(cacheKey) && (cacheKey[0] === "goalFinance" || cacheKey[0] === "goalHistory"),
+      cacheKey => Array.isArray(cacheKey) && (cacheKey[0] === "goalFinance" || cacheKey[0] === "goalHistory" || cacheKey[0] === "goalWalletMetadata"),
       () => undefined,
       { populateCache: true, revalidate: false },
     );
@@ -50,5 +50,18 @@ export function useGoalFinance(userId: string | null) {
     await refreshFinancialData(userId, mutateCache, cache);
   }, [cache, mutateCache, userId]);
 
-  return { data: snapshotUserId === userId ? cachedData : undefined, isLoading, error, refresh, mutate };
+  const data = snapshotUserId === userId ? cachedData : undefined;
+  return { data, snapshot: data, userId, isLoading, error, refresh, mutate };
+}
+
+export function useGoalWalletMetadata(userId: string | null) {
+  const key = userId ? ["goalWalletMetadata", userId] as const : null;
+  const { data, error, isLoading, mutate } = useSWR(key, ([, scopedUserId]) => fetchGoalWalletMetadata(scopedUserId));
+  return { data: userId ? data : undefined, error, isLoading, refresh: mutate };
+}
+
+export function useGoalHistory(userId: string | null, goalId: string | null) {
+  const key = userId && goalId ? ["goalHistory", userId, goalId] as const : null;
+  const { data, error, isLoading, mutate } = useSWR(key, ([, scopedUserId, scopedGoalId]) => fetchGoalHistory(scopedUserId, scopedGoalId));
+  return { data: userId && goalId ? data : undefined, error, isLoading, refresh: mutate };
 }

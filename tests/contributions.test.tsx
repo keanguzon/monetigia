@@ -185,7 +185,7 @@ test("legacy goal-tagged installments remain history and do not reserve funds", 
   expect(db.transactions[3].goal_id).toBeNull();
 });
 
-test("page fixtures render summaries and expose a working contribution shortcut", async () => {
+test("page fixtures render summaries and expose a working spend-from-goal shortcut", async () => {
   function save(name: string) {
     if (!process.env.MONETIGIA_VISUAL_FIXTURES) return;
     mkdirSync(".superpowers/visual-check", { recursive: true });
@@ -193,9 +193,9 @@ test("page fixtures render summaries and expose a working contribution shortcut"
   }
   const user = userEvent.setup();
   const goals = render(<SWRConfig value={config}><GoalsPage /></SWRConfig>);
-  await screen.findAllByRole("button", { name: "Add contribution" });
+  await screen.findAllByRole("button", { name: "Spend from goal" });
   save("goals");
-  await user.click(screen.getAllByRole("button", { name: "Add contribution" })[0]);
+  await user.click(screen.getAllByRole("button", { name: "Spend from goal" })[0]);
   await waitFor(() => expect((screen.getByLabelText("Goal (Optional)") as HTMLSelectElement).value).toBe(db.phoneId));
   save("contribution");
   goals.unmount();

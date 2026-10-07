@@ -1,18 +1,12 @@
 "use client";
 
 import React from "react";
-import {
-  Calendar,
-  CheckCircle2,
-  Circle,
-  Clock,
-  Edit2,
-  Flame,
-  Trash2,
-} from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { Calendar, CheckCircle2, Clock, Edit2, Flame, MoreHorizontal, Circle, History, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import { getProjection, GoalWithProgress } from "@/hooks/use-goals";
+import { getProjection, type GoalWithProgress } from "@/hooks/use-goals";
+import { toMinorUnits } from "@/lib/goals/summary";
 
 const categoryStyles: Record<string, string> = {
   lifestyle: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
@@ -27,17 +21,8 @@ const categoryStyles: Record<string, string> = {
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return null;
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return null;
-    return new Intl.DateTimeFormat(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(d);
-  } catch {
-    return null;
-  }
+  const date = new Date(dateStr);
+  return Number.isNaN(date.getTime()) ? null : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
 interface GoalCardProps {
@@ -46,168 +31,98 @@ interface GoalCardProps {
   onDelete: (goalId: string) => void;
   onToggleComplete: (goalId: string, completed: boolean) => void;
   onContribute: (goalId: string) => void;
+  onReserve: (goalId: string) => void;
+  onRelease: (goalId: string) => void;
+  onMove: (goalId: string) => void;
+  onHistory: (goalId: string) => void;
+  onClose?: (goalId: string, status: "completed" | "cancelled") => void;
 }
 
-export function GoalCard({
-  goal,
-  onEdit,
-  onDelete,
-  onToggleComplete,
-  onContribute,
-}: GoalCardProps) {
+export function GoalCard({ goal, onEdit, onDelete, onToggleComplete, onContribute, onReserve, onRelease, onMove, onHistory, onClose }: GoalCardProps) {
   const projection = getProjection(goal);
-  const clampedPercent = Math.min(100, Math.max(0, goal.progressPercent));
+  const progressCents = toMinorUnits(goal.financeAmounts.progress);
+  const targetCents = toMinorUnits(goal.financeAmounts.target);
+  const isCompleted = goal.status === "completed";
+  const isCancelled = goal.status === "cancelled";
+  const isActive = goal.status === "active";
+  const activeFunded = isActive && progressCents >= targetCents;
+  const displayedProgress = isCompleted ? goal.spent : goal.financeAmounts.progress;
+  const percent = isCompleted ? (targetCents ? Math.min(100, toMinorUnits(goal.spent) / targetCents * 100) : 0) : goal.progressPercent;
+  const clampedPercent = Math.min(100, Math.max(0, percent));
   const categoryStyle = categoryStyles[goal.category?.toLowerCase()] || categoryStyles.lifestyle;
   const formattedTargetDate = formatDate(goal.target_date);
   const formattedProjectedDate = formatDate(projection.projectedDate);
+  const hasReservations = goal.walletReservations.some(wallet => toMinorUnits(wallet.amount) > 0);
 
   return (
-    <div
-      className={`group relative flex flex-col justify-between rounded-xl border p-4 sm:p-5 transition-all duration-200 ${
-        goal.is_completed
-          ? "border-border/30 bg-card/30 opacity-75 hover:opacity-100"
-          : "border-border/40 bg-card/50 hover:bg-card/75 hover:border-border/70 hover:shadow-xs"
-      }`}
-    >
+    <article aria-label={`${goal.name} goal`} className={`group flex flex-col justify-between rounded-xl border p-4 sm:p-5 ${isActive ? "border-border/40 bg-card/50" : "border-border/30 bg-card/30"}`}>
       <div>
-        {/* Header row: Name, Category Pill, Priority */}
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="space-y-1.5 min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold text-base leading-snug tracking-tight truncate text-foreground">
-                {goal.name}
-              </h3>
-              {goal.is_priority && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                  <Flame className="h-3 w-3" />
-                  Priority
-                </span>
-              )}
-              {goal.is_completed && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Done
-                </span>
-              )}
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-base font-semibold leading-snug tracking-tight text-foreground">{goal.name}</h3>
+              {goal.is_priority && <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><Flame className="h-3 w-3" />Priority</span>}
+              {isCompleted && <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" />Completed</span>}
+              {isCancelled && <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Cancelled</span>}
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span
-                className={`inline-block rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize ${categoryStyle}`}
-              >
-                {goal.category || "General"}
-              </span>
-              {formattedTargetDate && (
-                <span className="flex items-center gap-1 text-muted-foreground text-[11px]">
-                  <Calendar className="h-3 w-3" />
-                  Target: {formattedTargetDate}
-                </span>
-              )}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={`inline-block rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize ${categoryStyle}`}>{goal.category || "General"}</span>
+              {formattedTargetDate && <span className="flex items-center gap-1 text-[11px] text-muted-foreground"><Calendar className="h-3 w-3" />Target: {formattedTargetDate}</span>}
             </div>
           </div>
-
-          {/* Quick Actions */}
-          <div className="flex items-center gap-0.5 shrink-0 opacity-80 sm:opacity-40 group-hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-foreground"
-              onClick={() => onEdit(goal)}
-              title="Edit Goal"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-              onClick={() => onDelete(goal.id)}
-              title="Delete Goal"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label={`${goal.name} actions`}><MoreHorizontal className="h-4 w-4" /></Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content align="end" sideOffset={6} className="z-[60] min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
+                <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onHistory(goal.id)}><History className="h-4 w-4" />View history</DropdownMenu.Item>
+                <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onEdit(goal)}><Edit2 className="h-4 w-4" />Edit goal</DropdownMenu.Item>
+                {isActive && <>
+                  <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onRelease(goal.id)} disabled={!hasReservations}>Release funds</DropdownMenu.Item>
+                  <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onMove(goal.id)} disabled={!hasReservations}>Move reservation</DropdownMenu.Item>
+                  <DropdownMenu.Separator className="my-1 h-px bg-border" />
+                  <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onClose ? onClose(goal.id, "completed") : onToggleComplete(goal.id, true)}>Complete goal</DropdownMenu.Item>
+                  <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onClose?.(goal.id, "cancelled")}>Cancel goal</DropdownMenu.Item>
+                </>}
+                {isCompleted && <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onToggleComplete(goal.id, false)}><Circle className="h-4 w-4" />Reopen</DropdownMenu.Item>}
+                {!isActive && !hasReservations && <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm text-destructive outline-none focus:bg-accent" onSelect={() => onDelete(goal.id)}><Trash2 className="h-4 w-4" />Archive goal</DropdownMenu.Item>}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
 
-        {/* Progress Bar & Amounts */}
         <div className="my-3.5 space-y-2">
-          <div className="flex items-baseline justify-between">
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-base sm:text-lg font-bold tracking-tight text-foreground tabular-nums">
-                {formatCurrency(goal.saved)}
-              </span>
-              <span className="text-xs text-muted-foreground font-medium tabular-nums">
-                / {formatCurrency(goal.target_amount)}
-              </span>
-            </div>
-            <span className="text-xs font-bold tabular-nums text-foreground">
-              {clampedPercent.toFixed(0)}%
-            </span>
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="min-w-0"><span className="text-base font-bold tracking-tight text-foreground sm:text-lg">{formatCurrency(Number(displayedProgress))}</span><span className="ml-1.5 text-xs font-medium text-muted-foreground">/ {formatCurrency(goal.target_amount)}</span></div>
+            <span className="text-xs font-bold tabular-nums text-foreground">{clampedPercent.toFixed(0)}%</span>
           </div>
-
-          <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                goal.is_completed
-                  ? "bg-emerald-500"
-                  : goal.progressPercent >= 75
-                  ? "bg-emerald-500"
-                  : goal.progressPercent >= 30
-                  ? "bg-primary"
-                  : "bg-amber-500"
-              }`}
-              style={{ width: `${clampedPercent}%` }}
-            />
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50" role="progressbar" aria-label={`${goal.name} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(clampedPercent)}>
+            <div className={`h-full rounded-full ${isCompleted || activeFunded ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${clampedPercent}%` }} />
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs tabular-nums">
+            <p className="text-muted-foreground">Reserved <span className="font-medium text-foreground">{formatCurrency(Number(goal.reserved))}</span></p>
+            <p className="text-muted-foreground">Spent <span className="font-medium text-foreground">{formatCurrency(Number(goal.spent))}</span></p>
           </div>
         </div>
       </div>
 
-      {!goal.is_completed && <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => onContribute(goal.id)}>Add contribution</Button>}
+      {isActive && <div className="mt-2 grid grid-cols-2 gap-2">
+        <Button variant="outline" size="sm" className="h-11 min-h-11" onClick={() => onReserve(goal.id)}>Set aside</Button>
+        <Button size="sm" className="h-11 min-h-11" onClick={() => onContribute(goal.id)}>Spend from goal</Button>
+      </div>}
 
-      {/* Footer: Projection & Complete Toggle */}
-      <div className="mt-2 pt-3 border-t border-border/30 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+      <div className="mt-2 flex items-center justify-between gap-3 border-t border-border/30 pt-3 text-xs text-muted-foreground">
         <div className="min-w-0 flex-1">
-          {goal.is_completed ? (
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5 text-xs">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Fully funded!
-            </span>
-          ) : Number(goal.allocation_per_cycle) > 0 ? (
-            <div className="space-y-0.5">
-              <span className="flex items-center gap-1 text-[11px] font-medium text-foreground">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                ~{projection.count} {projection.unit} ({formatCurrency(projection.monthlyAmount)}/mo · {formatCurrency(projection.kinsenasAmount)}/ks)
-              </span>
-              {formattedProjectedDate && (
-                <span className="block text-[10px] text-muted-foreground">
-                  Est. completion: {formattedProjectedDate}
-                </span>
-              )}
-            </div>
-          ) : (
-            <span className="text-[11px] text-muted-foreground/70">
-              No target cadence set
-            </span>
-          )}
+          {isCompleted ? <span className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3.5 w-3.5" />PHP {goal.spent} spent</span>
+            : isCancelled ? <span>Spending history retained</span>
+            : activeFunded ? <span className="font-medium text-emerald-600 dark:text-emerald-400">Funded</span>
+            : Number(goal.allocation_per_cycle) > 0 ? <div className="space-y-0.5"><span className="flex items-center gap-1 text-[11px] font-medium text-foreground"><Clock className="h-3 w-3 text-muted-foreground" />Saving · ~{projection.count} {projection.unit}</span>{formattedProjectedDate && <span className="block text-[10px] text-muted-foreground">Estimate: {formattedProjectedDate}</span>}</div>
+            : <span className="text-[11px] text-muted-foreground">Saving</span>}
         </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2.5 text-xs gap-1.5 text-muted-foreground hover:text-foreground shrink-0 rounded-lg"
-          onClick={() => onToggleComplete(goal.id, !goal.is_completed)}
-        >
-          {goal.is_completed ? (
-            <>
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-              Reopen
-            </>
-          ) : (
-            <>
-              <Circle className="h-3.5 w-3.5" />
-              Complete
-            </>
-          )}
-        </Button>
+        {isActive && !activeFunded && <Button variant="ghost" size="sm" className="h-11 min-h-11 shrink-0 px-2 text-xs" onClick={() => onClose ? onClose(goal.id, "completed") : onToggleComplete(goal.id, true)}>Complete</Button>}
+        {isCompleted && <Button variant="ghost" size="sm" className="h-11 min-h-11 shrink-0 px-2 text-xs" onClick={() => onToggleComplete(goal.id, false)}>Reopen</Button>}
       </div>
-    </div>
+    </article>
   );
 }
