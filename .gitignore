@@ -64,6 +64,8 @@ docs/superpowers/*
 docs/superpowers/plans/*
 docs/superpowers/specs/*
 !docs/superpowers/plans/2026-10-06-goal-reservations.md
+!docs/superpowers/plans/2026-10-07-manual-qa-follow-ups.md
+!docs/superpowers/plans/2026-10-07-installment-history.md
 !docs/superpowers/specs/2026-10-06-goal-reservations-design.md
 
 # Database & Migrations
@@ -84,3 +86,4 @@ scripts/
 !supabase/migrations/202610060004_goal_transaction_operations.sql
 !supabase/migrations/202610060005_goal_lifecycle_operations.sql
 !supabase/migrations/202610060006_goal_write_guards.sql
+!supabase/migrations/202610070001_installment_purchase_dates.sql

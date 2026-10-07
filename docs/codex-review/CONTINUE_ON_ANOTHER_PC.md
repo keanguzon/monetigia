@@ -1,64 +1,70 @@
-# Continue on another Windows PC
+# Monetigia handoff, October 7, 2026
 
-The private transfer ZIP contains `monetigia.bundle` and the existing local environment file. Keep the ZIP private: environment values are not committed to Git, but are included in this private transfer package. The bundle includes the locally committed code, workspace skills, instructions, plan, spec, checkpoint, and task reports. It does not require a remote push.
+Read this before changing code. This records current work and the user's instructions; it does not grant permission to implement deferred features.
 
-## Transfer and open
+## Repository and current scope
 
-1. Copy the ZIP to the new PC and extract it to `C:\MonetigiaTransfer`. Save the conversation separately if desired; the execution state is also recorded in the repository.
-2. Install Git, a supported Node.js LTS release, and Codex. Sign in to Codex. These tools and account credentials are not part of the package.
-3. Open PowerShell and run:
+- Repository: https://github.com/keanguzon/monetigia
+- Development base: `beta`. Feature branch: `codex/goal-reservations`.
+- Original main checkout: `C:/Users/PC/Documents/monetigia`.
+- Active feature checkout: `C:/Users/PC/.codex/worktrees/goal-reservations/monetigia`.
+- Goal reservation architecture tasks 1 through 11 were committed before this installment work. Previous HEAD was `d9592d0`; prior verification report is `docs/codex-review/GOAL_RESERVATIONS_VERIFICATION.md`.
+- Latest scope: grouped installment history, purchase versus due dates, bounded full-history loading, modal polish, right-side expansion, dropdown inset, subtle press feedback, and iOS logo assets. See `docs/superpowers/plans/2026-10-07-installment-history.md` and `docs/codex-review/INSTALLMENT_HISTORY_VERIFICATION.md`.
+- Latest instruction: local build/commit, user QA, then push. Do not push until user finishes QA and authorizes it. Do not merge into beta or deploy without separate authorization.
+- Preserve local QA data and existing changes. Never reset the local database merely to obtain a clean fixture.
 
-```powershell
-git clone -b codex/goal-reservations C:\MonetigiaTransfer\monetigia.bundle C:\Projects\monetigia
-Set-Location C:\Projects\monetigia
-Get-ChildItem C:\MonetigiaTransfer -File -Force -Filter '.env*' | Copy-Item -Destination C:\Projects\monetigia
-npm ci
-```
+## User's working rules
 
-Stop and resolve any installation error before proceeding. `npm ci` installs the versions in the lockfile; do not copy the old `node_modules` junction or build output.
+- Antislop active: **during (session override)**. Read `AGENTS.md` and referenced workspace skills. Use Goals as the design reference, existing Manrope/Bricolage fonts, shared primary green. ENERGY 1 / RHYTHM 2 / MOTION 1.
+- Use Subagent-Driven Development for meaningful implementation tasks, with specification and code review. Avoid spawning many agents for tiny changes.
+- When Luna writes code, use **gpt-6-luna, max**. For lighter bounded testing/review, Luna medium or high. Never use below medium for Luna.
+- Sol low/medium for work whose complexity warrants it. Sol high was allowed for the completed installment backend only. The later override removes new Sol high and Astra use. Do not infer that the earlier Astra permission still applies.
+- No button bounce or press scaling on Transactions. Keep a restrained pressed indication. Only the installment schedule body animates on expansion/collapse, with reduced-motion support.
+- Use actual evidence. Separate automated tests, agent review, browser checks, and user-reported QA. Do not call something tested merely because a test file exists. Silent TypeScript output alone does not record its exit status.
+- Give short Taglish updates; explain the next QA step without assuming balances or goals that no longer exist.
 
-4. Check the restored checkout:
+## Financial invariants
 
-```powershell
-git branch --show-current
-git status --short
-npx tsc --noEmit
-npm test
-npm run lint
-npm run build
-```
+- Wallet actual balance is real recorded cash. A reservation allocates money inside a normal wallet; it does not decrease actual balance or create an expense.
+- Available = actual minus reserved. Credit/debt/PayLater accounts are never reservation wallets.
+- Goal progress = reserved + actual spending toward that goal, shown separately. Funded is distinct from explicitly completed.
+- Goal spending consumes reservation and records one expense atomically. Release increases available without a fake expense.
+- Ordinary overspend within actual cash requires a reviewed release quote; cancellation saves nothing. Stale quotes reject, request UUID replay is idempotent.
+- Deleting active-goal spending restores cash and applicable reservation atomically. Deleting completed-goal spending restores cash without reopening the goal or restoring a closed reservation.
+- Legacy tagged transactions are not automatically adopted as live reservations.
+- Financial mutations use authenticated atomic RPCs, owner checks, guards and idempotency. Do not replace these with direct client writes.
 
-Expected branch: `codex/goal-reservations`. Git status should be clean. At the checkpoint, the test suite has 47 Vitest tests and two Node tests. Lint has six existing hook dependency warnings. A new PC must run its own checks rather than rely on the old results.
+## Installment decisions
 
-5. Open `C:\Projects\monetigia` as a project in Codex. Paste the resume prompt below, optionally followed by the saved conversation. The restored repository is a normal checkout, not the old PC's worktree; old absolute paths in reports identify historical evidence only.
+- Purchase date defaults to local today, editable. First due defaults one calendar month later and is separately editable; manual due edits survive unrelated changes.
+- Subsequent due dates use the original first-due anchor: Jan 31, Feb 28/29, Mar 31. Exact centavo split; no duplicate purchase/debt row.
+- `transactions.date` remains the installment due date. `purchase_date` and `installment_group_id` hold explicit purchase metadata. Generated `history_date` supports server sorting.
+- Migration: `supabase/migrations/202610070001_installment_purchase_dates.sql`. Apply after the six October 6 migrations.
+- Legacy grouping uses authoritative operation result IDs, never descriptions. Unknown purchase dates remain unknown. Legacy Transaction date sorting uses latest remaining due date, visibly labeled.
+- Date added is default sort; Transaction date is alternate. Stable server tie-breakers. Load more fetches 50 source rows at a time and hydrates complete selected groups, with deduplication.
+- Search/filter applies to **loaded history**, clearly labeled. This is not an all-history server search. Offset pagination is not a snapshot under concurrent external writes.
+- Delete installment deletes only that row; group amount means remaining scheduled amount.
+- Actual chosen debt-payment date determines the breakdown month. Independent historical billing attribution is deferred.
 
-## Resume prompt
+## QA and pending work
 
-```text
-antislop active: during (session override).
+- User reported passing reservation/release/move, overspend decline/confirm, active and completed expense deletion, reopen at zero, and archive hiding a goal. These are user-reported, not fresh audit claims.
+- Root browser tested a three-installment local disposable purchase, distinct purchase/due dates, Jan31 schedule, exact split, auto-close, grouping, keyboard expansion and individual deletion. Temporary acceptance rows were removed; existing user QA rows retained.
+- Follow `INSTALLMENT_HISTORY_VERIFICATION.md` for current regression QA. Read wallet baselines first; GCash was previously zero, then funded for testing, so do not prescribe an assumed balance.
+- Deferred, documentation only: overspend popup instead of inline notice; discoverable archived-goal restore; iOS-inspired glass mobile bottom navigation; useful Settings redesign. See `2026-10-07-manual-qa-follow-ups.md`. User has not approved the Settings feature selection/design.
+- iOS icon PNG sizes and HTML/manifest URLs are verified locally. Physical Safari/iPhone Add to Home Screen is still a manual device check; manifest alone does not establish offline support.
 
-Continue the Monetigia goal reservations plan with Subagent-Driven Development and independent review per task. Read AGENTS.md and the installed workspace skills first.
+## Continue on another PC
 
-Read these files before changing code:
-- docs/codex-review/TASK_1_2_CHECKPOINT.md
-- docs/superpowers/specs/2026-10-06-goal-reservations-design.md
-- docs/superpowers/plans/2026-10-06-goal-reservations.md
-- .superpowers/sdd/2026-10-06-goal-reservations/progress.md
-- docs/codex-review/GOALS_ARCHITECTURE_PAIN_POINTS.md
+1. Before push, preserve the feature branch with a bundle. In the active feature checkout run `git bundle create monetigia-handoff.bundle codex/goal-reservations beta`, then `git bundle verify monetigia-handoff.bundle`. This captures committed Git history, not ignored files, live database data or the chat.
+2. Copy the bundle and this handoff document to the other PC. Keep any required `.env` files in a separate private transfer, never a Git commit. The ignored local preview harness/database is not in the bundle; copy it only if you need the exact disposable QA state. Do not copy running database files while PostgreSQL is writing to them; use a proper dump or stop it first.
+3. On the other PC run `git clone -b codex/goal-reservations <path-to-bundle> monetigia`. Then inside that checkout run `git remote set-url origin https://github.com/keanguzon/monetigia.git` and `npm ci`. Restore the environment privately. Do not use production credentials for disposable QA.
+4. If the branch has already been pushed, cloning GitHub and checking out `codex/goal-reservations` replaces the bundle step. Verify `git log -5 --oneline` and `git status` against the source PC.
+5. Open that folder in your AI tool. Give it the prompt below. Source-PC absolute paths are historical; the new checkout path is authoritative.
+6. For an ordinary local server run `npm run dev`; use the port it prints. The old isolated harness uses app port 3107, auth helper 3108 and a local PostgreSQL/API stack. Those ports/helpers do not exist automatically after cloning.
 
-Tasks 1 and 2 are complete and independently reviewed. Do not implement them again. Verify this checkout and continue from Task 3 when I authorize resuming implementation; merely reading this prompt is not authorization to start Task 3. The prior session stopped after Task 2 at my request.
+Copy this prompt to the new AI:
 
-Keep progress = reserved + spent toward the goal, shown separately. Ordinary overspending uses a soft warning with explicitly confirmed automatic release, committed atomically with the expense. Preserve existing history. Do not deploy migrations against the live database.
+> Continue Monetigia from the current `codex/goal-reservations` checkout. First read AGENTS.md, docs/codex-review/CONTINUE_ON_ANOTHER_PC.md, docs/codex-review/INSTALLMENT_HISTORY_VERIFICATION.md, and both October 7 plans. Antislop during is active. Preserve financial invariants and local data. Use Luna max for Luna coding and medium/high for lighter checks; Sol low/medium when warranted; no new Astra or Sol high. Use subagents with review for meaningful tasks. Tell me the actual branch/status and next manual QA step. Do not implement deferred Settings/navigation/restore/popup scope, push, merge or deploy without my instruction. Never invent prior test results or assume fixture balances.
 
-Subagents: no Astra. GPT-6-luna medium/high/xhigh as needed, never below medium. GPT-6.1-sol low/medium, with medium the maximum. Choose by complexity and value rather than using one model for everything. Preserve required tests and review quality.
-
-No push, merge, or deployment until my final check. Keep work on codex/goal-reservations. Provision a disposable local database before database work; never run test fixtures against the live .env project. Portable database executables and credentials from the previous PC are intentionally excluded. Historical absolute paths must be adapted to this checkout.
-```
-
-## Database and remote setup
-
-The local PostgreSQL/PostgREST installation was specific to the old PC and is excluded. The next agent must recreate disposable database infrastructure before Task 3's integration tests. `.superpowers/sdd/2026-10-06-goal-reservations/local-db-report.md` records the earlier approach; it is evidence, not a ready-to-run installation on the new PC. Do not skip database tests because the tools need provisioning.
-
-Cloning from a bundle makes `origin` point to the bundle file. This is suitable for local continuation. When remote operations are later authorized, configure the original repository URL and authenticate on the new PC. Do not assume the bundle path is a GitHub remote.
-
-The private ZIP does not include Codex login state, global settings, the full conversation, or browser sessions. Repository skills, the checkpoint, and the ledger supply the project handoff.
+The Git bundle does not contain this conversation. This document supplies portable project context. A copied chat transcript can supplement it, but the receiving AI should verify current source/status rather than treating old statements as current results.

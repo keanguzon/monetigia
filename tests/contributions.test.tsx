@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { SWRConfig } from "swr";
 import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import { useGoals } from "@/hooks/use-goals";
+import { getFirstInstallmentDueDate, toLocalDateInputValue } from "@/lib/transactions/installment-dates";
 import GoalsPage from "@/app/(dashboard)/goals/page";
 import DashboardPage from "@/app/(dashboard)/dashboard/page";
 import AccountsPage from "@/app/(dashboard)/accounts/page";
@@ -139,18 +140,99 @@ test("goal shortcut selects the goal, leaves wallet empty and resets between ope
 
 test.each(["Expense", "Transfer", "Income"])("%s sends its explicit goal meaning and refreshes progress", async (type) => {
   const user = userEvent.setup();
-  render(<SWRConfig value={config}><Progress /><AddTransactionModal isOpen onClose={() => {}} defaultGoalId={db.phoneId} /></SWRConfig>);
+  const close = vi.fn();
+  render(<SWRConfig value={config}><Progress /><AddTransactionModal isOpen onClose={close} defaultGoalId={db.phoneId} /></SWRConfig>);
   await screen.findByRole("option", { name: "phone" });
   await user.click(screen.getByRole("button", { name: type }));
   await user.selectOptions(screen.getByLabelText(type === "Transfer" ? "From Account" : "Account"), db.cashId);
   if (type === "Transfer") { await user.selectOptions(screen.getByLabelText("To Account"), db.bankId); await user.type(screen.getByLabelText("Reservation to carry"), "500"); }
   if (type === "Income") expect(screen.queryByLabelText("Goal (Optional)")).toBeNull();
   await user.type(screen.getByLabelText("Amount"), "500");
+  fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-09-12" } });
   await user.click(screen.getByRole("button", { name: "Add Transaction" }));
   await waitFor(() => expect(db.transactions).toHaveLength(1));
+  expect(db.commands[0].draft.date).toBe("2026-09-12");
   expect(db.transactions[0].goal_id).toBe(type === "Expense" ? db.phoneId : null);
   expect(db.commands[0].draft.reservationMoves).toEqual(type === "Transfer" ? [{ goalId: db.phoneId, amount: "500.00" }] : []);
   await waitFor(() => expect(screen.getByLabelText("Phone funding").textContent).toBe("0/0"));
+  await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+});
+
+test("installment purchase date and due date stay separate, preserve edits, and reset on reopen", async () => {
+  const user = userEvent.setup();
+  const view = render(<SWRConfig value={config}><AddTransactionModal isOpen onClose={() => {}} /></SWRConfig>);
+  await screen.findByRole("option", { name: "Cash" });
+
+  const today = screen.getByLabelText("Date") as HTMLInputElement;
+  const todayValue = toLocalDateInputValue(new Date());
+  expect(today.value).toBe(todayValue);
+
+  await user.click(screen.getByLabelText("PayLater purchase (adds to debt)"));
+  expect(screen.getByLabelText("Purchase date")).toBe(today);
+  expect(today.compareDocumentPosition(screen.getByRole("heading", { name: "Payment schedule" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const firstDueDate = screen.getByLabelText("First payment due date") as HTMLInputElement;
+  expect(firstDueDate.value).toBe(getFirstInstallmentDueDate(todayValue));
+
+  fireEvent.change(today, { target: { value: "2026-10-07" } });
+  await user.selectOptions(screen.getByLabelText("Number of payments"), "3");
+  fireEvent.change(today, { target: { value: "2026-10-06" } });
+  expect(firstDueDate.value).toBe("2026-11-06");
+
+  fireEvent.change(today, { target: { value: "2026-10-31" } });
+  expect(firstDueDate.value).toBe("2026-11-30");
+
+  fireEvent.change(firstDueDate, { target: { value: "2026-12-15" } });
+  fireEvent.change(today, { target: { value: "2026-10-10" } });
+  expect(firstDueDate.value).toBe("2026-12-15");
+
+  view.rerender(<SWRConfig value={config}><AddTransactionModal isOpen={false} onClose={() => {}} /></SWRConfig>);
+  view.rerender(<SWRConfig value={config}><AddTransactionModal isOpen onClose={() => {}} /></SWRConfig>);
+  await screen.findByRole("option", { name: "Cash" });
+  expect((screen.getByLabelText("Date") as HTMLInputElement).value).toBe(todayValue);
+  await user.click(screen.getByLabelText("PayLater purchase (adds to debt)"));
+  expect((screen.getByLabelText("First payment due date") as HTMLInputElement).value).toBe(getFirstInstallmentDueDate(todayValue));
+});
+
+test("installment preview uses exact centavos and submits purchase date separately from its schedule", async () => {
+  const user = userEvent.setup();
+  render(<SWRConfig value={config}><AddTransactionModal isOpen onClose={() => {}} /></SWRConfig>);
+  await screen.findByRole("option", { name: "Cash" });
+  fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-10-07" } });
+  await user.click(screen.getByLabelText("PayLater purchase (adds to debt)"));
+  await user.selectOptions(screen.getByLabelText("Number of payments"), "3");
+  await user.type(screen.getByLabelText("Amount"), "1000.01");
+
+  expect(screen.getAllByText("₱333.34")).toHaveLength(2);
+  expect(screen.getByText("₱333.33")).toBeTruthy();
+  expect(document.querySelector('time[datetime="2026-11-07"]')).not.toBeNull();
+  expect(document.querySelector('time[datetime="2026-12-07"]')).not.toBeNull();
+  expect(document.querySelector('time[datetime="2027-01-07"]')).not.toBeNull();
+
+  fireEvent.change(screen.getByLabelText("Purchase date"), { target: { value: "2026-10-31" } });
+  expect((screen.getByLabelText("First payment due date") as HTMLInputElement).value).toBe("2026-11-30");
+  await user.click(screen.getByRole("button", { name: "Add Transaction" }));
+  await waitFor(() => expect(db.commands).toHaveLength(1));
+  expect(db.commands[0].draft.date).toBe("2026-10-31");
+  expect(db.commands[0].draft.installments).toEqual({ count: 3, firstDueDate: "2026-11-30" });
+});
+
+test("debt payment month follows its chosen payment date", async () => {
+  const user = userEvent.setup();
+  render(<SWRConfig value={config}><AddTransactionModal isOpen onClose={() => {}} /></SWRConfig>);
+  await screen.findByRole("option", { name: "Cash" });
+  await user.click(screen.getByRole("button", { name: "Transfer" }));
+  await user.selectOptions(screen.getByLabelText("To Account"), db.debtId);
+
+  expect(screen.queryByLabelText("Debt month to pay")).toBeNull();
+  expect(screen.getByText(/Payment will be recorded on the chosen date/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Payment date"), { target: { value: "2026-11-12" } });
+  expect(screen.getAllByText(/November 2026/)).toHaveLength(2);
+
+  await user.type(screen.getByLabelText("Amount"), "75");
+  await user.click(screen.getByRole("button", { name: "Add Transaction" }));
+  await waitFor(() => expect(db.commands).toHaveLength(1));
+  expect(db.commands[0].draft.date).toBe("2026-11-12");
+  expect(db.commands[0].draft.description).toBe("Debt - November 2026");
 });
 
 test("failed save and cancellation do not add funding; Escape closes the dialog", async () => {
@@ -178,6 +260,8 @@ test("reopening a contribution cannot submit a wallet retained from the previous
   db.delayLoad = new Promise<void>(resolve => { release = resolve; });
   view.rerender(<SWRConfig value={config}><AddTransactionModal isOpen onClose={() => {}} defaultGoalId={db.laptopId} /></SWRConfig>);
   expect((screen.getByRole("button", { name: /Add Transaction|Loading accounts/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByText("Loading accounts…")).toBeTruthy();
+  expect(screen.queryByText(/You don't have any accounts yet/)).toBeNull();
   release();
   await waitFor(() => expect((screen.getByLabelText("Account") as HTMLSelectElement).value).toBe(""));
 });
@@ -187,7 +271,7 @@ test("credit goal-tagged installments remain informational and do not reserve fu
   const view = render(<SWRConfig value={config}><Progress /><AddTransactionModal isOpen onClose={() => {}} defaultGoalId={db.phoneId} /></SWRConfig>);
   await screen.findByRole("option", { name: "Cash" });
   await user.click(screen.getByLabelText("PayLater purchase (adds to debt)"));
-  await user.selectOptions(screen.getByLabelText("Installments"), "3");
+  await user.selectOptions(screen.getByLabelText("Number of payments"), "3");
   await user.type(screen.getByLabelText("Amount"), "300");
   await user.click(screen.getByRole("button", { name: "Add Transaction" }));
   await waitFor(() => expect(db.transactions).toHaveLength(3));
@@ -210,9 +294,9 @@ test("page fixtures render summaries and expose a working spend-from-goal shortc
   }
   const user = userEvent.setup();
   const goals = render(<SWRConfig value={config}><GoalsPage /></SWRConfig>);
-  await screen.findAllByRole("button", { name: "Spend from goal" });
+  await screen.findAllByRole("button", { name: "Spend from Goal" });
   save("goals");
-  await user.click(screen.getAllByRole("button", { name: "Spend from goal" })[0]);
+  await user.click(screen.getAllByRole("button", { name: "Spend from Goal" })[0]);
   await waitFor(() => expect((screen.getByLabelText("Goal (Optional)") as HTMLSelectElement).value).toBe(db.phoneId));
   save("contribution");
   goals.unmount();

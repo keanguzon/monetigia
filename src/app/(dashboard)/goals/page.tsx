@@ -121,7 +121,7 @@ export default function GoalsPage() {
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><Coins className="h-3.5 w-3.5 text-emerald-500" /><span>Total Progress</span></div>
                 <span className="text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{totals.progressPercent.toFixed(0)}%</span>
               </div>
-              <div className="pt-1 font-heading text-2xl font-extrabold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 sm:text-3xl">{formatCurrency(Number(totals.progress))}</div>
+              <div className="pt-1 font-heading text-2xl font-extrabold tabular-nums tracking-tight text-primary sm:text-3xl">{formatCurrency(Number(totals.progress))}</div>
               <div className="pt-1.5"><div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50" role="progressbar" aria-label="Total goal progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(Math.min(100, totals.progressPercent))}><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, Math.max(0, totals.progressPercent))}%` }} /></div></div>
               <p className="pt-1 text-xs tabular-nums text-muted-foreground">Reserved {formatCurrency(Number(totals.reserved))} · Spent {formatCurrency(Number(totals.spent))}</p>
             </div>
@@ -133,7 +133,7 @@ export default function GoalsPage() {
           </div>
         </div>
       )}
-      <p className="text-sm text-muted-foreground">Set aside money in a wallet to fund a goal. Spending from that goal uses its reserved funds. Monthly and kinsenas targets estimate completion only.</p>
+      <p className="text-sm text-muted-foreground">Reserve money from a wallet for a goal. It stays in the wallet, but becomes unavailable for other spending. Spending from the goal uses its reserved funds. Monthly and kinsenas targets estimate completion only.</p>
 
       {isLoading ? (
         <div role="status" aria-label="Loading goals" className="space-y-4"><Skeleton className="h-4 w-36" /><div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{[1, 2, 3].map(index => <GoalCardSkeleton key={index} />)}</div></div>

@@ -69,7 +69,7 @@ export default function TransactionDetailModal({
   return (
     <Dialog.Root open={isOpen} onOpenChange={open => { if (!open) onClose(); }}><Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-      <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto shadow-xl">
+      <Dialog.Content data-no-press-motion="" aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto shadow-xl">
         {/* Header/Banner */}
         <div className={`p-8 flex flex-col items-center justify-center text-center ${getTypeColor()}`}>
           <div className="p-4 rounded-full bg-white dark:bg-slate-800 shadow-sm mb-4">

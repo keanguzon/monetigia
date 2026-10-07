@@ -137,6 +137,9 @@ export interface Database {
           amount: number;
           description: string | null;
           date: string;
+          installment_group_id: string | null;
+          purchase_date: string | null;
+          history_date: string;
           transfer_to_account_id: string | null;
           created_at: string;
           updated_at: string;
@@ -151,6 +154,8 @@ export interface Database {
           amount: number;
           description?: string | null;
           date: string;
+          installment_group_id?: string | null;
+          purchase_date?: string | null;
           transfer_to_account_id?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -165,6 +170,8 @@ export interface Database {
           amount?: number;
           description?: string | null;
           date?: string;
+          installment_group_id?: string | null;
+          purchase_date?: string | null;
           transfer_to_account_id?: string | null;
           created_at?: string;
           updated_at?: string;

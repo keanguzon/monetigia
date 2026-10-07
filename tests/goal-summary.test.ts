@@ -195,6 +195,14 @@ describe("domain JSON parsing", () => {
       expect(TransactionDraftSchema.safeParse({ ...draft, installments: { count } }).success).toBe(false);
     }
   });
+  test("preserves a separate first due date and validates its calendar day", () => {
+    const dated = { ...draft, installments: { count: 3, firstDueDate: "2028-02-29" } };
+    expect(TransactionDraftSchema.parse(dated)).toEqual(dated);
+    for (const firstDueDate of ["2026-02-29", "2026-02-30", "2026-13-01", "2026-1-01", null]) {
+      expect(TransactionDraftSchema.safeParse({ ...draft, installments: { count: 3, firstDueDate } }).success).toBe(false);
+    }
+    expect(TransactionDraftSchema.parse({ ...draft, installments: { count: 3 } }).installments).toEqual({ count: 3 });
+  });
   test("snapshot goal row monetary fields override raw numeric rows", () => {
     const goal = { id: goalId, user_id: goalId, name: "Date", target_amount: "3000.00", current_amount: "1000.00", target_date: null, color: null, icon: null, is_completed: false, status: "active", review_state: "confirmed", completed_at: null, archived_at: null, is_priority: false, category: "savings", allocation_per_cycle: "500.00", allocation_frequency: "monthly", created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:00Z", ...summarizeGoal(goalId, "3000.00", [event("1000.00")]) };
     const snapshot = { goals: [goal], wallets: [{ accountId, actual: "5000.00", reserved: "1000.00", available: "4000.00" }] };

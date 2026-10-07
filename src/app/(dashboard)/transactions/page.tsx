@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTransactionDelete } from "@/hooks/use-transaction-submit";
 import dynamic from "next/dynamic";
@@ -11,6 +11,16 @@ import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search } fro
 import { useToast } from "@/components/ui/use-toast";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import InstallmentHistoryGroup from "@/components/transactions/InstallmentHistoryGroup";
+import {
+  filterHistoryEntries,
+  groupTransactions,
+  loadHistoryPage,
+  mergeHistoryRows,
+  sortHistoryEntries,
+  type TransactionHistoryRow,
+  type TransactionHistorySort,
+} from "@/lib/transactions/history";
 
 const AddTransactionModal = dynamic(() => import("@/components/transactions/AddTransactionModal"), {
   ssr: false,
@@ -25,20 +35,28 @@ export default function TransactionsPage() {
   const supabase = createClient();
   const sb = supabase as any;
   const { toast } = useToast();
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<TransactionHistoryRow[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "expense" | "income" | "transfer">("all");
+  const [sortMode, setSortMode] = useState<TransactionHistorySort>("date_added");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<TransactionHistoryRow | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionHistoryRow | null>(null);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [savedDeleteKind, setSavedDeleteKind] = useState<"transaction" | "installment">("transaction");
+  const requestGeneration = useRef(0);
+  const loadMoreLock = useRef(false);
   const deletion = useTransactionDelete(loadTransactions);
   const isDeleting = deletion.isDeleting;
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     void loadTransactions().catch(() => {});
-  }, [refreshKey]);
+  }, [refreshKey, sortMode]);
 
   useEffect(() => {
     if (!deletion.savedTransactionId) return;
@@ -46,50 +64,81 @@ export default function TransactionsPage() {
     setTransactions(current => current.filter(transaction => transaction.id !== deletion.savedTransactionId));
   }, [deletion.savedTransactionId]);
 
-  const deleteTransaction = async (transaction: any) => {
+  const deleteTransaction = async (transaction: TransactionHistoryRow | null) => {
     if (!transaction?.id || !isValidUuid(transaction.id)) {
       toast({ title: "Cannot delete transaction", description: "This transaction could not be identified.", variant: "destructive" });
       return;
     }
+    setSavedDeleteKind(transaction.installment_group_id ? "installment" : "transaction");
     await deletion.remove(transaction.id);
   };
 
   async function loadTransactions() {
+    const generation = ++requestGeneration.current;
+    loadMoreLock.current = false;
     setIsLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    setIsLoadingMore(false);
+    setLoadError(null);
+    setLoadMoreError(null);
+    setNextOffset(null);
+    setTransactions([]);
 
-    if (user?.id) {
-
-      const { data, error } = await sb
-        .from("transactions")
-        .select(
-          "id, user_id, account_id, category_id, goal_id, type, amount, description, date, transfer_to_account_id, created_at, category:categories(id,name,color), account:accounts!account_id(id,name,type), transfer_to_account:accounts!transfer_to_account_id(id,name,type)"
-        )
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (error) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return;
+      const page = await loadHistoryPage(sb, user.id, sortMode);
+      if (generation !== requestGeneration.current) return;
+      setTransactions(page.rows);
+      setNextOffset(page.nextOffset);
+    } catch (error) {
+      if (generation === requestGeneration.current) {
         console.error("Failed to load transactions", error);
+        setLoadError("The transaction list could not refresh. Try again.");
         toast({
           title: "Failed to load transactions",
-          description: "The transaction list could not refresh. Try refreshing the page.",
+          description: "The transaction list could not refresh. Try again.",
           variant: "destructive",
         });
-        setIsLoading(false);
-        throw new Error("The transaction list could not refresh.");
-      } else {
-        setTransactions(data || []);
+      }
+      throw new Error("The transaction list could not refresh.");
+    } finally {
+      if (generation === requestGeneration.current) setIsLoading(false);
+    }
+  }
+
+  async function loadMoreTransactions() {
+    if (nextOffset === null || isLoading || isLoadingMore || loadMoreLock.current) return;
+    const offset = nextOffset;
+    const generation = requestGeneration.current;
+    loadMoreLock.current = true;
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) throw new Error("Sign in to load older transactions.");
+      const page = await loadHistoryPage(sb, user.id, sortMode, offset);
+      if (generation !== requestGeneration.current) return;
+      setTransactions(current => mergeHistoryRows(current, page.rows));
+      setNextOffset(page.nextOffset);
+    } catch (error) {
+      if (generation === requestGeneration.current) {
+        console.error("Failed to load more transactions", error);
+        setLoadMoreError("Older history could not be loaded. Your current entries are still here.");
+        toast({
+          title: "Failed to load more transactions",
+          description: "Older history could not be loaded. Try again.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      if (generation === requestGeneration.current) {
+        loadMoreLock.current = false;
+        setIsLoadingMore(false);
       }
     }
-    setIsLoading(false);
-  };
+  }
 
-  const filteredTransactions =
-    filter === "all" ? transactions : transactions.filter((t) => t.type === filter);
+  const historyEntries = sortHistoryEntries(groupTransactions(transactions), sortMode);
 
   const filterLabel =
     filter === "all"
@@ -100,23 +149,15 @@ export default function TransactionsPage() {
           ? "Income"
           : "Transfer";
 
-  const searchFilteredTransactions = filteredTransactions.filter((t) => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      (t.description?.toLowerCase().includes(query)) ||
-      (t.category?.name?.toLowerCase().includes(query)) ||
-      (t.amount?.toString().includes(query)) ||
-      (t.account?.name?.toLowerCase().includes(query)) ||
-      (t.transfer_to_account?.name?.toLowerCase().includes(query))
-    );
-  });
+  const searchFilteredTransactions = filterHistoryEntries(historyEntries, searchQuery, filter);
+  const deleteConfirmIsInstallment = !!deleteConfirm?.installment_group_id;
 
   return (
     <>
-      {deletion.error && <div role="alert" className="mb-4 text-sm text-red-700 dark:text-red-300 space-y-2"><p>{deletion.error}</p>{deletion.pendingTransactionId && <button type="button" disabled={isDeleting} onClick={() => { void deletion.remove(deletion.pendingTransactionId!); }} className="min-h-11 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same deletion</button>}</div>}
-      {deletion.savedTransactionId && <p role="status" className="mb-4 text-sm">{deletion.refreshError ? "Transaction deleted. Some views could not refresh. Refresh the page; do not delete it again." : "Transaction deleted and wallet balances updated."}</p>}
-      <div className="space-y-6">
+      {deletion.error && <div data-no-press-motion="" role="alert" className="mb-4 text-sm text-red-700 dark:text-red-300 space-y-2"><p>{deletion.error}</p>{deletion.pendingTransactionId && <button type="button" disabled={isDeleting} onClick={() => { void deletion.remove(deletion.pendingTransactionId!); }} className="min-h-11 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same deletion</button>}</div>}
+      {deletion.savedTransactionId && <p role="status" className="mb-4 text-sm">{savedDeleteKind === "installment" ? deletion.refreshError ? "Installment deleted, but some views could not refresh. Refresh the page to check the remaining schedule." : "Installment deleted. Its siblings remain and the remaining scheduled amount has been updated." : deletion.refreshError ? "Transaction deleted. Some views could not refresh. Refresh the page; do not delete it again." : "Transaction deleted and wallet balances updated."}</p>}
+      {loadError && <div data-no-press-motion="" role="alert" className="mb-4 flex flex-col items-start gap-2 text-sm text-red-700 dark:text-red-300"><p>{loadError}</p><button type="button" onClick={() => { void loadTransactions().catch(() => {}); }} className="min-h-11 rounded-lg border px-4 focus-visible:ring-2 focus-visible:ring-primary">Retry loading transactions</button></div>}
+      <div data-no-press-motion="" className="space-y-6">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
@@ -127,24 +168,23 @@ export default function TransactionsPage() {
             </div>
             <Button
               onClick={() => setIsModalOpen(true)}
-              className="h-8 text-xs font-semibold gap-1.5 w-full sm:w-auto shadow-sm"
+              className="h-11 text-sm font-semibold gap-1.5 w-full sm:w-auto text-slate-950"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-4 w-4" />
               <span>Add Transaction</span>
             </Button>
           </div>
 
-          {/* Filter Chips & Search Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
               {(["all", "expense", "income", "transfer"] as const).map((type) => (
                 <button
                   key={type}
                   type="button"
                   onClick={() => setFilter(type)}
-                  className={`h-7 px-3 rounded-lg text-xs font-medium capitalize transition-all ${
+                  className={`min-h-11 px-3 rounded-lg text-sm font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                     filter === type
-                      ? "bg-emerald-700 text-white dark:bg-emerald-400 dark:text-slate-950 shadow-xs"
+                      ? "bg-primary text-slate-950"
                       : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
@@ -153,119 +193,122 @@ export default function TransactionsPage() {
               ))}
             </div>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search transactions..."
-                className="pl-8 h-8 text-xs bg-card/60"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className="grid gap-2 sm:grid-cols-[minmax(12rem,1fr)_auto] lg:w-[min(100%,34rem)]">
+              <div className="relative min-w-0">
+                <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <Input
+                  type="search"
+                  aria-label="Search transactions"
+                  placeholder="Search transactions..."
+                  className="min-h-11 bg-card/60 pl-10 text-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="transaction-sort" className="sr-only">Sort transactions</label>
+                <select
+                  id="transaction-sort"
+                  aria-label="Sort transactions"
+                  value={sortMode}
+                  onChange={event => {
+                    const nextSort = event.target.value as TransactionHistorySort;
+                    if (nextSort === sortMode) return;
+                    requestGeneration.current += 1;
+                    loadMoreLock.current = false;
+                    setTransactions([]);
+                    setNextOffset(null);
+                    setIsLoadingMore(false);
+                    setLoadError(null);
+                    setLoadMoreError(null);
+                    setIsLoading(true);
+                    setSortMode(nextSort);
+                  }}
+                  className="min-h-11 w-full rounded-md border border-input bg-card/60 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:w-auto"
+                >
+                  <option value="date_added">Date added (newest first)</option>
+                  <option value="transaction_date">Transaction date (newest first)</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Hallmark F3 Tabular Spec Sheet Ledger */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
-            <span>
-              Showing {searchFilteredTransactions.length} {filterLabel.toLowerCase()}{" "}
-              {searchFilteredTransactions.length === 1 ? "entry" : "entries"}
-            </span>
-          </div>
+          {!isLoading && !loadError && <div className="flex flex-col gap-1 px-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Showing {searchFilteredTransactions.length} {filterLabel.toLowerCase()} {searchFilteredTransactions.length === 1 ? "entry" : "entries"} in loaded history</span>
+            {nextOffset !== null && <span>Older records are available below.</span>}
+          </div>}
 
-          <div className="rounded-xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden">
-            {!isLoading && searchFilteredTransactions && searchFilteredTransactions.length > 0 ? (
+          <div className="overflow-hidden rounded-xl border border-border/50 bg-card/60">
+            {!isLoading && !loadError && searchFilteredTransactions.length > 0 ? (
               <div className="divide-y divide-border/30">
-                {searchFilteredTransactions.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    onClick={() => setSelectedTransaction(transaction)}
-                    className="flex items-center justify-between px-4 py-3.5 sm:px-5 sm:py-4 hover:bg-muted/30 transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 pr-3">
-                      <div
-                        className={`p-2.5 rounded-lg shrink-0 ${
+                {searchFilteredTransactions.map((entry) => {
+                  if (entry.kind === "installment_group") {
+                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} onSelectTransaction={setSelectedTransaction} onRequestDelete={setDeleteConfirm} />;
+                  }
+
+                  const transaction = entry.transaction;
+                  const description = transaction.description || transaction.category?.name || (transaction.type === "transfer" ? "Transfer" : "Transaction");
+                  return (
+                    <div key={entry.key} className="flex flex-col gap-2 px-3 py-3.5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
+                      <button
+                        type="button"
+                        aria-label={`View details for ${description}`}
+                        onClick={() => setSelectedTransaction(transaction)}
+                        className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
                           transaction.type === "income"
                             ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                             : transaction.type === "expense"
                               ? "bg-rose-500/10 text-rose-500"
                               : "bg-blue-500/10 text-blue-500"
-                        }`}
-                      >
-                        {transaction.type === "income" ? (
-                          <ArrowDownLeft className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-                        ) : transaction.type === "expense" ? (
-                          <ArrowUpRight className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-                        ) : (
-                          <ArrowLeftRight className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm sm:text-base font-semibold text-foreground truncate tracking-tight">
-                          {transaction.description || transaction.category?.name || (transaction.type === "transfer" ? "Transfer" : "Transaction")}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground truncate mt-0.5">
-                          <span className="font-medium text-foreground/80">{transaction.account?.name}</span>
-                          {transaction.category?.name && (
-                            <>
-                              <span>•</span>
-                              <span>{transaction.category.name}</span>
-                            </>
-                          )}
-                          {transaction.type === "transfer" && (
-                            <>
-                              <span>•</span>
-                              <span>Transfer</span>
-                            </>
-                          )}
-                          <span>•</span>
-                          <span className="font-mono">{formatDate(transaction.date)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                      <div className="text-right">
-                        <span
-                          className={`text-sm sm:text-base font-bold font-mono tabular-nums tracking-tight ${
-                            transaction.type === "income"
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : transaction.type === "expense"
-                                ? "text-rose-500"
-                                : "text-blue-500"
-                          }`}
-                        >
-                          {transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : ""}
-                          {formatCurrency(Number(transaction.amount))}
+                        }`} aria-hidden="true">
+                          {transaction.type === "income" ? <ArrowDownLeft className="h-5 w-5" /> : transaction.type === "expense" ? <ArrowUpRight className="h-5 w-5" /> : <ArrowLeftRight className="h-5 w-5" />}
                         </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteConfirm(transaction);
-                        }}
-                        aria-label="Delete transaction"
-                        className="min-h-11 min-w-11 opacity-70 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary transition-opacity p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md"
-                        title={transaction?.id ? "Delete transaction" : ""}
-                      >
-                        <Trash2 className="h-4 w-4" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">{description}</span>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground/80">{transaction.account?.name || "Unknown wallet"}</span>
+                            {transaction.category?.name && <span>{transaction.category.name}</span>}
+                            {transaction.type === "transfer" && <span>Transfer</span>}
+                            <span>{formatDate(transaction.date)}</span>
+                          </span>
+                        </span>
                       </button>
+
+                      <div className="flex items-center justify-between gap-3 pl-[3.25rem] sm:justify-end sm:pl-0">
+                        <span className={`whitespace-nowrap font-mono text-sm font-bold tabular-nums tracking-tight sm:text-base ${
+                          transaction.type === "income" ? "text-green-700 dark:text-primary" : transaction.type === "expense" ? "text-red-700 dark:text-red-400" : "text-blue-700 dark:text-blue-400"
+                        }`}>
+                          {transaction.type === "income" ? "+" : transaction.type === "expense" ? "−" : ""}{formatCurrency(Number(transaction.amount))}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirm(transaction)}
+                          aria-label="Delete transaction"
+                          className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          title="Delete transaction"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+            ) : !isLoading && loadError ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">Transaction history could not be loaded.</p>
             ) : !isLoading ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <ArrowLeftRight className="h-8 w-8 text-muted-foreground/40 mb-2" />
                 <p className="text-sm font-semibold text-foreground">No transactions found</p>
                 <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-                  Try adjusting your filter or search query.
+                  {searchQuery.trim() && nextOffset !== null ? "Search covers loaded history. Load more to include older records." : "Try adjusting your filter or search query."}
                 </p>
-                <Button size="sm" onClick={() => setIsModalOpen(true)} className="h-8 text-xs font-semibold gap-1.5">
-                  <Plus className="h-3.5 w-3.5" />
+                <Button size="sm" onClick={() => setIsModalOpen(true)} className="h-11 text-sm font-semibold gap-1.5 text-slate-950">
+                  <Plus className="h-4 w-4" />
                   Add Transaction
                 </Button>
               </div>
@@ -273,19 +316,35 @@ export default function TransactionsPage() {
               <TableSkeleton rows={8} />
             )}
           </div>
+
+          {searchQuery.trim() && nextOffset !== null && <p className="text-xs text-muted-foreground">Search covers loaded history. Load more to search older records.</p>}
+          {nextOffset !== null && !isLoading && (
+            <div className="flex flex-col items-center gap-2 pt-2">
+              {loadMoreError ? (
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <p role="alert" className="text-sm text-red-700 dark:text-red-300">{loadMoreError}</p>
+                  <button type="button" onClick={() => { void loadMoreTransactions(); }} className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Retry loading more</button>
+                </div>
+              ) : (
+                <button type="button" disabled={isLoadingMore} onClick={() => { void loadMoreTransactions(); }} className="min-h-11 min-w-36 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                  {isLoadingMore ? "Loading more..." : "Load more"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       <Dialog.Root open={!!deleteConfirm} onOpenChange={open => { if (!open && !isDeleting) setDeleteConfirm(null); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content onEscapeKeyDown={event => { if (isDeleting) event.preventDefault(); }} onPointerDownOutside={event => { if (isDeleting) event.preventDefault(); }} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl bg-card text-card-foreground p-6 shadow-xl">
-            <Dialog.Title className="text-xl font-semibold mb-2">Delete transaction?</Dialog.Title>
-            <Dialog.Description className="text-sm text-muted-foreground mb-6">This removes the transaction and reverses its wallet balances and goal effects. The deletion may be refused if the money or carried reservation has already been used.</Dialog.Description>
+          <Dialog.Content data-no-press-motion="" onEscapeKeyDown={event => { if (isDeleting) event.preventDefault(); }} onPointerDownOutside={event => { if (isDeleting) event.preventDefault(); }} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl bg-card text-card-foreground p-6 shadow-xl">
+            <Dialog.Title className="text-xl font-semibold mb-2">{deleteConfirmIsInstallment ? "Delete this installment?" : "Delete transaction?"}</Dialog.Title>
+            <Dialog.Description className="text-sm text-muted-foreground mb-6">{deleteConfirmIsInstallment ? "This deletes only this installment and reverses its wallet effects. The other installments in this schedule will remain, and the remaining scheduled amount will update." : "This removes the transaction and reverses its wallet balances and goal effects. The deletion may be refused if the money or carried reservation has already been used."}</Dialog.Description>
             {deleteConfirm && <p className="mb-6 text-sm">{deleteConfirm.description || "Transaction"} · {formatCurrency(Number(deleteConfirm.amount))}</p>}
             <div className="flex gap-3">
               <button type="button" disabled={isDeleting} onClick={() => setDeleteConfirm(null)} className="min-h-11 flex-1 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Cancel</button>
-              <button type="button" onClick={() => { void deleteTransaction(deleteConfirm); }} disabled={isDeleting || !!deletion.pendingTransactionId && deletion.pendingTransactionId !== deleteConfirm?.id} className="min-h-11 flex-1 px-4 bg-red-700 text-white dark:bg-red-400 dark:text-slate-950 rounded-lg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">{isDeleting ? "Deleting..." : "Delete"}</button>
+              <button type="button" onClick={() => { void deleteTransaction(deleteConfirm); }} disabled={isDeleting || !!deletion.pendingTransactionId && deletion.pendingTransactionId !== deleteConfirm?.id} className="min-h-11 flex-1 px-4 bg-red-700 text-white dark:bg-red-400 dark:text-slate-950 rounded-lg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">{isDeleting ? "Deleting..." : deleteConfirmIsInstallment ? "Delete installment" : "Delete"}</button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
@@ -296,6 +355,8 @@ export default function TransactionsPage() {
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
+          requestGeneration.current += 1;
+          loadMoreLock.current = false;
           setRefreshKey(prev => prev + 1);
         }}
       />

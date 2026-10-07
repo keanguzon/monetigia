@@ -111,8 +111,8 @@ export function GoalCard({ goal, onEdit, onDelete, onToggleComplete, onContribut
 
       {needsReview && <div className="mt-2 space-y-2"><p className="text-xs text-muted-foreground">Existing tags need review before they count as funding.</p><Button variant="outline" className="h-11 min-h-11 w-full" onClick={() => onReview?.(goal.id)}>Review existing funding</Button></div>}
       {isActive && !needsReview && <div className="mt-2 grid grid-cols-2 gap-2">
-        <Button variant="outline" size="sm" className="h-11 min-h-11" onClick={() => onReserve(goal.id)}>Set aside</Button>
-        <Button size="sm" className="h-11 min-h-11" onClick={() => onContribute(goal.id)}>Spend from goal</Button>
+        <Button variant="outline" size="sm" className="h-11 min-h-11 border-red-700 text-red-700 hover:bg-red-50/70 hover:text-red-800 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300" onClick={() => onContribute(goal.id)}>Spend from Goal</Button>
+        <Button size="sm" className="h-11 min-h-11 text-slate-950" onClick={() => onReserve(goal.id)}>Reserve for Goal</Button>
       </div>}
 
       <div className="mt-2 flex items-center justify-between gap-3 border-t border-border/30 pt-3 text-xs text-muted-foreground">
@@ -123,7 +123,7 @@ export function GoalCard({ goal, onEdit, onDelete, onToggleComplete, onContribut
             : Number(goal.allocation_per_cycle) > 0 ? <div className="space-y-0.5"><span className="flex items-center gap-1 text-[11px] font-medium text-foreground"><Clock className="h-3 w-3 text-muted-foreground" />Saving · ~{projection.count} {projection.unit}</span>{formattedProjectedDate && <span className="block text-[10px] text-muted-foreground">Estimate: {formattedProjectedDate}</span>}</div>
             : <span className="text-[11px] text-muted-foreground">Saving</span>}
         </div>
-        {isActive && !needsReview && !activeFunded && <Button variant="ghost" size="sm" className="h-11 min-h-11 shrink-0 px-2 text-xs" onClick={() => onClose ? onClose(goal.id, "completed") : onToggleComplete(goal.id, true)}>Complete</Button>}
+        {isActive && !needsReview && !activeFunded && <Button variant="outline" size="sm" className="h-11 min-h-11 shrink-0 border-muted-foreground px-2 text-xs" onClick={() => onClose ? onClose(goal.id, "completed") : onToggleComplete(goal.id, true)}>Complete</Button>}
         {isCompleted && !needsReview && <Button variant="ghost" size="sm" className="h-11 min-h-11 shrink-0 px-2 text-xs" onClick={() => onToggleComplete(goal.id, false)}>Reopen</Button>}
       </div>
     </article>

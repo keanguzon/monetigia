@@ -367,3 +367,32 @@
   height: 40px;
   animation: spin 1s linear infinite;
 }
+
+select:not([multiple]):not([size]),
+select:not([multiple])[size="1"] {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.25rem) center,
+    calc(100% - 0.9375rem) center;
+  background-repeat: no-repeat;
+  background-size: 0.3125rem 0.3125rem;
+  padding-inline-end: 2.5rem;
+}
+
+select:not([multiple]):not([size]):dir(rtl),
+select:not([multiple])[size="1"]:dir(rtl) {
+  background-position:
+    0.9375rem center,
+    0.625rem center;
+}
+
+[data-no-press-motion] button:not(:disabled):active,
+[data-no-press-motion] .btn-press:not(:disabled):active,
+[data-no-press-motion] .btn-animate:not(:disabled):active {
+  filter: brightness(0.94);
+  transform: none;
+  transition: none;
+}

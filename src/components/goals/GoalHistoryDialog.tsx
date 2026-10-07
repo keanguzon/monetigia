@@ -24,7 +24,7 @@ function eventTitle(entry: GoalHistoryEntry): string {
   if (entry.kind === "transaction_reversal") return "Transaction reversed";
   if (entry.kind === "reversal") return "Reversal";
   if (entry.kind === "release" && entry.operationKind === "transaction") return "Confirmed automatic release";
-  if (entry.kind === "reserve") return "Set aside";
+  if (entry.kind === "reserve") return "Reserved for goal";
   if (entry.kind === "release") return "Release funds";
   if (entry.kind === "spend" || entry.kind === "legacy_spent") return entry.kind === "legacy_spent" ? "Imported past spending" : "Spending from goal";
   if (entry.kind === "move_in" || entry.kind === "move_out") return "Move reservation";

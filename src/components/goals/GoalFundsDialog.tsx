@@ -21,7 +21,7 @@ interface GoalFundsDialogProps {
 }
 
 const titles: Record<GoalFundsMode, string> = {
-  reserve: "Set aside",
+  reserve: "Reserve for goal",
   release: "Release funds",
   move: "Move reservation",
 };
@@ -176,7 +176,7 @@ export function GoalFundsDialog({ goalId, mode, open, onOpenChange }: GoalFundsD
                     {wallets.map(wallet => <option key={wallet.accountId} value={wallet.accountId}>{wallet.name}</option>)}
                   </select>
                   {selectedWallet && <p className="text-xs text-muted-foreground">{mode === "reserve" ? "Available" : "Reserved for this goal"}: PHP {selectedWallet.eligibleAmount}</p>}
-                  {!busy && !walletDataError && wallets.length === 0 && <p className="text-xs text-muted-foreground">{mode === "reserve" ? "No wallet has money available to set aside." : "This goal has no reserved funds in a wallet."}</p>}
+                  {!busy && !walletDataError && wallets.length === 0 && <p className="text-xs text-muted-foreground">{mode === "reserve" ? "No wallet has money available to reserve for this goal." : "This goal has no reserved funds in a wallet."}</p>}
                 </div>
 
                 {mode === "move" && (

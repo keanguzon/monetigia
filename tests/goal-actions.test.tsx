@@ -133,19 +133,19 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("goal reservation actions", () => {
-  test("set aside uses reservation dialog and does not quote or create an expense", async () => {
+  test("reserving for a goal uses the reservation dialog and does not quote or create an expense", async () => {
     const user = userEvent.setup();
     render(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={() => {}} />);
 
-    const dialog = screen.getByRole("dialog", { name: /set aside/i });
-    expect(screen.getByRole("dialog", { name: /set aside/i })).toBeVisible();
+    const dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
+    expect(screen.getByRole("dialog", { name: /reserve for goal/i })).toBeVisible();
     expect(state.apply).not.toHaveBeenCalled();
     expect(state.apply.mock.calls.some(([, command]) => command.kind === "transaction")).toBe(false);
     expect(dialog.getAttribute("data-state")).toBe("open");
     expect(within(dialog).getAllByRole("option").map(option => option.textContent)).toEqual(["Choose a wallet", "GCash", "GoTyme"]);
     await user.selectOptions(within(dialog).getByLabelText(/wallet/i), gcashId);
     await user.type(within(dialog).getByLabelText(/amount/i), "500");
-    await user.click(within(dialog).getByRole("button", { name: /set aside/i }));
+    await user.click(within(dialog).getByRole("button", { name: /reserve for goal/i }));
 
     await waitFor(() => expect(state.apply).toHaveBeenCalledWith(expect.any(String), {
       kind: "reserve", goalId: laptopId, accountId: gcashId, amount: "500.00",
@@ -193,18 +193,18 @@ describe("goal reservation actions", () => {
   test("changing goal or reopening clears entered amount and wallet selection", async () => {
     const user = userEvent.setup();
     const view = render(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={() => {}} />);
-    let dialog = screen.getByRole("dialog", { name: /set aside/i });
+    let dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     await user.selectOptions(within(dialog).getByLabelText(/wallet/i), gcashId);
     await user.type(within(dialog).getByLabelText(/amount/i), "500");
 
     view.rerender(<GoalFundsDialog goalId={dateId} mode="reserve" open onOpenChange={() => {}} />);
-    dialog = screen.getByRole("dialog", { name: /set aside/i });
+    dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     expect((within(dialog).getByLabelText(/amount/i) as HTMLInputElement).value).toBe("");
     expect((within(dialog).getByLabelText(/wallet/i) as HTMLSelectElement).value).toBe("");
 
     view.rerender(<GoalFundsDialog goalId={dateId} mode="reserve" open={false} onOpenChange={() => {}} />);
     view.rerender(<GoalFundsDialog goalId={dateId} mode="reserve" open onOpenChange={() => {}} />);
-    dialog = screen.getByRole("dialog", { name: /set aside/i });
+    dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     expect((within(dialog).getByLabelText(/amount/i) as HTMLInputElement).value).toBe("");
     expect((within(dialog).getByLabelText(/wallet/i) as HTMLSelectElement).value).toBe("");
   });
@@ -213,17 +213,17 @@ describe("goal reservation actions", () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
     const view = render(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={onOpenChange} />);
-    const dialog = screen.getByRole("dialog", { name: /set aside/i });
+    const dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
     expect(state.apply).not.toHaveBeenCalled();
     expect(state.finance.wallets[0].reserved).toBe("3000.00");
 
     state.apply.mockRejectedValueOnce(new Error("Could not reserve funds"));
     view.rerender(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={onOpenChange} />);
-    const reopened = screen.getByRole("dialog", { name: /set aside/i });
+    const reopened = screen.getByRole("dialog", { name: /reserve for goal/i });
     await user.selectOptions(within(reopened).getByLabelText(/wallet/i), gcashId);
     await user.type(within(reopened).getByLabelText(/amount/i), "500");
-    await user.click(within(reopened).getByRole("button", { name: /set aside/i }));
+    await user.click(within(reopened).getByRole("button", { name: /reserve for goal/i }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/could not reserve funds/i);
     expect(state.finance.wallets[0].reserved).toBe("3000.00");
   });
@@ -233,15 +233,15 @@ describe("goal reservation actions", () => {
     const unknown = new FinancialCommandError({ message: "Network disconnected", outcome: "unknown" });
     state.apply.mockRejectedValueOnce(unknown).mockResolvedValue({ operationId, transactionIds: [], replayed: true });
     const view = render(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={() => {}} />);
-    let dialog = screen.getByRole("dialog", { name: /set aside/i });
+    let dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     await user.selectOptions(within(dialog).getByLabelText(/wallet/i), gcashId);
     await user.type(within(dialog).getByLabelText(/amount/i), "125");
-    await user.click(within(dialog).getByRole("button", { name: /set aside/i }));
+    await user.click(within(dialog).getByRole("button", { name: /reserve for goal/i }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/could not confirm whether this was saved/i);
     const firstAttempt = state.apply.mock.calls[0];
 
     view.rerender(<GoalFundsDialog goalId={dateId} mode="reserve" open onOpenChange={() => {}} />);
-    dialog = screen.getByRole("dialog", { name: /set aside/i });
+    dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     await user.click(within(dialog).getByRole("button", { name: /retry same request/i }));
     await waitFor(() => expect(state.apply).toHaveBeenCalledTimes(2));
     expect(state.apply.mock.calls[1]).toEqual(firstAttempt);
@@ -250,7 +250,7 @@ describe("goal reservation actions", () => {
   test("wallet read errors stay distinct from an empty eligible-wallet list", () => {
     state.walletError = new Error("metadata unavailable");
     render(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={() => {}} />);
-    const dialog = screen.getByRole("dialog", { name: /set aside/i });
+    const dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     expect(within(dialog).getByRole("alert").textContent).toMatch(/could not load/i);
     expect(dialog.textContent).not.toMatch(/no wallet has money available/i);
   });
@@ -258,13 +258,39 @@ describe("goal reservation actions", () => {
   test("reservation amount and retry loading controls have mobile minimum heights", () => {
     state.walletError = new Error("metadata unavailable");
     render(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={() => {}} />);
-    const dialog = screen.getByRole("dialog", { name: /set aside/i });
+    const dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     expect(within(dialog).getByLabelText(/amount/i).classList.contains("min-h-11")).toBe(true);
     expect(within(dialog).getByRole("button", { name: /retry loading/i }).classList.contains("min-h-11")).toBe(true);
   });
 });
 
 describe("goal lifecycle presentation", () => {
+  test("puts red goal spending before green reservation and gives Complete an outline", async () => {
+    const user = userEvent.setup();
+    const onContribute = vi.fn();
+    const onReserve = vi.fn();
+    const onToggleComplete = vi.fn();
+    render(<GoalCard goal={makeGoal() as any} onEdit={() => {}} onDelete={() => {}} onToggleComplete={onToggleComplete} onContribute={onContribute} onReserve={onReserve} onRelease={() => {}} onMove={() => {}} onHistory={() => {}} />);
+    const card = screen.getByRole("article", { name: /laptop/i });
+    const actions = within(card).getAllByRole("button").filter(button => ["Spend from Goal", "Reserve for Goal"].includes(button.textContent ?? ""));
+
+    expect(actions.map(button => button.textContent)).toEqual(["Spend from Goal", "Reserve for Goal"]);
+    expect(actions[0].className).toContain("border-red-700");
+    expect(actions[0].className).toContain("dark:text-red-400");
+    expect(actions[0].className).not.toContain("bg-destructive");
+    expect(actions[1].className).toContain("bg-primary");
+    expect(actions[1].className).toContain("text-slate-950");
+    const complete = within(card).getByRole("button", { name: "Complete" });
+    expect(complete.className).toContain("border-muted-foreground");
+
+    await user.click(actions[0]);
+    await user.click(actions[1]);
+    await user.click(complete);
+    expect(onContribute).toHaveBeenCalledWith(laptopId);
+    expect(onReserve).toHaveBeenCalledWith(laptopId);
+    expect(onToggleComplete).toHaveBeenCalledWith(laptopId, true);
+  });
+
   test("active progress adds reserved and spent while showing each amount separately", () => {
     render(<GoalCard goal={makeGoal() as any} onEdit={() => {}} onDelete={() => {}} onToggleComplete={() => {}} onContribute={() => {}} onReserve={() => {}} onRelease={() => {}} onMove={() => {}} onHistory={() => {}} />);
     const card = screen.getByRole("article", { name: /laptop/i });
@@ -355,7 +381,7 @@ describe("goal closure and history", () => {
     ];
     render(<GoalHistoryDialog goalId={laptopId} open onOpenChange={() => {}} />);
     const dialog = screen.getByRole("dialog", { name: /laptop history/i });
-    expect(within(dialog).getByText("Set aside")).toBeTruthy();
+    expect(within(dialog).getByText("Reserved for goal")).toBeTruthy();
     expect(within(dialog).getByText("Release funds")).toBeTruthy();
     expect(within(dialog).getByText("Confirmed automatic release")).toBeTruthy();
     expect(within(dialog).getByText("Spending from goal")).toBeTruthy();
@@ -418,19 +444,19 @@ describe("goal closure and history", () => {
     const user = userEvent.setup();
     function Harness() {
       const [open, setOpen] = React.useState(false);
-      return <><button type="button" onClick={() => setOpen(true)}>Open set aside</button><GoalFundsDialog goalId={laptopId} mode="reserve" open={open} onOpenChange={setOpen} /></>;
+      return <><button type="button" onClick={() => setOpen(true)}>Open reserve for goal</button><GoalFundsDialog goalId={laptopId} mode="reserve" open={open} onOpenChange={setOpen} /></>;
     }
     render(<Harness />);
-    const trigger = screen.getByRole("button", { name: "Open set aside" });
+    const trigger = screen.getByRole("button", { name: "Open reserve for goal" });
     trigger.focus();
     expect(document.activeElement).toBe(trigger);
     await user.click(trigger);
-    const dialog = screen.getByRole("dialog", { name: /set aside/i });
+    const dialog = screen.getByRole("dialog", { name: /reserve for goal/i });
     expect(dialog.contains(document.activeElement)).toBe(true);
     await user.tab();
     expect(dialog.contains(document.activeElement)).toBe(true);
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /set aside/i })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /reserve for goal/i })).toBeNull());
     expect(document.activeElement).toBe(trigger);
   });
 });

@@ -1,0 +1,25 @@
+
+> monetigia@1.0.0 lint
+> next lint
+
+
+./src/app/(dashboard)/accounts/page.tsx
+83:6  Warning: React Hook useEffect has a missing dependency: 'loadAccounts'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/categories/page.tsx
+141:6  Warning: React Hook useEffect has a missing dependency: 'loadCategories'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/settings/page.tsx
+35:6  Warning: React Hook useEffect has a missing dependency: 'loadProfile'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/transactions/page.tsx
+59:6  Warning: React Hook useEffect has a missing dependency: 'loadTransactions'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/forms/AddAccountForm.tsx
+41:6  Warning: React Hook useEffect has a missing dependency: 'icon'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/transactions/AddTransactionModal.tsx
+80:6  Warning: React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+Exit Code: 0

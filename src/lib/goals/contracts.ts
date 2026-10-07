@@ -30,7 +30,7 @@ export const TransactionDraftSchema = z.object({
   type: z.enum(["income", "expense", "transfer"]), accountId: id,
   transferToAccountId: id.nullable(), categoryId: id.nullable(), goalId: id.nullable(),
   amount: PositiveMoneySchema, description: z.string().nullable(), date,
-  installments: z.object({ count: z.number().int().positive().safe().max(MAX_INSTALLMENTS) }).nullable(),
+  installments: z.object({ count: z.number().int().positive().safe().max(MAX_INSTALLMENTS), firstDueDate: date.optional() }).nullable(),
   reservationMoves: z.array(ReservationMoveSchema),
 });
 export type TransactionDraft = z.infer<typeof TransactionDraftSchema>;

@@ -29,7 +29,7 @@ export function GoalReleaseNotice({ quote, draft, snapshot, disabled, onChange, 
   };
   return <section aria-labelledby="release-heading" className="mx-6 mb-6 rounded-lg border border-border bg-muted/30 p-4 space-y-3">
     <h3 id="release-heading" className="font-semibold">Review goal releases</h3>
-    <p className="text-sm">This transaction needs money set aside for goals. Saving will release:</p>
+    <p className="text-sm">This transaction needs money reserved for goals. Saving will release:</p>
     <ul className="space-y-1 text-sm">{quote.releases.map(line => <li key={line.goalId}>{goalName(line.goalId)}: {formatCurrency(Number(line.amount))}</li>)}</ul>
     <p className="text-xs text-muted-foreground">Actual {formatCurrency(Number(quote.actual))} · Reserved {formatCurrency(Number(quote.reserved))} · Available {formatCurrency(Number(quote.available))}</p>
     <p className="text-sm">These goals will have less reserved money. This release does not count as goal spending.</p>
@@ -41,7 +41,7 @@ export function GoalReleaseNotice({ quote, draft, snapshot, disabled, onChange, 
     {error && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>}
     <div className="flex flex-col sm:flex-row gap-3">
       <button type="button" disabled={disabled} onClick={onCancel} className="min-h-11 flex-1 px-3 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Keep reservations</button>
-      <button type="button" disabled={disabled || custom} onClick={onConfirm} className="min-h-11 flex-1 px-3 rounded-lg bg-emerald-700 text-white dark:bg-emerald-400 dark:text-slate-950 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">Release funds and save</button>
+      <button type="button" disabled={disabled || custom} onClick={onConfirm} className="min-h-11 flex-1 px-3 rounded-lg bg-primary text-slate-950 hover:bg-primary/90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">Release funds and save</button>
     </div>
   </section>;
 }

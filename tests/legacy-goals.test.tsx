@@ -33,8 +33,8 @@ test('unreviewed goal opens review and cannot spend or reserve legacy tagged mon
   render(<GoalCard goal={state.goal} onReview={review} onEdit={vi.fn()} onDelete={vi.fn()} onToggleComplete={vi.fn()} onContribute={vi.fn()} onReserve={vi.fn()} onRelease={vi.fn()} onMove={vi.fn()} onHistory={vi.fn()} />);
   await userEvent.click(screen.getByRole("button", { name: "Review existing funding" }));
   expect(review).toHaveBeenCalledWith(goalId);
-  expect(screen.queryByRole("button", { name: "Set aside" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Spend from goal" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Reserve for Goal" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Spend from Goal" })).toBeNull();
 });
 
 test('review explains fake savings correction and only imports explicitly selected cash spending', async () => {
@@ -43,11 +43,11 @@ test('review explains fake savings correction and only imports explicitly select
   expect(screen.getByText(/normal transaction correction/i)).toBeTruthy();
   expect(screen.queryByRole("checkbox", { name: /Installment purchase/ })).toBeNull();
   expect(screen.queryByRole("checkbox", { name: /Cash transfer/ })).toBeNull();
-  fireEvent.change(screen.getByLabelText("Set aside in GCash (PHP)"), { target: { value: "3000.01" } });
+  fireEvent.change(screen.getByLabelText("Reserved in GCash (PHP)"), { target: { value: "3000.01" } });
   await userEvent.click(screen.getByRole("button", { name: "Confirm funding review" }));
   expect(state.apply).not.toHaveBeenCalled();
   expect(screen.getByRole("alert").textContent).toMatch(/available/);
-  fireEvent.change(screen.getByLabelText("Set aside in GCash (PHP)"), { target: { value: "500.01" } });
+  fireEvent.change(screen.getByLabelText("Reserved in GCash (PHP)"), { target: { value: "500.01" } });
   await userEvent.click(screen.getByRole("checkbox", { name: /Laptop purchase/ }));
   await userEvent.click(screen.getByRole("button", { name: "Confirm funding review" }));
   expect(state.apply.mock.calls[0][1]).toEqual({ kind: "adopt_legacy", goalId, status: "active", reservations: [{ accountId, amount: "500.01" }], spentTransactionIds: [state.history[0].id] });
@@ -56,7 +56,7 @@ test('review explains fake savings correction and only imports explicitly select
 test('completed review submits zero reservations and optional empty history', async () => {
   renderDialog(); await screen.findByRole("checkbox", { name: /Laptop purchase/ });
   fireEvent.change(screen.getByLabelText("Goal status"), { target: { value: "completed" } });
-  expect(screen.queryByLabelText("Set aside in GCash (PHP)")).toBeNull();
+  expect(screen.queryByLabelText("Reserved in GCash (PHP)")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Confirm funding review" }));
   expect(state.apply.mock.calls[0][1]).toEqual({ kind: "adopt_legacy", goalId, status: "completed", reservations: [], spentTransactionIds: [] });
 });
