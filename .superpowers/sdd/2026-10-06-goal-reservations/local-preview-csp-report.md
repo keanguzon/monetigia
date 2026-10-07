@@ -28,3 +28,11 @@ The development policy now omits that directive only when the validated configur
 TDD RED: `node --test tests/local-preview-csp.test.cjs` exited 1, 3/5 passed. The two new HTTP loopback assertions failed because `upgrade-insecure-requests` was still present.
 
 GREEN: the same focused command exited 0, 5/5 passed, including byte-equivalent production/nondevelopment headers, HTTPS loopback retention, no-API behavior, and rejected origins. Full `npm test` exited 0: Node 7/7 and Vitest 9 files / 130 tests passed. No TypeScript sources changed, so no separate typecheck was required. The owned Next process was not restarted; root will apply the committed config and perform the browser retry. That retry must establish the auth-user read and account/RPC requests before claiming rendered acceptance.
+
+## Follow-up disposition
+
+The owned preview services were restarted and the ignored local PostgREST proxy CORS allowlist was updated to permit its required `accept-profile` and `content-profile` headers. A fresh scoped review of the HTTP-upgrade follow-up commit `8cb894c` passed without findings; focused CSP tests passed 5/5.
+
+The regular browser now authenticates and renders the disposable Dashboard account data and Wallet tiles. The Wallets `goal_finance_snapshot` POST returns HTTP 200, but the Wallets finance summary still displays `Unavailable`. This is a confirmed remaining preview issue, not a CSP/authentication failure, and is not claimed as resolved. Full viewport/lifecycle rendered acceptance was not performed because the user set the stop boundary at Task 10.
+
+The local preview remains available. No production configuration, live database, push, merge, or deployment was changed.
