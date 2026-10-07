@@ -41,7 +41,7 @@ These failure cases must receive explicit tests in the owning tasks:
 - **Confirmed progress default:** `reserved + spent toward this goal`. Date target PHP 3,000, spent PHP 2,000, reserved PHP 1,000 remains 100%, with both components visible. The user approved this model and subagent-driven execution on 2026-10-06.
 - **Proposed release ordering:** non-priority first; furthest target date first, null first; newest creation first; UUID as final tie-breaker. Users can adjust the preview. This is an implementation default, not a claim that the user chose this policy.
 - **Installment count:** cap at 12, matching the current transaction modal's 1..12 choices. Schema and split helper must share the same constant; authoritative transaction RPCs must retain this bound.
-- **User model policy:** no Astra. Use GPT-6-luna with medium, high, or extra-high reasoning for suitable work/testing/review; never below medium. Use GPT-6.1-sol with low or medium reasoning for tasks that need it, with medium as the ceiling. Choose model and effort by complexity rather than using one combination for every role.
+- **User model policy:** no Astra. When assigning coding implementation to GPT-6-luna, use max reasoning; use medium/high for lighter work and never below medium. Use GPT-6.1-sol with low or medium reasoning where appropriate, with medium as the ceiling. Choose the model by complexity and value rather than using one combination for every role.
 - **User stopping boundary:** stopped after Task 2 on October 6, resumed October 7, then requested stopping after Task 4 is complete, including independent review and local verification. The user subsequently resumed; complete the Task 5 prerequisite and continue Tasks 6–11 with the same remote-write restrictions.
 - Implement on an isolated branch/worktree based on current beta using the workspace worktree skill at execution time. Do not merge or deploy as part of this plan.
 - No product code, dependency installation, live database migration, commit, or push is authorized by this planning document alone.
@@ -239,13 +239,13 @@ Define `AllocationEvent` from the new database row, including `reserved_delta`, 
 
 **Interfaces:** consume `WalletFunds` using the same wallet inclusion scope as the existing balance headline. Dashboard's existing metrics continue to consume real transactions and accounts. Local wallet state must refresh after finance operations, using the shared snapshot or explicit revalidation rather than only modal close.
 
-- [ ] Write assertions: reserving 5,000 of 30,000 shows actual 30,000 / reserved 5,000 / available 25,000 and unchanged net worth; excluded wallets remain excluded from corresponding headline sums; credit debt is separate and cannot be reserved; release changes no income/expense metric.
-- [ ] Test loading/error states never display fabricated zero balances. Test wallet fetches do not call balance updates, and successful finance operations refresh Wallets while its page remains mounted. Debt filters and previews yield the same values as baseline fixtures.
+- [x] Write assertions: reserving 5,000 of 30,000 shows actual 30,000 / reserved 5,000 / available 25,000 and unchanged net worth; excluded wallets remain excluded from corresponding headline sums; credit debt is separate and cannot be reserved; release changes no income/expense metric.
+- [x] Test loading/error states never display fabricated zero balances. Test wallet fetches do not call balance updates, and successful finance operations refresh Wallets while its page remains mounted. Debt filters and previews yield the same values as baseline fixtures.
 
   Pin `reservations do not change net worth`: `expect(after.netWorth).toBe(before.netWorth)` and `expect(after.available).toBe("25000.00")` after reserving 5,000 in a 30,000 wallet.
-- [ ] Run `npx vitest run tests/wallet-reservations.test.tsx`; expect red. Extend the existing Goals-style top summary with the reservation distinction and remove fetch-time credit balance synchronization. Do not redesign lower tiles or change drag order, ledger toggle, wallet actions, or APY/net-worth behavior.
-- [ ] Audit credit opening-balance and transaction-derived differences before cutover and document them in the rollout checklist; preserve stored actual debt rather than overwriting it on page load. Preserve existing real cash-advance and payment reporting fixtures.
-- [ ] Run focused tests and TypeScript; commit: `feat: show wallet reserved and available funds consistently`.
+- [x] Run `npx vitest run tests/wallet-reservations.test.tsx`; expect red. Extend the existing Goals-style top summary with the reservation distinction and remove fetch-time credit balance synchronization. Do not redesign lower tiles or change drag order, ledger toggle, wallet actions, or APY/net-worth behavior.
+- [x] Audit credit opening-balance and transaction-derived differences before cutover and document them in the rollout checklist; preserve stored actual debt rather than overwriting it on page load. Preserve existing real cash-advance and payment reporting fixtures.
+- [x] Run focused tests and TypeScript; commit: `feat: show wallet reserved and available funds consistently`.
 
 ## Task 10: Legacy funding review and write-permission cutover
 
@@ -291,6 +291,8 @@ Define `AllocationEvent` from the new database row, including `reserved_delta`, 
 ## Execution handoff
 
 Review this plan and its companion spec before product implementation. For this change, prefer subagent-driven execution with a fresh review after each task because a mistake in atomic writes or migration can corrupt financial balances. Native execution with one final independent branch review is the lower-cost alternative. The user chose subagent-driven execution and accepted combined progress on 2026-10-06. Local implementation and commits are authorized; remote pushes remain prohibited pending final check.
+
+
 
 
 

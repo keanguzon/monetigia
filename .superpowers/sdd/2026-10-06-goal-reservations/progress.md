@@ -139,3 +139,14 @@ Ruling: ExtendTask8narrow005migration/schema repeatedapplicationfix - reapplying
 
 Task 8: complete (commits72591fb..605057d, independent Sol medium review spec compliant / Approved, no findings). Report:111 Vitest +2 Node,57 native DB tests,TSC exit0. Task11 browser/build acceptance remains pending.
 User model clarification: Luna coding max; lighter work medium/high; Sol low/medium only; no Astra.
+
+Task9 implementing; base2c6e47c; task_9_wallet_summaries Luna max per latest coding policy. Own listed reader/UI files and rollout debt audit; no parallel implementer.
+Controller fresh CUA localDashboard repro: initial skeleton then failed Supabase auth fetch renders falsezero headline/metrics; sent Task9 reader-error evidence. Five local listeners healthy; no browser-security bypass. Task11 loaded rendered acceptance remains pending.
+
+Ruling: Task9 may minimally update tests/contributions.test.tsx account/mock snapshot fixtures - existing useAccounts mock creates newinline data array eachrender and causes infinite mounted Accounts effect; real SWR keeps stabledata - use stable completePHPactive accountfixture and consistent snapshotwallets/mutate as needed; preserve every behaviorassertion, no weakening/runtime changes. Worker owns serialfix and report.
+
+Task9 implementedcb92691; independentSol low review Needs fixes:1Important overlappingloadAccounts stale-responsewrites,1Minor captioninclusion scope. Fixround1 freshSol low boundedrace/captionpatch; noTask10dispatchuntilreviewclean.
+
+Task9 fixround1 at95d941d; re-review addressesrace/caption butmanualreload-after-queryerror lacksunconditionalunmountinvalidation. Fixround2 sameSol low narrowfixer; Task10notdispatched.
+
+Task9 fixround2 at85747d4; independentSol low re-reviewApproved/allfindingsclosed. Task9 complete (2c6e47c..85747d4),123Vitest+2Node/TSC/12focused. Live debtinventory remains documenteddeploymentpreflight; renderedloadedTask11gatepending.
