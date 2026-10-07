@@ -1,7 +1,27 @@
 BEGIN;
-DO $$ BEGIN
+DO $$
+DECLARE
+  v_public regprocedure := to_regprocedure('public.goal_finance_apply(uuid,jsonb,jsonb)');
+  v_body text; v_definition text;
+  v_header constant text := 'CREATE OR REPLACE FUNCTION public.goal_finance_apply(';
+BEGIN
+  IF v_public IS NULL THEN RAISE EXCEPTION 'Transaction dispatcher is missing'; END IF;
+  SELECT prosrc INTO v_body FROM pg_proc WHERE oid=v_public;
   IF to_regprocedure('public.goal_transaction_apply(uuid,jsonb,jsonb)') IS NULL THEN
+    IF position('public.goal_normalize_transaction' IN v_body)=0 OR position('public.goal_transaction_apply' IN v_body)>0 THEN
+      RAISE EXCEPTION 'Expected transaction implementation before lifecycle dispatcher';
+    END IF;
     ALTER FUNCTION public.goal_finance_apply(uuid,jsonb,jsonb) RENAME TO goal_transaction_apply;
+  ELSE
+    IF position('public.goal_normalize_transaction' IN v_body)>0 AND position('public.goal_transaction_apply' IN v_body)=0 THEN
+      v_definition := pg_get_functiondef(v_public);
+      IF left(v_definition,length(v_header))<>v_header THEN RAISE EXCEPTION 'Unexpected transaction function definition'; END IF;
+      EXECUTE 'CREATE OR REPLACE FUNCTION public.goal_transaction_apply(' || substr(v_definition,length(v_header)+1);
+    ELSIF position('public.goal_transaction_apply' IN v_body)>0 AND position('public.goal_normalize_transaction' IN v_body)=0 THEN
+      NULL;
+    ELSE
+      RAISE EXCEPTION 'Ambiguous transaction dispatcher definition';
+    END IF;
   END IF;
 END $$;
 REVOKE ALL ON FUNCTION public.goal_transaction_apply(uuid,jsonb,jsonb) FROM PUBLIC,anon,authenticated,service_role;

@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
 import { X, ArrowUpRight, ArrowDownLeft, ArrowLeftRight } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { GoalSelector } from "@/components/goals/GoalSelector";
-import { contributionGoalId } from "@/lib/goal-funding";
-import { refreshFinancialData } from "@/lib/refresh-financial-data";
+import { useTransactionSubmit } from "@/hooks/use-transaction-submit";
+import { useGoals } from "@/hooks/use-goals";
+import { parseMoney } from "@/lib/goals/summary";
+import { GoalReleaseNotice } from "./GoalReleaseNotice";
 import * as Dialog from "@radix-ui/react-dialog";
 
 interface AddTransactionModalProps {
@@ -22,8 +22,8 @@ interface AddTransactionModalProps {
 export default function AddTransactionModal({ isOpen, onClose, defaultAccountId, defaultGoalId }: AddTransactionModalProps) {
   const supabase = createClient();
   const sb = supabase as any;
-  const router = useRouter();
-  const { toast } = useToast();
+  const submit = useTransactionSubmit();
+  const { financeSnapshot } = useGoals();
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -36,7 +36,9 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState("");
   const [transferToAccountId, setTransferToAccountId] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(false);
+  const isLoading = submit.phase === "saving" || submit.phase === "quoting";
+  const [formError, setFormError] = useState("");
+  const [carryAmount, setCarryAmount] = useState("");
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [dataError, setDataError] = useState("");
   const [debtPaymentMonth, setDebtPaymentMonth] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -48,10 +50,9 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
   const [installments, setInstallments] = useState<number>(1);
   const [startMonth, setStartMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
-  const debtAccounts = accounts.filter((a: any) => a?.type === "credit_card");
-
   useEffect(() => {
     let cancelled = false;
+    submit.reset();
     if (isOpen) {
       setIsDataLoading(true);
       setDataError("");
@@ -61,6 +62,10 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
       setType("expense");
       setAmount("");
       setDescription("");
+      setFormError("");
+      setCarryAmount("");
+      setDate(new Date().toISOString().slice(0, 10));
+      setStartMonth(new Date().toISOString().slice(0, 7));
       setIsPayLater(false);
       setInstallments(1);
       setTransferToAccountId("");
@@ -69,7 +74,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
         .finally(() => { if (!cancelled) setIsDataLoading(false); });
     }
     return () => { cancelled = true; };
-  }, [isOpen, defaultAccountId, defaultGoalId]);
+  }, [isOpen, defaultAccountId, defaultGoalId, submit.reset]);
 
   useEffect(() => {
     // Auto-select first matching category when type changes
@@ -97,7 +102,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
     if (!user?.id) throw new Error("Not signed in");
 
     const { data: accountsData, error: accountsError } = await sb.from("accounts").select("*").eq("user_id", user.id).order("name");
-    const accountsList = (accountsData ?? []) as any[];
+    const accountsList = ((accountsData ?? []) as any[]).filter(a => a.is_active === true && a.currency === "PHP");
 
     const { data: catsData, error: categoriesError } = await sb.from("categories").select("*").order("name");
     if (!isCurrent()) return;
@@ -238,312 +243,57 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDataLoading || isLoading || dataError) return;
-    setIsLoading(true);
-
+    if (isDataLoading || isLoading || dataError || submit.phase === "saved" || submit.phase === "review") return;
+    setFormError("");
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id) {
-        toast({ title: "Not signed in", description: "You must be signed in to add transactions", variant: "destructive" });
-        return;
-      }
-
-      const amt = Number(amount);
-      const effectiveAccountId = type === "expense" && isPayLater ? payLaterAccountId : accountId;
-      if (!effectiveAccountId || !Number.isFinite(amt) || amt <= 0) {
-        toast({ title: "Missing fields", description: "Please select wallet and amount", variant: "destructive" });
-        return;
-      }
-
-      if (accounts.length === 0) {
-        toast({ title: "No wallets", description: "Please create a wallet first", variant: "destructive" });
-        return;
-      }
-
-      if (type === "expense" && isPayLater && !effectiveAccountId) {
-        toast({ title: "Missing fields", description: "Please select a PayLater/Credit Card wallet", variant: "destructive" });
-        return;
-      }
-
-      // Prevent negative debt on credit cards when reducing debt.
-      // - income on credit_card reduces debt (balance - amt)
-      // - transfer TO credit_card reduces debt (dst - amt)
-      if (type === "income") {
-        const accMeta = getAccount(effectiveAccountId);
-        if (accMeta?.type === "credit_card") {
-          const { data: accRow, error: accErr } = await sb
-            .from("accounts")
-            .select("balance")
-            .eq("id", effectiveAccountId)
-            .single();
-          if (accErr) {
-            toast({ title: "Error", description: "Failed to validate debt balance", variant: "destructive" });
-            return;
-          }
-          const currentDebt = Number(accRow?.balance || 0);
-          if (currentDebt - amt < 0) {
-            toast({
-              title: "Payment too large",
-              description: `This would make your debt negative. Current debt: ${formatCurrency(currentDebt)}.`,
-              variant: "destructive",
-            });
-            return;
-          }
-        }
-      }
-
-      if (type === "transfer") {
-        const dstMeta = getAccount(transferToAccountId);
-        if (dstMeta?.type === "credit_card") {
-          // Month-level guard: only allow paying up to the selected month's remaining debt.
-          if (isDebtPayment) {
-            if (isDebtMonthLoading) {
-              toast({ title: "Please wait", description: "Loading debt month details...", variant: "destructive" });
-              return;
-            }
-
-            const monthDebt = Math.max(0, Number(selectedDebtMonthAmount || 0));
-            const label = selectedDebtMonthLabel || debtPaymentMonth;
-
-            if (!debtPaymentMonth) {
-              toast({ title: "Missing month", description: "Please select a debt month to pay", variant: "destructive" });
-              return;
-            }
-
-            if (monthDebt <= 0) {
-              toast({
-                title: "No debt for this month",
-                description: `There is no remaining debt for ${label}. Pick a different month.`,
-                variant: "destructive",
-              });
-              return;
-            }
-
-            if (amt - monthDebt > 1e-9) {
-              toast({
-                title: "Payment too large",
-                description: `Max for ${label} is ${formatCurrency(monthDebt)}.`,
-                variant: "destructive",
-              });
-              return;
-            }
-          }
-
-          const { data: dstRow, error: dstErr } = await sb
-            .from("accounts")
-            .select("balance")
-            .eq("id", transferToAccountId)
-            .single();
-          if (dstErr) {
-            toast({ title: "Error", description: "Failed to validate debt balance", variant: "destructive" });
-            return;
-          }
-          const currentDebt = Number(dstRow?.balance || 0);
-          if (currentDebt - amt < 0) {
-            toast({
-              title: "Payment too large",
-              description: `You can only pay up to ${formatCurrency(currentDebt)} for this debt account.`,
-              variant: "destructive",
-            });
-            return;
-          }
-        }
-      }
-
-      // Prevent negative balances (no overdraft) for non-credit accounts.
-      if (type === "expense" || type === "transfer") {
-        if (type === "transfer") {
-          if (!transferToAccountId) {
-            toast({ title: "Missing fields", description: "Please select a destination wallet", variant: "destructive" });
-            return;
-          }
-          if (transferToAccountId === effectiveAccountId) {
-            toast({ title: "Invalid transfer", description: "Source and destination wallets must be different", variant: "destructive" });
-            return;
-          }
-        }
-
-        const srcAcc = getAccount(effectiveAccountId);
-        const srcType = srcAcc?.type;
-        const currentBal = Number(srcAcc?.balance || 0);
-
-        // Credit cards are tracked as "debt" (balance can grow with purchases).
-        // Only block overdraft for non-credit wallets.
-        if (srcType !== "credit_card") {
-          const nextBal = currentBal - amt;
-          if (nextBal < 0) {
-            toast({
-              title: "Not enough balance",
-              description: `Not enough money in ${srcAcc?.name || "this wallet"}. Available: ₱${currentBal.toFixed(2)}.`,
-              variant: "destructive",
-            });
-            return;
-          }
-        }
-      }
-
-      // Insert transaction(s) - for PayLater with installments, create multiple transactions
-      if (type === "expense" && isPayLater && installments > 1) {
-        const installmentAmount = amt / installments;
-        const transactions = [];
-
-        for (let i = 0; i < installments; i++) {
-          const installmentDate = new Date(startMonth + "-01");
-          installmentDate.setMonth(installmentDate.getMonth() + i);
-          const dateStr = installmentDate.toISOString().slice(0, 10);
-
-          transactions.push({
-            user_id: user.id,
-            account_id: effectiveAccountId,
-            category_id: categoryId || null,
-            goal_id: contributionGoalId(type, goalId),
-            type,
-            amount: installmentAmount,
-            description: `${description} (Installment ${i + 1}/${installments})`,
-            date: dateStr,
-            transfer_to_account_id: null,
-          });
-        }
-
-        const { error } = await sb.from("transactions").insert(transactions);
-        if (error) {
-          toast({ title: "Error", description: error.message, variant: "destructive" });
-          return;
-        }
-
-        // Update debt account balance (sum of all installments)
-        const { data: acc } = await sb.from("accounts").select("balance").eq("id", effectiveAccountId).single();
-        const current = Number(acc?.balance || 0);
-        const newBal = current + amt; // Debt increases by total amount
-        await sb.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
-      } else {
-        // Single transaction
-        const transactionDate = isDebtPayment
-          ? `${debtPaymentMonth}-01`
-          : (type === "expense" && isPayLater)
-            ? new Date(startMonth + "-01").toISOString().slice(0, 10)
-            : date;
-        const finalDescription = (() => {
-          const trimmed = (description || "").trim();
-          if (trimmed) return trimmed;
-          if (!isDebtPayment) return "";
-          const label = selectedDebtMonthLabel || debtPaymentMonth;
-          return `Debt - ${label}`;
-        })();
-        const { error } = await sb.from("transactions").insert({
-          user_id: user.id,
-          account_id: effectiveAccountId,
-          category_id: type === "transfer" ? null : (categoryId || null),
-          goal_id: contributionGoalId(type, goalId),
-          type,
-          amount: amt,
-          description: finalDescription,
-          date: transactionDate,
-          transfer_to_account_id: type === "transfer" ? transferToAccountId || null : null,
-        }).select();
-
-        if (error) {
-          toast({ title: "Error", description: error.message, variant: "destructive" });
-          return;
-        }
-
-        // Update balances for single transaction
-        const effAcc = getAccount(effectiveAccountId);
-        const effType = effAcc?.type;
-
-        if (type === "income") {
-          const { data: acc } = await sb.from("accounts").select("balance").eq("id", effectiveAccountId).single();
-          const current = Number(acc?.balance || 0);
-          const newBal = effType === "credit_card" ? current - amt : current + amt;
-          await sb.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
-        } else if (type === "expense") {
-          const { data: acc } = await sb.from("accounts").select("balance").eq("id", effectiveAccountId).single();
-          const current = Number(acc?.balance || 0);
-          const newBal = effType === "credit_card" ? current + amt : current - amt;
-          await sb.from("accounts").update({ balance: newBal }).eq("id", effectiveAccountId);
-        } else if (type === "transfer") {
-          const { data: src } = await sb.from("accounts").select("balance").eq("id", effectiveAccountId).single();
-          const { data: dst } = await sb.from("accounts").select("balance").eq("id", transferToAccountId).single();
-
-          const srcMeta = getAccount(effectiveAccountId);
-          const dstMeta = getAccount(transferToAccountId);
-
-          if (!dst) {
-            toast({ title: "Error", description: "Transfer destination not found", variant: "destructive" });
-          } else {
-            const srcCurrent = Number(src?.balance || 0);
-            const dstCurrent = Number(dst?.balance || 0);
-
-            // For credit cards, balance is "debt":
-            // - Paying a credit card (transfer to credit_card) reduces debt (dst - amt)
-            // - Sending from credit card increases debt (src + amt)
-            const nextSrc = srcMeta?.type === "credit_card" ? srcCurrent + amt : srcCurrent - amt;
-            const nextDst = dstMeta?.type === "credit_card" ? dstCurrent - amt : dstCurrent + amt;
-
-            await sb.from("accounts").update({ balance: nextSrc }).eq("id", effectiveAccountId);
-            await sb.from("accounts").update({ balance: nextDst }).eq("id", transferToAccountId);
-          }
-        }
-      }
-
-      await refreshFinancialData();
-      toast({
-        title: "Transaction added",
-        description: isPayLater && installments > 1
-          ? `Created ${installments} installments successfully.`
-          : "Your transaction was saved."
+      const exactAmount = parseMoney(amount);
+      if (!effectiveAccountId || exactAmount === "0.00") { setFormError("Select a wallet and enter an amount greater than zero."); return; }
+      if (type === "transfer" && (!transferToAccountId || transferToAccountId === effectiveAccountId)) { setFormError("Choose a different destination wallet."); return; }
+      const cashTransfer = type === "transfer" && !isDebtPayment;
+      const selectedGoalId = type === "income" ? null : goalId || null;
+      await submit.quote({
+        type, accountId: effectiveAccountId, transferToAccountId: type === "transfer" ? transferToAccountId : null,
+        categoryId: type === "transfer" ? null : categoryId || null, goalId: cashTransfer ? null : selectedGoalId,
+        amount: exactAmount, description: description.trim() || (isDebtPayment ? `Debt - ${selectedDebtMonthLabel || debtPaymentMonth}` : null),
+        date: isDebtPayment ? `${debtPaymentMonth}-01` : type === "expense" && isPayLater ? `${startMonth}-01` : date,
+        installments: type === "expense" && isPayLater ? { count: installments } : null,
+        reservationMoves: cashTransfer && selectedGoalId ? [{ goalId: selectedGoalId, amount: parseMoney(carryAmount) }] : [],
       });
-
-      // Reset form
-      setAmount("");
-      setDescription("");
-      setDate(new Date().toISOString().slice(0, 10));
-      setIsPayLater(false);
-      setInstallments(1);
-      setStartMonth(new Date().toISOString().slice(0, 7));
-
-      // Small delay to ensure DB has updated before closing
-      setTimeout(() => {
-        onClose();
-      }, 100);
-    } catch (err) {
-      toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
+    } catch { setFormError("Enter valid amounts with no more than two decimal places."); }
   };
+  const close = () => { submit.reset(); onClose(); };
 
   if (!isOpen) return null;
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open && !isLoading) onClose(); }}>
+    <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open && !isLoading) close(); }}>
       <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-      <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" onEscapeKeyDown={(event) => { if (isLoading) event.preventDefault(); }} onPointerDownOutside={(event) => { if (isLoading) event.preventDefault(); }}>
+      <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-lg max-h-[90dvh] overflow-y-auto shadow-xl" onEscapeKeyDown={(event) => { if (isLoading) event.preventDefault(); }} onPointerDownOutside={(event) => { if (isLoading) event.preventDefault(); }}>
         {/* Modal Header */}
         <div className="flex items-center justify-between p-6 border-b dark:border-slate-700">
           <Dialog.Title className="text-xl font-semibold">Add Transaction</Dialog.Title>
           <button
-            onClick={onClose}
+            onClick={close}
             disabled={isLoading}
             aria-label="Close transaction form"
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200 hover:rotate-90"
+            className="min-h-11 min-w-11 p-2 hover:bg-muted rounded-lg focus-visible:ring-2 focus-visible:ring-primary"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          {dataError && <p role="alert" className="px-6 pt-4 text-sm text-destructive">{dataError}</p>}
-          <fieldset disabled={isDataLoading || isLoading} className="p-6 space-y-6 min-w-0">
+          {dataError && <p role="alert" className="px-6 pt-4 text-sm text-red-700 dark:text-red-300">{dataError}</p>}
+          <fieldset onChange={() => { submit.reset(); setFormError(""); }} disabled={isDataLoading || isLoading || submit.unresolved || submit.phase === "saved"} className="p-6 space-y-6 min-w-0">
             {/* Transaction Type Selector */}
             <div>
               <label className="block text-sm font-medium mb-3">Transaction Type</label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setType("expense")}
-                  className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all duration-200 ${type === "expense"
+                  onClick={() => { submit.reset(); setType("expense"); }}
+                  className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-colors duration-200 motion-reduce:transition-none ${type === "expense"
                     ? "border-red-500 bg-red-50 dark:bg-red-950/20"
                     : "border-gray-200 dark:border-slate-700 hover:border-red-300"
                     }`}
@@ -553,8 +303,8 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
                 </button>
                 <button
                   type="button"
-                  onClick={() => setType("income")}
-                  className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all duration-200 ${type === "income"
+                  onClick={() => { submit.reset(); setType("income"); }}
+                  className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-colors duration-200 motion-reduce:transition-none ${type === "income"
                     ? "border-green-500 bg-green-50 dark:bg-green-950/20"
                     : "border-gray-200 dark:border-slate-700 hover:border-green-300"
                     }`}
@@ -564,8 +314,8 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
                 </button>
                 <button
                   type="button"
-                  onClick={() => setType("transfer")}
-                  className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all duration-200 ${type === "transfer"
+                  onClick={() => { submit.reset(); setType("transfer"); }}
+                  className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-colors duration-200 motion-reduce:transition-none ${type === "transfer"
                     ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
                     : "border-gray-200 dark:border-slate-700 hover:border-blue-300"
                     }`}
@@ -644,7 +394,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
             {/* PayLater / Credit Card purchase */}
             {type === "expense" && (
               <div className="rounded-lg border p-4 space-y-3">
-                <label className="flex items-center gap-2 text-sm font-medium">
+                <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
                   <input
                     type="checkbox"
                     checked={isPayLater}
@@ -705,7 +455,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
 
             {/* Transfer To Account */}
             {type === "transfer" && (
-              <div className="animate-in slide-in-from-top duration-200">
+              <div className="animate-in slide-in-from-top duration-200 motion-reduce:animate-none">
                 <label htmlFor="transferTo" className="block text-sm font-medium mb-2">To Account</label>
                 <select
                   id="transferTo"
@@ -789,7 +539,11 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
             </div>
 
             {/* Date */}
-            {(type === "expense" || type === "transfer") && <GoalSelector value={goalId} onChange={setGoalId} disabled={isLoading} />}
+            {(type === "expense" || type === "transfer") && <GoalSelector value={goalId} onChange={setGoalId} disabled={isLoading} meaning={isPayLater ? "purchase" : type === "transfer" && !isDebtPayment ? "carry" : "spend"} debtOnly={isDebtPayment} />}
+            {type === "transfer" && !isDebtPayment && goalId && <div>
+              <label htmlFor="carry-amount" className="block text-sm font-medium mb-2">Reservation to carry</label>
+              <input id="carry-amount" type="number" min="0.01" step="0.01" required value={carryAmount} onChange={event => setCarryAmount(event.target.value)} className="min-h-11 w-full px-4 py-3 border rounded-lg bg-background focus-visible:ring-2 focus-visible:ring-primary" />
+            </div>}
 
             <div>
               <label htmlFor="date" className="block text-sm font-medium mb-2">Date</label>
@@ -817,22 +571,26 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
             </div>
           </fieldset>
 
+          {(formError || submit.error) && <p role="alert" className="px-6 pb-4 text-sm text-red-700 dark:text-red-300">{formError || submit.error}</p>}
+          {submit.phase === "review" && !submit.unresolved && submit.transactionQuote && submit.draft && <GoalReleaseNotice key={JSON.stringify(submit.transactionQuote)} quote={submit.transactionQuote} draft={submit.draft} snapshot={financeSnapshot} disabled={isLoading} onChange={releases => { void submit.quote(submit.draft!, releases); }} onConfirm={() => { void submit.confirm(); }} onCancel={submit.reset} />}
+          {submit.unresolved && <div className="px-6 pb-6 space-y-3"><p className="text-sm">Pending transaction: {formatCurrency(Number(submit.draft?.amount))}. Its original wallet, quote and save request are retained.</p><button type="button" disabled={isLoading} onClick={() => { void submit.confirm(); }} className="min-h-11 px-4 py-3 bg-emerald-700 text-white dark:bg-emerald-400 dark:text-slate-950 rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same transaction</button></div>}
+          {submit.phase === "saved" && <p role="status" className="px-6 pb-4 text-sm">{submit.refreshError ? "Transaction saved. Some views could not refresh. Close and refresh the page; do not save it again." : "Transaction saved."}</p>}
           {/* Modal Footer */}
           <div className="flex gap-3 p-6 border-t dark:border-slate-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={close}
               disabled={isLoading}
-              className="flex-1 px-4 py-3 border rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 font-medium"
+              className="flex-1 px-4 py-3 border rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-200 motion-reduce:transition-none font-medium"
             >
-              Cancel
+              {submit.phase === "saved" ? "Close" : "Cancel"}
             </button>
             <button
               type="submit"
-              disabled={isLoading || isDataLoading || !!dataError || accounts.length === 0}
-              className="flex-1 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium hover:shadow-lg"
+              disabled={isLoading || isDataLoading || !!dataError || accounts.length === 0 || submit.phase === "review" || submit.phase === "saved"}
+              className="flex-1 px-4 py-3 bg-emerald-700 text-white dark:bg-emerald-400 dark:text-slate-950 rounded-lg hover:bg-emerald-800 dark:hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 motion-reduce:transition-none font-medium hover:shadow-lg"
             >
-              {isLoading ? "Adding..." : isDataLoading ? "Loading accounts..." : "Add Transaction"}
+              {isLoading ? "Checking..." : isDataLoading ? "Loading accounts..." : submit.phase === "saved" ? "Saved" : "Add Transaction"}
             </button>
           </div>
         </form>

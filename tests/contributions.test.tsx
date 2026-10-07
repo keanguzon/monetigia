@@ -11,7 +11,7 @@ import AccountsPage from "@/app/(dashboard)/accounts/page";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const db = vi.hoisted(() => ({
-  transactions: [] as any[], failInsert: false, delayLoad: null as Promise<void> | null,
+  commands: [] as any[], transactions: [] as any[], failInsert: false, delayLoad: null as Promise<void> | null,
   userId: "10000000-0000-4000-8000-000000000001",
   phoneId: "20000000-0000-4000-8000-000000000001",
   laptopId: "20000000-0000-4000-8000-000000000002",
@@ -27,9 +27,9 @@ vi.mock("@/hooks/use-data", () => ({
 }));
 vi.mock("@/lib/supabase/client", () => {
   const accounts = [
-    { id: db.cashId, name: "Cash", type: "cash", balance: 10000 },
-    { id: db.bankId, name: "Bank", type: "bank", balance: 0 },
-    { id: db.debtId, name: "PayLater", type: "credit_card", balance: 0 },
+    { id: db.cashId, name: "Cash", type: "cash", balance: 10000, currency: "PHP", is_active: true },
+    { id: db.bankId, name: "Bank", type: "bank", balance: 0, currency: "PHP", is_active: true },
+    { id: db.debtId, name: "PayLater", type: "credit_card", balance: 0, currency: "PHP", is_active: true },
   ];
   const goals = [{ id: db.phoneId, name: "phone" }, { id: db.laptopId, name: "laptop" }];
   return { createClient: () => ({
@@ -38,8 +38,17 @@ vi.mock("@/lib/supabase/client", () => {
       getSession: async () => ({ data: { session: { user: { id: db.userId }, access_token: "fixture-token" } }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
-    rpc(name: string) {
+    rpc(name: string, args: any) {
       const response = Promise.resolve().then(() => {
+        if (name === "goal_transaction_quote") return { data: { fingerprint: "quote", actual: "30000.00", reserved: "0.00", available: "30000.00", releases: [] }, error: null };
+        if (name === "goal_finance_apply") {
+          if (db.failInsert) return { data: null, error: { message: "INVALID_STATE", hint: "Save failed" } };
+          db.commands.push(args.p_command);
+          const draft = args.p_command.draft;
+          const count = draft.installments?.count ?? 1;
+          for (let i = 0; i < count; i++) db.transactions.push({ amount: Number(draft.amount) / count, goal_id: draft.goalId });
+          return { data: { operationId: "40000000-0000-4000-8000-000000000004", transactionIds: db.transactions.map((_, index) => `50000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`), replayed: false }, error: null };
+        }
         if (name !== "goal_finance_snapshot") return { data: null, error: null };
         return { data: {
         goals: goals.map(goal => ({
@@ -108,7 +117,7 @@ function Progress() {
 }
 
 const config = { dedupingInterval: 0, revalidateOnFocus: false };
-beforeEach(() => { db.transactions = []; db.failInsert = false; db.delayLoad = null; });
+beforeEach(() => { db.transactions = []; db.commands = []; db.failInsert = false; db.delayLoad = null; });
 afterEach(cleanup);
 
 test("goal shortcut selects the goal, leaves wallet empty and resets between openings", async () => {
@@ -121,18 +130,19 @@ test("goal shortcut selects the goal, leaves wallet empty and resets between ope
   await waitFor(() => expect((screen.getByLabelText("Goal (Optional)") as HTMLSelectElement).value).toBe(db.laptopId));
 });
 
-test.each(["Expense", "Transfer", "Income"])("%s saves correct goal association and refreshes actual progress", async (type) => {
+test.each(["Expense", "Transfer", "Income"])("%s sends its explicit goal meaning and refreshes progress", async (type) => {
   const user = userEvent.setup();
   render(<SWRConfig value={config}><Progress /><AddTransactionModal isOpen onClose={() => {}} defaultGoalId={db.phoneId} /></SWRConfig>);
   await screen.findByRole("option", { name: "phone" });
   await user.click(screen.getByRole("button", { name: type }));
   await user.selectOptions(screen.getByLabelText(type === "Transfer" ? "From Account" : "Account"), db.cashId);
-  if (type === "Transfer") await user.selectOptions(screen.getByLabelText("To Account"), db.bankId);
+  if (type === "Transfer") { await user.selectOptions(screen.getByLabelText("To Account"), db.bankId); await user.type(screen.getByLabelText("Reservation to carry"), "500"); }
   if (type === "Income") expect(screen.queryByLabelText("Goal (Optional)")).toBeNull();
   await user.type(screen.getByLabelText("Amount"), "500");
   await user.click(screen.getByRole("button", { name: "Add Transaction" }));
   await waitFor(() => expect(db.transactions).toHaveLength(1));
-  expect(db.transactions[0].goal_id).toBe(type === "Income" ? null : db.phoneId);
+  expect(db.transactions[0].goal_id).toBe(type === "Expense" ? db.phoneId : null);
+  expect(db.commands[0].draft.reservationMoves).toEqual(type === "Transfer" ? [{ goalId: db.phoneId, amount: "500.00" }] : []);
   await waitFor(() => expect(screen.getByLabelText("Phone funding").textContent).toBe("0/0"));
 });
 
@@ -165,7 +175,7 @@ test("reopening a contribution cannot submit a wallet retained from the previous
   await waitFor(() => expect((screen.getByLabelText("Account") as HTMLSelectElement).value).toBe(""));
 });
 
-test("legacy goal-tagged installments remain history and do not reserve funds", async () => {
+test("credit goal-tagged installments remain informational and do not reserve funds", async () => {
   const user = userEvent.setup();
   const view = render(<SWRConfig value={config}><Progress /><AddTransactionModal isOpen onClose={() => {}} defaultGoalId={db.phoneId} /></SWRConfig>);
   await screen.findByRole("option", { name: "Cash" });

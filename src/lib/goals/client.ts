@@ -69,6 +69,7 @@ export type GoalHistoryEntry = Omit<AllocationEvent, "kind"> & {
   kind: AllocationEvent["kind"] | "transaction_reversal";
   accountName: string;
   operationKind: FinancialCommand["kind"] | null;
+  linkedTransactionIds?: string[];
 };
 
 function normalizeDatabaseDecimal(value: unknown): string {
@@ -130,6 +131,9 @@ export async function fetchGoalHistory(userId: string, goalId: string): Promise<
   type OperationRow = { id: string; command: { kind?: unknown; transactionId?: unknown }; result?: { transactionIds?: unknown }; created_at: string };
   const sourceOperations = (sourceOperationResult.data ?? []) as OperationRow[];
   const sourceOperationsById = new Map<string, OperationRow>(sourceOperations.map(row => [row.id, row]));
+  const operationTransactionLinks = new Map(sourceOperations.map(row => [row.id,
+    row.result?.transactionIds === undefined ? [] : z.array(z.string().uuid()).parse(row.result.transactionIds),
+  ]));
   const transactionIds = Array.from(new Set(events.flatMap(event => {
     if (event.transaction_id) return [event.transaction_id];
     const operation = sourceOperationsById.get(event.operation_id);
@@ -161,6 +165,7 @@ export async function fetchGoalHistory(userId: string, goalId: string): Promise<
     ...event,
     accountName: accountNames.get(event.account_id) ?? "Wallet",
     operationKind: operationKinds.get(event.operation_id) ?? null,
+    linkedTransactionIds: operationTransactionLinks.get(event.operation_id) ?? [],
   }));
   const reversedEventIds = new Set(events.filter(event => event.kind === "reversal" && event.reversal_of !== null).map(event => event.reversal_of));
   for (const event of events) {

@@ -219,7 +219,7 @@ test('credit installments distribute centavos and book debt once; debt goal paym
     const tx = (await rows(f))[3];
     assert.deepEqual(tx.sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.amount, t.date]), [[333.34, '2026-10-01'], [333.34, '2026-11-01'], [333.33, '2026-12-01']]);
     assert.equal(requireSuccess(await f.owner.client.from('accounts').select('*').eq('id', credit.id).single()).balance, 1000.01);
-    assert.equal((await quote(f, { ...d, goalId: f.owner.goal.id })).error?.message, 'INVALID_STATE');
+    assert.deepEqual(requireSuccess(await quote(f, { ...d, goalId: f.owner.goal.id })).releases, []);
     requireSuccess(await f.owner.client.from('goals').update({ category: 'debt' }).eq('id', f.owner.goal.id));
     await reserve(f);
     await save(f, draft(f, {
@@ -307,4 +307,66 @@ test('credit signs and negative month credits carry forward authoritatively', as
     const s = await snap(f);
     assert.equal(s.wallets.find(w => w.accountId === credit.id).actual, '10.00');
     assert.equal(s.wallets.find(w => w.accountId === f.owner.account.id).actual, '29510.00');
+});
+
+test('credit goal tags are informational for purchases and installments, replay and deletion invent no goal funds', async (t) => {
+    const f = await setup(t);
+    const credit = requireSuccess(await f.owner.client.from('accounts').insert({ user_id: f.owner.id, name: 'userPayLater', type: 'credit_card', balance: 0 }).select().single());
+    const initial = await snap(f);
+    const ordinary = draft(f, { accountId: credit.id, goalId: f.owner.goal.id, amount: '100.00' });
+    const first = await save(f, ordinary);
+    assert.equal(first.transactionIds.length, 1);
+    const installmentDraft = draft(f, { accountId: credit.id, goalId: f.owner.goal.id, amount: '1000.01', installments: { count: 3 } });
+    const q = requireSuccess(await quote(f, installmentDraft));
+    const requestId = randomUUID();
+    const command = { kind: 'transaction', draft: installmentDraft };
+    const result = requireSuccess(await apply(f, command, q, requestId));
+    assert.equal(result.transactionIds.length, 3);
+    assert.equal(requireSuccess(await apply(f, command, q, requestId)).replayed, true);
+    const persisted = await rows(f);
+    assert.equal(persisted[3].length, 4);
+    assert.ok(persisted[3].every(tx => tx.goal_id === f.owner.goal.id));
+    assert.equal(persisted[2].length, 0);
+    const after = await snap(f);
+    assert.equal(after.goals[0].reserved, '0.00');
+    assert.equal(after.goals[0].spent, '0.00');
+    assert.equal(after.goals[0].progressAmount, '0.00');
+    assert.deepEqual(after.wallets.find(wallet => wallet.accountId === f.owner.account.id), initial.wallets.find(wallet => wallet.accountId === f.owner.account.id));
+    assert.equal(requireSuccess(await f.owner.client.from('accounts').select('*').eq('id', credit.id).single()).balance, 1100.01);
+    const baseline = await rows(f);
+    assert.equal((await quote(f, { ...ordinary, goalId: f.other.goal.id })).error?.message, 'NOT_ALLOWED');
+    assert.equal((await quote(f, { ...ordinary, type: 'income' })).error?.message, 'INVALID_STATE');
+    assert.equal((await quote(f, { ...ordinary, type: 'transfer', transferToAccountId: f.owner.account.id })).error?.message, 'INVALID_STATE');
+    assert.deepEqual(await rows(f), baseline);
+    await applyMigration('202610060005_goal_lifecycle_operations.sql');
+    const transactionId = result.transactionIds[0];
+    const deleteRequestId = randomUUID();
+    const deletion = { kind: 'delete_transaction', transactionId };
+    requireSuccess(await apply(f, deletion, null, deleteRequestId));
+    assert.equal(requireSuccess(await apply(f, deletion, null, deleteRequestId)).replayed, true);
+    const deleted = await rows(f);
+    assert.equal(deleted[3].length, 3);
+    assert.equal(deleted[2].length, 0);
+    assert.equal(requireSuccess(await f.owner.client.from('accounts').select('*').eq('id', credit.id).single()).balance, 766.67);
+    const final = await snap(f);
+    assert.equal(final.goals[0].reserved, '0.00');
+    assert.equal(final.goals[0].spent, '0.00');
+    assert.equal(final.goals[0].progressAmount, '0.00');
+});
+
+test('ordered transaction and lifecycle reapplication refreshes the private helper; standalone lifecycle remains idempotent', async (t) => {
+    const f = await setup(t);
+    await applyMigration('202610060004_goal_transaction_operations.sql');
+    await applyMigration('202610060005_goal_lifecycle_operations.sql');
+    await applyMigration('202610060005_goal_lifecycle_operations.sql');
+    const credit = requireSuccess(await f.owner.client.from('accounts').insert({ user_id: f.owner.id, name: 'Credit', type: 'credit_card', balance: 0 }).select().single());
+    const result = await save(f, draft(f, { accountId: credit.id, goalId: f.owner.goal.id, amount: '1.00' }));
+    assert.equal(result.transactionIds.length, 1);
+    assert.equal((await rows(f))[2].length, 0);
+    assert.equal((await snap(f)).goals[0].progressAmount, '0.00');
+    requireSuccess(await apply(f, { kind: 'close', goalId: f.owner.goal.id, status: 'completed', leftovers: null }));
+    assert.equal((await snap(f)).goals[0].status, 'completed');
+    const { queryAdmin } = await databaseRuntime();
+    const grants = await queryAdmin("SELECT has_function_privilege('authenticated','public.goal_transaction_apply(uuid,jsonb,jsonb)','EXECUTE') AS authenticated, has_function_privilege('anon','public.goal_transaction_apply(uuid,jsonb,jsonb)','EXECUTE') AS anon, has_function_privilege('service_role','public.goal_transaction_apply(uuid,jsonb,jsonb)','EXECUTE') AS service");
+    assert.deepEqual(grants, [{ authenticated: false, anon: false, service: false }]);
 });

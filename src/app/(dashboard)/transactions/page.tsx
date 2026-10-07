@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useTransactionDelete } from "@/hooks/use-transaction-submit";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,48 +32,29 @@ export default function TransactionsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const deletion = useTransactionDelete(loadTransactions);
+  const isDeleting = deletion.isDeleting;
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    loadTransactions();
+    void loadTransactions().catch(() => {});
   }, [refreshKey]);
 
+  useEffect(() => {
+    if (!deletion.savedTransactionId) return;
+    setDeleteConfirm(null);
+    setTransactions(current => current.filter(transaction => transaction.id !== deletion.savedTransactionId));
+  }, [deletion.savedTransactionId]);
+
   const deleteTransaction = async (transaction: any) => {
-    setIsDeleting(true);
-    try {
-      if (!transaction?.id || !isValidUuid(transaction.id)) {
-        toast({ title: "Error", description: "Invalid transaction id", variant: "destructive" });
-        return;
-      }
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id) {
-        toast({ title: "Not signed in", description: "You must be signed in to delete transactions", variant: "destructive" });
-        return;
-      }
-
-      const { error: deleteError } = await sb.rpc('delete_transaction_atomic', {
-        p_transaction_id: transaction.id,
-        p_user_id: user.id
-      });
-
-      if (deleteError) {
-        toast({ title: "Error", description: deleteError.message, variant: "destructive" });
-        return;
-      }
-
-      toast({ title: "Transaction deleted", description: "Transaction and balance have been reverted." });
-      setDeleteConfirm(null);
-      setRefreshKey(prev => prev + 1);
-    } catch (err) {
-      toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
-    } finally {
-      setIsDeleting(false);
+    if (!transaction?.id || !isValidUuid(transaction.id)) {
+      toast({ title: "Cannot delete transaction", description: "This transaction could not be identified.", variant: "destructive" });
+      return;
     }
+    await deletion.remove(transaction.id);
   };
 
-  const loadTransactions = async () => {
+  async function loadTransactions() {
     setIsLoading(true);
     const {
       data: { user },
@@ -82,7 +65,7 @@ export default function TransactionsPage() {
       const { data, error } = await sb
         .from("transactions")
         .select(
-          "id, user_id, account_id, category_id, type, amount, description, date, transfer_to_account_id, created_at, category:categories(id,name,color), account:accounts!account_id(id,name,type), transfer_to_account:accounts!transfer_to_account_id(id,name,type)"
+          "id, user_id, account_id, category_id, goal_id, type, amount, description, date, transfer_to_account_id, created_at, category:categories(id,name,color), account:accounts!account_id(id,name,type), transfer_to_account:accounts!transfer_to_account_id(id,name,type)"
         )
         .eq("user_id", user.id)
         .order("date", { ascending: false })
@@ -93,10 +76,11 @@ export default function TransactionsPage() {
         console.error("Failed to load transactions", error);
         toast({
           title: "Failed to load transactions",
-          description: error.message,
+          description: "The transaction list could not refresh. Try refreshing the page.",
           variant: "destructive",
         });
-        setTransactions([]);
+        setIsLoading(false);
+        throw new Error("The transaction list could not refresh.");
       } else {
         setTransactions(data || []);
       }
@@ -130,6 +114,8 @@ export default function TransactionsPage() {
 
   return (
     <>
+      {deletion.error && <div role="alert" className="mb-4 text-sm text-red-700 dark:text-red-300 space-y-2"><p>{deletion.error}</p>{deletion.pendingTransactionId && <button type="button" disabled={isDeleting} onClick={() => { void deletion.remove(deletion.pendingTransactionId!); }} className="min-h-11 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same deletion</button>}</div>}
+      {deletion.savedTransactionId && <p role="status" className="mb-4 text-sm">{deletion.refreshError ? "Transaction deleted. Some views could not refresh. Refresh the page; do not delete it again." : "Transaction deleted and wallet balances updated."}</p>}
       <div className="space-y-6">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -158,7 +144,7 @@ export default function TransactionsPage() {
                   onClick={() => setFilter(type)}
                   className={`h-7 px-3 rounded-lg text-xs font-medium capitalize transition-all ${
                     filter === type
-                      ? "bg-primary text-primary-foreground shadow-xs"
+                      ? "bg-emerald-700 text-white dark:bg-emerald-400 dark:text-slate-950 shadow-xs"
                       : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
@@ -261,7 +247,8 @@ export default function TransactionsPage() {
                           e.stopPropagation();
                           setDeleteConfirm(transaction);
                         }}
-                        className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md"
+                        aria-label="Delete transaction"
+                        className="min-h-11 min-w-11 opacity-70 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary transition-opacity p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md"
                         title={transaction?.id ? "Delete transaction" : ""}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -289,44 +276,20 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in duration-200"
-          onClick={() => setDeleteConfirm(null)}
-        >
-          <div
-            className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl animate-in slide-in-from-bottom-4 duration-300 m-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6">
-              <h3 className="text-xl font-semibold mb-2 text-red-500">Delete Transaction?</h3>
-              <p className="text-muted-foreground mb-6">
-                This will remove the transaction and revert the balance. This action cannot be undone.
-              </p>
-              <div className="bg-slate-100 dark:bg-slate-900 p-3 rounded-lg mb-6 text-sm">
-                <p className="font-medium">{deleteConfirm.description || deleteConfirm.category?.name || "Transaction"}</p>
-                <p className="text-muted-foreground">{formatCurrency(Number(deleteConfirm.amount))} • {formatDate(deleteConfirm.date)}</p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => deleteTransaction(deleteConfirm)}
-                  disabled={isDeleting}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </button>
-              </div>
+      <Dialog.Root open={!!deleteConfirm} onOpenChange={open => { if (!open && !isDeleting) setDeleteConfirm(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+          <Dialog.Content onEscapeKeyDown={event => { if (isDeleting) event.preventDefault(); }} onPointerDownOutside={event => { if (isDeleting) event.preventDefault(); }} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl bg-card text-card-foreground p-6 shadow-xl">
+            <Dialog.Title className="text-xl font-semibold mb-2">Delete transaction?</Dialog.Title>
+            <Dialog.Description className="text-sm text-muted-foreground mb-6">This removes the transaction and reverses its wallet balances and goal effects. The deletion may be refused if the money or carried reservation has already been used.</Dialog.Description>
+            {deleteConfirm && <p className="mb-6 text-sm">{deleteConfirm.description || "Transaction"} · {formatCurrency(Number(deleteConfirm.amount))}</p>}
+            <div className="flex gap-3">
+              <button type="button" disabled={isDeleting} onClick={() => setDeleteConfirm(null)} className="min-h-11 flex-1 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Cancel</button>
+              <button type="button" onClick={() => { void deleteTransaction(deleteConfirm); }} disabled={isDeleting || !!deletion.pendingTransactionId && deletion.pendingTransactionId !== deleteConfirm?.id} className="min-h-11 flex-1 px-4 bg-red-700 text-white dark:bg-red-400 dark:text-slate-950 rounded-lg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">{isDeleting ? "Deleting..." : "Delete"}</button>
             </div>
-          </div>
-        </div>
-      )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* Add Transaction Modal */}
       <AddTransactionModal

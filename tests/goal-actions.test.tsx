@@ -381,6 +381,16 @@ describe("goal closure and history", () => {
     await expect(fetchGoalHistory(userId, laptopId)).rejects.toThrow(/invalid decimal/i);
   });
 
+  test("automatic release history carries validated operation transaction links without inventing a transaction id", async () => {
+    const transactionId = "60000000-0000-4000-8000-000000000006";
+    state.events = [event({ kind: "release", reserved_delta: "-3.00", transaction_id: null })];
+    state.operations = [{ id: operationId, command: { kind: "transaction" }, result: { operationId, transactionIds: [transactionId], replayed: false } }];
+    const history = await fetchGoalHistory(userId, laptopId);
+    expect(history[0]).toMatchObject({ transaction_id: null, linkedTransactionIds: [transactionId], operationKind: "transaction" });
+    state.operations[0].result.transactionIds = ["not-a-uuid"];
+    await expect(fetchGoalHistory(userId, laptopId)).rejects.toThrow();
+  });
+
   test("history records deleted-transaction reversals without inventing an allocation amount", async () => {
     const transactionId = "60000000-0000-4000-8000-000000000006";
     const deletionOperationId = "40000000-0000-4000-8000-000000000008";

@@ -84,12 +84,14 @@ BEGIN
     IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
     IF v_goal.review_state<>'confirmed' THEN RAISE EXCEPTION 'NEEDS_REVIEW'; END IF;
     IF v_goal.status<>'active' OR v_goal.archived_at IS NOT NULL THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
-    IF v_src.type='credit_card' OR v_draft->>'type'='income' OR
+    IF v_draft->>'type'='income' OR (v_src.type='credit_card' AND v_draft->>'type'<>'expense') OR
       (v_draft->>'type'='transfer' AND (v_dst.type<>'credit_card' OR v_goal.category<>'debt')) THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
-    SELECT coalesce(sum(reserved_delta),0) INTO v_funds FROM public.goal_allocation_events
-      WHERE user_id=v_owner AND goal_id=v_goal.id AND account_id=v_src.id;
-    IF v_funds<v_amount THEN RAISE EXCEPTION 'INSUFFICIENT_RESERVATION'; END IF;
-    v_spending := v_amount;
+    IF v_src.type<>'credit_card' THEN
+      SELECT coalesce(sum(reserved_delta),0) INTO v_funds FROM public.goal_allocation_events
+        WHERE user_id=v_owner AND goal_id=v_goal.id AND account_id=v_src.id;
+      IF v_funds<v_amount THEN RAISE EXCEPTION 'INSUFFICIENT_RESERVATION'; END IF;
+      v_spending := v_amount;
+    END IF;
   END IF;
   FOR v_line IN SELECT value FROM jsonb_array_elements(v_draft->'reservationMoves') LOOP
     SELECT * INTO v_goal FROM public.goals WHERE id=(v_line->>'goalId')::uuid AND user_id=v_owner;
@@ -245,7 +247,7 @@ BEGIN
   IF v_draft->>'type'='transfer' THEN
     UPDATE public.accounts SET balance=coalesce(balance,0)+CASE WHEN type='credit_card' THEN -v_amount ELSE v_amount END WHERE id=v_dst.id AND user_id=v_owner;
   END IF;
-  IF v_draft->>'goalId' IS NOT NULL THEN
+  IF v_draft->>'goalId' IS NOT NULL AND v_src.type<>'credit_card' THEN
     INSERT INTO public.goal_allocation_events(user_id,goal_id,account_id,operation_id,kind,reserved_delta,spent_delta,transaction_id)
       VALUES(v_owner,(v_draft->>'goalId')::uuid,v_src.id,v_operation,'spend',-v_amount,v_amount,v_transaction);
   END IF;
