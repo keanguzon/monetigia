@@ -214,7 +214,7 @@ test("an older completed load cannot end a newer debt loading state", async () =
   expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain("...");
   expect(screen.queryByLabelText("Net worth balance")).toBeNull();
   await act(async () => resolveNew({ data: [{ ...makeTransactions()[4], amount: 300 }], error: null }));
-  expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain(`-${formatCurrency(300)}`);
+  expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain(`-${formatCurrency(8000)}`);
 });
 
 test("late authentication cannot replace newer account metadata", async () => {
@@ -321,12 +321,12 @@ test("Wallets keeps stored card debt while preserving credit previews and filter
   render(<AccountsPage />, { wrapper });
 
   expect(await screen.findByText("Statement Balance")).not.toBeNull();
-  expect(screen.getByText(`-${formatCurrency(8000)}`)).not.toBeNull();
+  expect(screen.getAllByText(`-${formatCurrency(8000)}`)).toHaveLength(2);
   expect(fixture.accountWrites.some(write => Object.prototype.hasOwnProperty.call(write, "balance"))).toBe(false);
-  expect(screen.getByText(`-${formatCurrency(1600)}`)).not.toBeNull();
+  expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain(`-${formatCurrency(8000)}`);
 
   fireEvent.click(screen.getByRole("button", { name: "Deduct Debt: Off" }));
-  expect(screen.getByLabelText("Net worth balance").getAttribute("data-money")).toBe("28400.00");
+  expect(screen.getByLabelText("Net worth balance").getAttribute("data-money")).toBe("22000.00");
 
   await user.click(screen.getByRole("button", { name: "All months" }));
   await user.click(await screen.findByRole("menuitemcheckbox", { name: "2026-10" }));
@@ -334,6 +334,54 @@ test("Wallets keeps stored card debt while preserving credit previews and filter
   expect(screen.getByRole("button", { name: "2026-09" })).not.toBeNull();
   expect(screen.getByRole("button", { name: "Deduct Debt: Active" })).not.toBeNull();
   expect(screen.getByLabelText("Net worth balance").getAttribute("data-money")).toBe("29300.00");
+});
+
+test("All months uses the current credit balance while a selected month uses its scheduled debt", async () => {
+  const user = userEvent.setup();
+  fixture.accounts = makeAccounts().map(account => account.id === fixture.creditId ? { ...account, balance: 6600 } : account);
+
+  render(<AccountsPage />, { wrapper });
+
+  await waitFor(() => expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain(`-${formatCurrency(6600)}`));
+  fireEvent.click(screen.getByRole("button", { name: "Deduct Debt: Off" }));
+  expect(screen.getByLabelText("Net worth balance").getAttribute("data-money")).toBe("23400.00");
+
+  await user.click(screen.getByRole("button", { name: "All months" }));
+  await user.click(await screen.findByRole("menuitemcheckbox", { name: "2026-10" }));
+  await user.keyboard("{Escape}");
+
+  expect(screen.getByRole("button", { name: "2026-09" })).not.toBeNull();
+  await waitFor(() => expect(screen.getByText("Scheduled Debt:").parentElement?.textContent).toContain(`-${formatCurrency(700)}`));
+  expect(screen.getByLabelText("Net worth balance").getAttribute("data-money")).toBe("29300.00");
+});
+
+test("All months debt deduction remains available when there are no scheduled months", async () => {
+  fixture.accounts = makeAccounts().map(account => account.id === fixture.creditId ? { ...account, balance: 6600 } : account);
+  fixture.transactions = [];
+
+  render(<AccountsPage />, { wrapper });
+
+  await waitFor(() => expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain(`-${formatCurrency(6600)}`));
+  const deductButton = screen.getByRole("button", { name: "Deduct Debt: Off" }) as HTMLButtonElement;
+  expect(deductButton.disabled).toBe(false);
+
+  fireEvent.click(deductButton);
+  expect(screen.getByLabelText("Net worth balance").getAttribute("data-money")).toBe("23400.00");
+});
+
+test.each([
+  ["missing", undefined],
+  ["null", null],
+  ["blank", "  "],
+  ["malformed", "not a balance"],
+])("All months debt is unavailable when the credit balance is %s", async (_state, balance) => {
+  fixture.accounts = makeAccounts().map(account => account.id === fixture.creditId ? { ...account, balance } : account);
+  fixture.transactions = [];
+
+  render(<AccountsPage />, { wrapper });
+
+  await waitFor(() => expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain("Unavailable"));
+  expect((screen.getByRole("button", { name: "Deduct Debt: Off" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 test("Dashboard totals remain transaction-based after a reservation release", async () => {

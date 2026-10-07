@@ -460,6 +460,27 @@ export default function AccountsPage() {
     );
   }, [accounts, accountsQuery.data]);
 
+  const accountDebtResult = useMemo(() => {
+    let totalCents = 0;
+    for (const account of summaryAccounts) {
+      if (account?.type !== "credit_card") continue;
+      const rawBalance = account.balance;
+      const isDecimalBalance = typeof rawBalance === "number"
+        ? Number.isFinite(rawBalance)
+        : typeof rawBalance === "string" && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawBalance.trim());
+      if (!isDecimalBalance) {
+        return { amount: null, error: new Error("Credit account balance is unavailable") };
+      }
+      const balance = Number(rawBalance);
+      const cents = Math.round(Math.max(0, balance) * 100);
+      if (!Number.isFinite(balance) || !Number.isSafeInteger(cents) || !Number.isSafeInteger(totalCents + cents)) {
+        return { amount: null, error: new Error("Credit account balance is not a valid amount") };
+      }
+      totalCents += cents;
+    }
+    return { amount: totalCents / 100, error: null as unknown };
+  }, [summaryAccounts]);
+
   const walletSummaryResult = useMemo(() => {
     if (!goals.financeSnapshot) return { summary: null, error: null as unknown };
     try {
@@ -473,7 +494,9 @@ export default function AccountsPage() {
   }, [summaryAccounts, goals.financeSnapshot]);
   const walletSummaryError = accountsQuery.error || accountLoadError || goals.isError || walletSummaryResult.error ||
     (!goals.isLoading && !goals.financeSnapshot ? new Error("Finance snapshot is unavailable") : null);
-  const walletSummaryLoading = isLoading || accountsQuery.isLoading || goals.isLoading;
+  const walletSummaryLoading = isLoading || accountsQuery.isLoading || accountsQuery.isValidating || goals.isLoading;
+  const debtSummaryLoading = isDebtLoading || isLoading || accountsQuery.isLoading || accountsQuery.isValidating;
+  const debtSummaryError = debtLoadError || accountLoadError || accountsQuery.error || accountDebtResult.error;
 
   const currentMoney = walletSummaryResult.summary ? Number(walletSummaryResult.summary.netWorth) : 0;
 
@@ -503,7 +526,7 @@ export default function AccountsPage() {
   }, [sortedMonths]);
 
   const isAllMonthsSelected = useMemo(() => {
-    return sortedMonths.length > 0 && selectedDebtMonths.length === sortedMonths.length;
+    return sortedMonths.length === 0 || selectedDebtMonths.length === 0 || selectedDebtMonths.length === sortedMonths.length;
   }, [selectedDebtMonths.length, sortedMonths.length]);
 
   const selectedMonthsLabel = useMemo(() => {
@@ -520,15 +543,15 @@ export default function AccountsPage() {
   }, [isAllMonthsSelected, selectedDebtMonths, sortedMonths.length]);
 
   const selectedDebt = useMemo(() => {
-    if (sortedMonths.length === 0) return 0;
-    const months = isAllMonthsSelected ? sortedMonths : selectedDebtMonths;
+    if (isAllMonthsSelected) return accountDebtResult.amount ?? 0;
+    const months = selectedDebtMonths;
     return months.reduce((sum, m) => sum + Math.max(0, Number(debtByMonth[m] || 0)), 0);
-  }, [debtByMonth, isAllMonthsSelected, selectedDebtMonths, sortedMonths]);
+  }, [accountDebtResult.amount, debtByMonth, isAllMonthsSelected, selectedDebtMonths]);
 
   const previewMoney = useMemo(() => {
-    if (!previewAfterPay || debtLoadError) return currentMoney;
+    if (!previewAfterPay || debtSummaryLoading || debtSummaryError) return currentMoney;
     return currentMoney - selectedDebt;
-  }, [currentMoney, debtLoadError, previewAfterPay, selectedDebt]);
+  }, [currentMoney, debtSummaryError, debtSummaryLoading, previewAfterPay, selectedDebt]);
 
   const defaultCreditAccountId = useMemo(() => {
     return accounts.find((a) => a?.type === "credit_card")?.id;
@@ -579,12 +602,12 @@ export default function AccountsPage() {
                   {walletSummaryLoading ? <Skeleton className="h-9 w-48" /> : walletSummaryError || !walletSummaryResult.summary ? (
                     <span>Unavailable</span>
                   ) : (
-                    <output aria-label="Net worth balance" data-money={previewAfterPay && !debtLoadError ? previewMoney.toFixed(2) : walletSummaryResult.summary.netWorth}>
-                      {formatCurrency(previewAfterPay && !debtLoadError ? previewMoney : currentMoney)}
+                    <output aria-label="Net worth balance" data-money={previewAfterPay && !debtSummaryLoading && !debtSummaryError ? previewMoney.toFixed(2) : walletSummaryResult.summary.netWorth}>
+                      {formatCurrency(previewAfterPay && !debtSummaryLoading && !debtSummaryError ? previewMoney : currentMoney)}
                     </output>
                   )}
                 </div>
-                {previewAfterPay && !debtLoadError && !walletSummaryError && (
+                {previewAfterPay && !debtSummaryLoading && !walletSummaryLoading && !debtSummaryError && !walletSummaryError && (
                   <span className="text-xs tabular-nums text-muted-foreground font-medium">
                     (reflecting -{formatCurrency(Math.abs(selectedDebt))} debt deduction)
                   </span>
@@ -598,15 +621,15 @@ export default function AccountsPage() {
             {/* Inline Debt Deduction Bar */}
             <div className="flex flex-wrap items-center gap-2 pt-1 lg:pt-0">
               <div className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-2.5 py-1.5 text-xs">
-                <span className="text-muted-foreground">Outstanding Debt:</span>
+                <span className="text-muted-foreground">{isAllMonthsSelected ? "Outstanding Debt:" : "Scheduled Debt:"}</span>
                 <span className="font-heading tabular-nums font-bold text-rose-600 dark:text-rose-400">
-                  {isDebtLoading ? "..." : debtLoadError ? "Unavailable" : `-${formatCurrency(Math.abs(selectedDebt))}`}
+                  {debtSummaryLoading ? "..." : debtSummaryError ? "Unavailable" : `-${formatCurrency(Math.abs(selectedDebt))}`}
                 </span>
               </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 text-xs font-medium bg-background" disabled={isDebtLoading || !!debtLoadError || sortedMonths.length === 0}>
+                  <Button size="sm" variant="outline" className="h-8 text-xs font-medium bg-background" disabled={debtSummaryLoading || !!debtSummaryError || sortedMonths.length === 0}>
                     {isAllMonthsSelected ? "All months" : selectedMonthsLabel}
                     <ChevronDown className="ml-1.5 h-3.5 w-3.5 opacity-70" />
                   </Button>
@@ -661,7 +684,7 @@ export default function AccountsPage() {
                 size="sm"
                 variant={previewAfterPay ? "secondary" : "outline"}
                 onClick={() => setPreviewAfterPay((v) => !v)}
-                disabled={isDebtLoading || !!debtLoadError}
+                disabled={debtSummaryLoading || !!debtSummaryError}
                 className="h-8 text-xs font-medium"
               >
                 {previewAfterPay ? "Deduct Debt: Active" : "Deduct Debt: Off"}
@@ -864,13 +887,13 @@ export default function AccountsPage() {
         </div>
 
         {/* ─── PayLater & Credit Schedule (No outer card, hairline statement ledger) ─── */}
-        {debtLoadError ? (
+        {debtSummaryError ? (
           <p role="alert" className="text-sm text-muted-foreground">
             Credit debt history could not be loaded. Refresh the page to try again.
           </p>
         ) : (
           <DebtScheduleSection
-            isDebtLoading={isDebtLoading}
+            isDebtLoading={debtSummaryLoading}
             sortedMonths={sortedMonths}
             debtByMonth={debtByMonth}
             expenseItemsByMonth={expenseItemsByMonth}

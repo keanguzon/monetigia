@@ -268,7 +268,13 @@ test("an unknown dialog save survives closure and reopening before another trans
   await screen.findByRole("button", { name: "Release funds and save" });
   vi.mocked(applyFinancialCommand).mockRejectedValueOnce(new FinancialCommandError({ message: "network", outcome: "unknown" }));
   fireEvent.click(screen.getByRole("button", { name: "Release funds and save" }));
-  await screen.findByRole("button", { name: "Retry same transaction" });
+  const retry = await screen.findByRole("button", { name: "Retry same transaction" });
+  const alert = screen.getByRole("alert");
+  expect(alert.parentElement?.contains(retry)).toBe(false);
+  const scrollBody = screen.getByLabelText("Amount").closest("fieldset")?.parentElement;
+  expect(scrollBody?.contains(alert)).toBe(false);
+  expect(scrollBody?.contains(retry)).toBe(false);
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
   const original = vi.mocked(applyFinancialCommand).mock.calls[0];
   view.unmount();
   render(<AddTransactionModal isOpen onClose={() => {}} defaultAccountId="bank" />);
@@ -286,8 +292,38 @@ test("a saved dialog reports refresh failure without enabling another save", asy
   fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "50" } });
   fireEvent.click(screen.getByRole("button", { name: "Add Transaction" }));
   await screen.findByRole("status");
+  const scrollBody = screen.getByLabelText("Amount").closest("fieldset")?.parentElement;
+  expect(scrollBody?.contains(screen.getByRole("status"))).toBe(false);
   expect(screen.getByRole("status").textContent).toMatch(/saved.*could not refresh/i);
   fireEvent.click(screen.getByRole("button", { name: "Saved" }));
+  expect(applyFinancialCommand).toHaveBeenCalledTimes(1);
+});
+
+test("a rejected save stays visible above the scroll body and cancel clears it without retrying", async () => {
+  vi.mocked(quoteTransaction).mockResolvedValue({ ...proposal, releases: [] });
+  vi.mocked(applyFinancialCommand).mockRejectedValueOnce(new FinancialCommandError({ message: "INSUFFICIENT_ACTUAL", code: "INSUFFICIENT_ACTUAL", outcome: "rejected" }));
+  const onClose = vi.fn();
+  const view = render(<AddTransactionModal isOpen onClose={onClose} />);
+  await screen.findByRole("option", { name: "GoTyme" });
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "10" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add Transaction" }));
+
+  const alert = await screen.findByRole("alert");
+  const scrollBody = screen.getByLabelText("Amount").closest("fieldset")?.parentElement;
+  expect(alert.textContent).toMatch(/does not have enough money/i);
+  expect(scrollBody?.contains(alert)).toBe(false);
+  expect(applyFinancialCommand).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(applyFinancialCommand).toHaveBeenCalledTimes(1);
+
+  view.rerender(<AddTransactionModal isOpen={false} onClose={onClose} />);
+  view.rerender(<AddTransactionModal isOpen onClose={onClose} />);
+  await screen.findByRole("option", { name: "GoTyme" });
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("");
   expect(applyFinancialCommand).toHaveBeenCalledTimes(1);
 });
 
@@ -297,7 +333,10 @@ test("actual insufficiency is an inline human error and never writes", async () 
   await screen.findByRole("option", { name: "GoTyme" });
   fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "30001" } });
   fireEvent.click(screen.getByRole("button", { name: "Add Transaction" }));
-  expect((await screen.findByRole("alert")).textContent).toMatch(/does not have enough money/);
+  const alert = await screen.findByRole("alert");
+  const scrollBody = screen.getByLabelText("Amount").closest("fieldset")?.parentElement;
+  expect(alert.textContent).toMatch(/does not have enough money/);
+  expect(scrollBody?.contains(alert)).toBe(false);
   expect(screen.queryByText("INSUFFICIENT_ACTUAL")).toBeNull();
   expect(applyFinancialCommand).not.toHaveBeenCalled();
 });

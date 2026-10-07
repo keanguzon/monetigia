@@ -607,28 +607,38 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
             </div>
           </fieldset>
 
-          {(formError || submit.error) && <p role="alert" className="px-6 pb-4 text-sm text-red-700 dark:text-red-300">{formError || submit.error}</p>}
           {submit.phase === "review" && !submit.unresolved && submit.transactionQuote && submit.draft && <GoalReleaseNotice key={JSON.stringify(submit.transactionQuote)} quote={submit.transactionQuote} draft={submit.draft} snapshot={financeSnapshot} disabled={isLoading} onChange={releases => { void submit.quote(submit.draft!, releases); }} onConfirm={() => { void submit.confirm(); }} onCancel={submit.reset} />}
-          {submit.unresolved && <div className="px-6 pb-6 space-y-3"><p className="text-sm">Pending transaction: {formatCurrency(Number(submit.draft?.amount))}. Its original wallet, quote and save request are retained.</p><button type="button" disabled={isLoading} onClick={() => { void submit.confirm(); }} className="min-h-11 px-4 py-3 rounded-lg bg-primary text-slate-950 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary">Retry same transaction</button></div>}
-          {submit.phase === "saved" && <p role="status" className="px-6 pb-4 text-sm">{submit.refreshError ? "Transaction saved. Some views could not refresh. Close and refresh the page; do not save it again." : "Transaction saved."}</p>}
           </div>
-          {/* Modal Footer */}
-          <div className="flex shrink-0 gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t dark:border-slate-700">
-            <button
-              type="button"
-              onClick={close}
-              disabled={isLoading}
-              className="flex-1 min-h-11 px-4 py-3 text-sm border rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-200 motion-reduce:transition-none font-medium"
-            >
-              {submit.phase === "saved" ? "Close" : "Cancel"}
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || isDataLoading || !!dataError || accounts.length === 0 || submit.phase === "review" || submit.phase === "saved"}
-              className="flex-1 min-h-11 px-4 py-3 text-sm rounded-lg bg-primary text-slate-950 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 motion-reduce:transition-none font-medium hover:shadow-lg"
-            >
-              {isLoading ? "Checking..." : isDataLoading ? "Loading accounts..." : submit.phase === "saved" ? "Saved" : "Add Transaction"}
-            </button>
+          <div className="shrink-0 border-t dark:border-slate-700">
+            {(formError || submit.error) && (
+              <div className="max-h-28 overflow-y-auto overscroll-contain px-4 pt-3 sm:px-6">
+                <p role="alert" className="break-words text-sm text-red-700 dark:text-red-300">{formError || submit.error}</p>
+              </div>
+            )}
+            {submit.unresolved && (
+              <div className="px-4 pt-3 sm:px-6">
+                <button type="button" disabled={isLoading} onClick={() => { void submit.confirm(); }} className="min-h-11 px-4 py-3 rounded-lg bg-primary text-slate-950 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary">Retry same transaction</button>
+              </div>
+            )}
+            {submit.phase === "saved" && <p role="status" className="max-h-28 overflow-y-auto overscroll-contain break-words px-4 pt-3 text-sm sm:px-6">{submit.refreshError ? "Transaction saved. Some views could not refresh. Close and refresh the page; do not save it again." : "Transaction saved."}</p>}
+            {/* Modal Footer */}
+            <div className="flex shrink-0 gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                onClick={close}
+                disabled={isLoading}
+                className="flex-1 min-h-11 px-4 py-3 text-sm border rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-200 motion-reduce:transition-none font-medium"
+              >
+                {submit.phase === "saved" ? "Close" : "Cancel"}
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading || isDataLoading || !!dataError || accounts.length === 0 || submit.phase === "review" || submit.phase === "saved"}
+                className="flex-1 min-h-11 px-4 py-3 text-sm rounded-lg bg-primary text-slate-950 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 motion-reduce:transition-none font-medium hover:shadow-lg"
+              >
+                {isLoading ? "Checking..." : isDataLoading ? "Loading accounts..." : submit.phase === "saved" ? "Saved" : "Add Transaction"}
+              </button>
+            </div>
           </div>
         </form>
       </Dialog.Content>
