@@ -34,3 +34,11 @@ No migration, schema, deployment, push, or merge was performed. The debt audit i
 - Final verification: `npm test` exit 0, Node 2/2 and Vitest 8 files / 122 tests; Wallets test file 11/11. `npx tsc --noEmit` exit 0. Existing no-fabricated-zero, no-fetch-balance-write, preview and month-filter tests remain passing.
 - antislop scope gate PASS: the existing layout, visual styles, copy, wallet actions, APY controls, order, debt filters and previews were preserved. The only caption change is using the same account inclusion collection as the amounts; the toggle behavior test exercises that scope.
 - No dependencies, SQL, live database access, push or merge. Root ledger/plan/review files were not edited by this fix.
+
+## Review fix round 2
+
+- Corrected round 1's incomplete unmount protection: the account effect now returns its invalidating cleanup unconditionally, including error and undefined-data branches. A manual reload started by closing an already open transaction modal after a query error cannot outlive its page and publish stale accounts into SWR.
+- Added a controlled UI/cache regression: open Pay Debt, fail account revalidation, close the transaction modal to start a deferred manual account read, unmount, mount a fresh page with fresh account names, and resolve the old read. Assert both the shared SWR account cache and the fresh page retain the fresh accounts.
+- TDD red: the focused new regression failed before the fix because the old read replaced all fresh names in the cache. Green: `npx vitest run tests/wallet-reservations.test.tsx` exit 0, 12/12 tests passed.
+- Final verification: `npm test` exit 0, Node 2/2 and Vitest 8 files / 123 tests. `npx tsc --noEmit` exit 0. Existing race, caption, no-fabricated-zero, no-fetch-balance-write, preview and filter regressions remain passing.
+- antislop scope gate PASS: this round only changes effect cleanup and test controls; existing product layout, copy and wallet behavior are preserved. No dependencies, SQL, live database access, push or merge. Root ledger/plan/review files were not edited by this fix.

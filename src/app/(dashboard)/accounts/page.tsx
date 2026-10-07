@@ -76,10 +76,9 @@ export default function AccountsPage() {
       setAccounts([]);
       setIsLoading(false);
       setIsDebtLoading(false);
-      return;
+    } else if (accountsQuery.data !== undefined) {
+      void loadAccounts(accountsQuery.data);
     }
-    if (accountsQuery.data === undefined) return;
-    void loadAccounts(accountsQuery.data);
     return () => { loadRevision.current += 1; };
   }, [accountsQuery.data, accountsQuery.error]);
 

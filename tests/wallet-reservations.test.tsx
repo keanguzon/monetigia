@@ -32,10 +32,17 @@ const fixture = vi.hoisted(() => {
     transactionResponses: [] as Promise<any>[],
     transactionReads: 0,
     authResponses: [] as Promise<any>[],
+    accountResponses: [] as Promise<any>[],
   };
 });
 
-vi.mock("next/dynamic", () => ({ default: () => function DynamicStub() { return null; } }));
+vi.mock("next/dynamic", () => ({
+  default: () => function DynamicStub(props: any) {
+    return props.isOpen && "defaultAccountId" in props
+      ? <button type="button" onClick={props.onClose}>Close transaction modal</button>
+      : null;
+  },
+}));
 vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -63,6 +70,8 @@ vi.mock("@/lib/supabase/client", () => ({
           if (action === "update") return Promise.resolve({ data: null, error: null }).then(resolve, reject);
           if (table === "accounts") {
             fixture.accountReads += 1;
+            const pending = fixture.accountResponses.shift();
+            if (pending) return pending.then(resolve, reject);
             return Promise.resolve({ data: fixture.accounts, error: fixture.accountReadError }).then(resolve, reject);
           }
           if (table === "transactions") {
@@ -155,6 +164,7 @@ beforeEach(() => {
   fixture.transactionReads = 0;
   fixture.transactionResponses = [];
   fixture.authResponses = [];
+  fixture.accountResponses = [];
 });
 
 afterEach(() => {
@@ -235,6 +245,34 @@ test("an account query failure invalidates outstanding debt reads", async () => 
   await act(async () => resolveOld({ data: makeTransactions(), error: null }));
   expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain("Unavailable");
   expect(screen.queryByLabelText("Net worth balance")).toBeNull();
+});
+
+test("unmount after a query error invalidates a manual modal-close reload before it overwrites the account cache", async () => {
+  const view = render(<><AccountsPage /><FinanceOperation command={{ kind: "reserve" }} label="Refresh finance" /></>, { wrapper });
+  await screen.findByLabelText("Net worth balance");
+  fireEvent.click(screen.getByRole("button", { name: "Pay Debt" }));
+  expect(screen.getByRole("button", { name: "Close transaction modal" })).not.toBeNull();
+  fixture.accountReadError = new Error("accounts unavailable");
+  fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
+  await screen.findByText(/wallet balances could not be loaded/i);
+
+  let resolveOld!: (value: any) => void;
+  const oldAccounts = makeAccounts();
+  fixture.accountResponses = [new Promise(resolve => { resolveOld = resolve; })];
+  const readsBeforeClose = fixture.accountReads;
+  fireEvent.click(screen.getByRole("button", { name: "Close transaction modal" }));
+  await waitFor(() => expect(fixture.accountReads).toBe(readsBeforeClose + 1));
+  view.unmount();
+
+  fixture.accountReadError = null;
+  fixture.accounts = makeAccounts().map(account => ({ ...account, name: `${account.name} fresh mount` }));
+  render(<AccountsPage />, { wrapper });
+  await screen.findByText("GoTyme fresh mount");
+  expect(cache.get("accounts").data).toEqual(fixture.accounts);
+  await act(async () => resolveOld({ data: oldAccounts, error: null }));
+  expect(cache.get("accounts").data).toEqual(fixture.accounts);
+  expect(screen.getByText("GoTyme fresh mount")).not.toBeNull();
+  expect(screen.queryByText("GoTyme")).toBeNull();
 });
 
 test("reservations update the mounted Wallets summary without changing its net worth", async () => {
