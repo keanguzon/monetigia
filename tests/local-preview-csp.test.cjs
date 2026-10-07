@@ -22,8 +22,23 @@ test('development allows only the configured normalized HTTP(S) loopback API ori
     ['http://localhost:80/', 'http://localhost'],
   ]) {
     const actual = policy(await headers('development', url));
-    assert.equal(actual, baselinePolicy.replace(baselineConnect, `${baselineConnect} ${origin}`));
+    const expected = baselinePolicy.replace(baselineConnect, `${baselineConnect} ${origin}`);
+    assert.equal(actual, url.startsWith('http:') ? expected.replace('; upgrade-insecure-requests', '') : expected);
   }
+});
+
+test('only a configured HTTP loopback API suppresses upgrade-insecure-requests in development', async () => {
+  const http = policy(await headers('development', 'http://127.0.0.1:55440/auth/v1'));
+  assert.equal(http, baselinePolicy
+    .replace(baselineConnect, `${baselineConnect} http://127.0.0.1:55440`)
+    .replace('; upgrade-insecure-requests', ''));
+  assert.doesNotMatch(http, /upgrade-insecure-requests/);
+
+  const https = policy(await headers('development', 'https://localhost:55440/auth/v1'));
+  assert.equal(https, baselinePolicy.replace(baselineConnect, `${baselineConnect} https://localhost:55440`));
+  assert.match(https, /upgrade-insecure-requests/);
+
+  assert.equal(policy(await headers('development', undefined)), baselinePolicy);
 });
 
 test('production and nondevelopment headers remain byte-equivalent even with a loopback API configured', async () => {
@@ -50,7 +65,9 @@ test('a configured loopback URL cannot add path, query, fragment or encoded head
   const baseline = await headers('production', undefined);
   for (const url of ['http://localhost:55440/;script-src%20*?x=connect-src%20*#frame-src%20*', 'http://localhost:55440/%0d%0aContent-Security-Policy%3A%20default-src%20*']) {
     const actual = await headers('development', url);
-    assert.equal(policy(actual), baselinePolicy.replace(baselineConnect, `${baselineConnect} http://localhost:55440`));
+    assert.equal(policy(actual), baselinePolicy
+      .replace(baselineConnect, `${baselineConnect} http://localhost:55440`)
+      .replace('; upgrade-insecure-requests', ''));
     assert.deepEqual(actual[0].headers.filter(header => header.key !== 'Content-Security-Policy'), baseline[0].headers.filter(header => header.key !== 'Content-Security-Policy'));
   }
 });
