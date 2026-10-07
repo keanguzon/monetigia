@@ -2,7 +2,7 @@
 
 **Branch:** `codex/goal-reservations`  
 **Date:** 2026-10-07  
-**Status:** Verification Complete & Approved  
+**Status:** Verification Complete & Approved (Sign-off Ready)
 
 ---
 
@@ -18,54 +18,81 @@ All core accounting invariants, PostgreSQL database triggers, atomic RPC operati
 
 Executed sequentially on the final code state within the worktree:
 
-| Command | Exit Code | Tests / Status | Details |
-| :--- | :---: | :---: | :--- |
-| `npx tsc --noEmit` | **0** | Clean | Zero TypeScript errors across all application and test files. |
-| `npm test` | **0** | **138 Passed** (0 Failed) | **7 Node** (navigation & CSP) + **131 Vitest** (domain math, hooks, modals, release dialogs). |
-| `npm run test:db` | **0** | **71 Passed** (0 Failed) | Real PostgreSQL & PostgREST test harness verifying locking, RLS, triggers, and atomic rollbacks. |
-| `npm run lint` | **0** | **6 Baseline Warnings** | Verified clean: exactly six pre-existing `react-hooks/exhaustive-deps` warnings; zero new warnings introduced. |
-| `npm run build` | **0** | **20 Pages Generated** | Next.js 14.1.0 production bundle compiled successfully; static & dynamic routes validated. |
+| Command | Exit Code | Tests / Status | Log Artifact | Details |
+| :--- | :---: | :---: | :--- | :--- |
+| `npx tsc --noEmit` | **0** | Clean | `task-11-tsc.log` | Zero TypeScript errors across all application and test files. |
+| `npm test` | **0** | **138 Passed** (0 Failed) | `task-11-npm-test.log` | **7 Node** (navigation & CSP tests) + **131 Vitest** (contracts, domain math, hooks, modals, release dialogs). |
+| `npm run test:db` | **0** | **71 Passed** (0 Failed) | `task-11-db-test.log` | Real PostgreSQL & PostgREST test harness verifying locking, RLS, triggers, atomic rollbacks, and security definers. |
+| `npm run lint` | **0** | **6 Baseline Warnings** | `task-11-lint.log` | Verified clean: exactly six pre-existing `react-hooks/exhaustive-deps` warnings; zero new warnings introduced. |
+| `npm run build` | **0** | **20 Pages Generated** | `task-11-build.log` | Next.js 14.1.0 production bundle compiled successfully; static & dynamic routes validated. Nonfatal build warnings documented below. |
+
+### Documented Nonfatal Build Warnings
+As recorded in `task-11-build.log`:
+1. *Bricolage Grotesque Font Override:* Pre-existing local font fallback notice.
+2. *Edge Runtime API Warning:* `@supabase/supabase-js` process version access in Edge runtime middleware (existing Supabase SSR library behavior).
+3. *Webpack Cache String Serialization:* Standard Next.js cache serialization notice for chunks > 100kiB.
+4. *Browserslist Data:* caniuse-lite update notice.
 
 ---
 
-## 3. Disposition of Five Core Architectural Review Focus Cases
+## 3. Disposition of the Five Core Review Focus Cases
 
-| Case | Dilemma / Risk | Solution Implemented | Acceptance Evidence |
+Directly addressing the five architectural failure cases mandated in the implementation plan (`2026-10-06-goal-reservations.md`):
+
+| Review Focus Case | Dilemma & Risk | Implemented Invariants | Concrete Verification Evidence |
 | :--- | :--- | :--- | :--- |
-| **1. Single-Wallet GCash Desync** | Setting aside money for goals previously subtracted from wallet cash or caused balance mismatches. | **Separation of Actual vs. Reserved Funds.** Reserving funds does not deduct actual cash from the wallet. GCash retains its full actual balance (e.g. ₱60,000) while goal reservation reduces *Available* funds. | Verified in `tests/wallet-reservations.test.tsx` and browser preview: ₱60,000 actual, ₱0 reserved, ₱60,000 available. |
-| **2. Purchase Double-Counting** | Adding to goal and then buying item caused expenses to be counted twice. | **Atomic Quote & Confirmed Release.** Paying for the goal item consumes the reservation and books exactly *one* financial expense transaction while linking the goal completion event. | Verified in `tests/database/financial-transactions.test.mjs` and Laptop purchase browser test (₱30,000 progress recorded once). |
-| **3. Under-Budget Completion** | Finishing a goal with leftover money stranded or incorrectly logged. | **Explicit Leftover Choice Modal.** When closing a goal under target, users can choose to release leftover funds back to available wallet cash or reallocate them to another active goal. | Verified in `tests/database/goal-lifecycle.test.mjs` and Date goal browser scenario (₱1,000 leftover moved to Phone goal). |
-| **4. Emergency Release** | Needing money set aside for a goal without recording a fake purchase. | **First-Class Release Command.** Users can release reserved funds back to the paying wallet at any time without quoting or generating an expense transaction. | Verified in `tests/goal-actions.test.tsx` and emergency release browser flow. |
-| **5. Overspend & Stale Quote Race** | Spending more than available funds or concurrent edits in multiple tabs. | **Fingerprinted Quotes & ConfirmReleaseDialog.** If an expense exceeds available funds, user is prompted to confirm releasing goal reservations. If balance changes concurrently, quote fingerprint mismatch aborts atomically (`STALE_QUOTE`). | Verified in `tests/database/financial-transactions.test.mjs` (shortfall release) and multi-tab browser test (Tab A rejected after Tab B mutated reservations). |
+| **Review Focus 1**<br>*(Stale Quote Race)* | A second tab changes funds while a warning is open: reject a stale quote without releasing or spending money. | Transaction drafts obtain a fingerprinted quote. When committing, `goal_finance_apply` checks quote hash against current database state. Mismatches abort atomically with `STALE_QUOTE`. | • `tests/database/financial-transactions.test.mjs:156` (asserts full rollback of balances, operations, and events).<br>• Multi-tab browser test (Tab B mutated reservation; Tab A submission failed cleanly without duplicate deduction). |
+| **Review Focus 2**<br>*(Timeout & Request Replay)* | A timeout occurs after the save committed: retry the same request ID and recover its result without duplication. | `financial_operation` ledger deduplicates requests using caller UUID. Replaying the identical request returns the cached result without creating new allocation events or double-charging. | • `tests/database/reservations.test.mjs:174` & `tests/database/financial-transactions.test.mjs:249` (request replay retains original result).<br>• `tests/goal-actions.test.tsx:210` & `tests/transaction-release.test.tsx:352` (unknown save recovers across dialog re-openings). |
+| **Review Focus 3**<br>*(Multi-Goal Shortfall Release)* | Several goals share one wallet: release exactly the confirmed shortfall from that wallet with predictable priority ordering. | Release engine calculates deterministic shortfall: non-priority first, furthest date first, newest first. The user can manually edit release line allocations in the confirmation dialog. | • `tests/database/financial-transactions.test.mjs:164` (custom release must match exact shortfall from paying wallet).<br>• `tests/transaction-release.test.tsx:142` (custom release inputs quote chosen goals before confirmation). |
+| **Review Focus 4**<br>*(Purchase Deletion on Closed Goal)* | A purchase is deleted after its goal closed: reverse accounting without silently reopening the goal or restoring a closed reservation. | Deleting a goal expense reverses the spent allocation and restores wallet cash. If the goal is closed, it increases available money without reopening the goal or restoring closed reservations. | • `tests/database/goal-lifecycle.test.mjs:236` (`deletion preserves closed goal state`).<br>• `tests/database/goal-lifecycle.test.mjs:245` (`ordinary expense release reversal respects closed goal`). |
+| **Review Focus 5**<br>*(Direct Writes & Legacy RPCs)* | An old client uses direct writes or an old deletion RPC: database permissions prevent bypassing reservation invariants. | Direct table writes to allocation amounts and balances are blocked via PostgreSQL triggers and RLS. Client must execute authoritative RPCs. Zero targets are rejected while zero allocations remain valid. | • `tests/database/migration-security.test.mjs:120` (`authenticated direct finance writes fail`).<br>• `tests/database/migration-security.test.mjs:240` (`authenticated zero-target goal creation is denied`).<br>• `tests/database/migration-security.test.mjs:253` (`zero-target updates leave snapshot intact`). |
 
 ---
 
-## 4. Browser Smoke Test & Responsive Matrix
+## 4. Evidence Mapping for Key User Scenarios
+
+| Scenario | Architectural Flow | Automated Test Evidence | Browser Preview Evidence |
+| :--- | :--- | :--- | :--- |
+| **₱28,000 Confirmed Overspend** | Spending beyond available funds triggers `ConfirmReleaseDialog` to release reservation shortfall from paying wallet. | `tests/database/financial-transactions.test.mjs` (*"confirmed overspend releases only its shortfall"*) | Rendered `ConfirmReleaseDialog` prompt on expense entry; release breakdown verified before write. |
+| **Installment / Debt Payment** | Credit goal-tagged installments are informational tags; card debt books once and does not reserve cash funds. | `tests/database/financial-transactions.test.mjs` (*"credit installments distribute centavos and book debt once"*) & `tests/contributions.test.tsx` | Credit card purchase with installment choice tested; verified zero phantom reservation in wallet summary. |
+| **Transaction Reversal / Deletion** | Deleting a transaction reverses associated allocation events atomically and restores original wallet state. | `tests/database/goal-lifecycle.test.mjs` (*"deletion restores active reservations and retains source event and transaction UUID"*) | Transaction deletion in activity list correctly restored goal reservation back to available balance. |
+| **Archive & Reopen Goal** | Closed goals can be archived once reservations reach zero; reopening returns goal to active state with history intact. | `tests/database/goal-lifecycle.test.mjs` (*"cancel, reopen, and archive retain spending; archive requires closed zero reservations"*) | Goal card action menu: Archive/Reopen tested on completed Laptop and Date goals; closed goals filtered from active views. |
+| **Cancel / Failed Save** | Dismissing action dialogs or experiencing network rejections leaves the finance snapshot untouched. | `tests/contributions.test.tsx` (*"failed save and cancellation do not add funding; Escape closes dialog"*) & `tests/goal-actions.test.tsx` | Tested Escape key and Cancel button across Set Aside and Release dialogs; snapshot verified unchanged. |
+| **Legacy Adoption** | Existing goals default to `needs_review` state; historical cash spending can be explicitly reconciled without double-charging. | `tests/legacy-goals.test.tsx` (*"unreviewed goal opens review and cannot spend or reserve legacy tagged money"*) & `tests/database/migration-security.test.mjs` | Unreviewed goal banner displays review guidance; fake savings explanation prevents phantom deductions. |
+
+---
+
+## 5. Browser Smoke Test, Viewport Matrix & UI Hygiene
 
 Verified on local preview (`http://127.0.0.1:3000` with local API `127.0.0.1:55440`):
 
-- **Viewports Tested:**
-  - `375px` (Mobile): Verified card stacks, no horizontal overflow, tap targets >= 44px.
-  - `768px` (Tablet): Two-column reflow, clean summary grid, hairline dividers intact.
-  - `1280px` (Desktop): Four-column layout, modal positioning, keyboard focus trapping.
-- **Themes Tested:** Light Mode and Dark Mode validated; contrast ratios meet WCAG AA standards.
-- **SWR Cache Eviction Bug:** Resolved in `src/hooks/use-goal-finance.ts`. Cache is only cleared on genuine user sign-out (`previousUserId !== null && userId === null`), eliminating false "Unavailable" summary states.
-- **Keyboard & Accessibility:** Full Tab / Enter / Escape navigation in `ConfirmReleaseDialog`, `SetAsideModal`, and transaction forms.
+- **Viewport Reflow:**
+  - `375px` (Mobile): Card stacks reflow cleanly; zero horizontal overflow; all tap targets >= 44px.
+  - `768px` (Tablet): Two-column summary grid with hairline dividers intact.
+  - `1280px` (Desktop): Full four-column cards; modal overlays properly centered.
+- **Themes & Contrast:** Validated across Light Mode and Dark Mode; color contrasts comply with WCAG AA.
+- **SWR Cache Eviction Bug Resolved:** Fixed in `src/hooks/use-goal-finance.ts` and verified with `tests/goal-finance-hooks.test.tsx` (`an unauthenticated finance consumer does not clear a mounted user's snapshot`). Cache eviction triggers only on genuine sign-out (`previousUserId !== null && userId === null`).
+- **Keyboard Navigation:** Full Tab, Enter, and Escape support in all financial action dialogs.
 
 ---
 
-## 5. Preflight Checklist & Deployment Guidelines
+## 6. Preflight Deployment Checklist & Unresolved Risks
 
 > [!WARNING]
-> This branch does **NOT** apply live migrations or deploy to production. The following steps must be followed when rolling out to live Supabase:
+> This branch does **NOT** apply live migrations or deploy to production. Follow these preflight steps when executing the production release:
 
-1. **Database Migration Order:** Apply migrations `202610060001` through `202610060006` in exact sequence:
-   - `0001_runtime_baseline.sql`
-   - `0002_goal_allocation_ledger.sql`
-   - `0003_goal_finance_operations.sql`
-   - `0004_transaction_linkage.sql`
-   - `0005_lifecycle_reversals.sql`
-   - `0006_goal_write_guards.sql`
-2. **RPC Inventory Check:** Confirm `goal_finance_snapshot`, `goal_finance_apply`, and `goal_transaction_quote` are registered with `SECURITY DEFINER` and pinned `search_path = public`.
-3. **Legacy Data Review:** Ensure existing goals are flagged with `review_state = 'needs_review'` so users can reconcile legacy allocations before ledger operations are applied.
+1. **Database Migration Order:** Apply migrations `202610060001` through `202610060006` sequentially:
+   - `202610060001_runtime_baseline.sql`
+   - `202610060002_goal_allocation_ledger.sql`
+   - `202610060003_goal_finance_operations.sql`
+   - `202610060004_transaction_linkage.sql`
+   - `202610060005_lifecycle_reversals.sql`
+   - `202610060006_goal_write_guards.sql`
+2. **RPC Function Registration & Security Definers:**
+   - Confirm all financial RPCs (`goal_finance_snapshot`, `goal_finance_apply`, `goal_transaction_quote`) are registered with `SECURITY DEFINER`.
+   - **MANDATORY:** Verify search path is pinned exactly to:
+     ```sql
+     SET search_path = pg_catalog, public;
+     ```
+3. **Legacy Data Review:** Ensure existing goals are initialized with `review_state = 'needs_review'` so users can reconcile legacy allocations before ledger operations are applied.
 4. **Environment Variables:** Production CSP in `next.config.js` remains strict (loopback API allowed only in development).
