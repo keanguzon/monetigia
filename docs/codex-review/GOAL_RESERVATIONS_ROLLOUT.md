@@ -62,6 +62,12 @@ For the local native PostgreSQL/PostgREST setup, use `TEST_DATABASE_ADAPTER` poi
 
 The upgrade test builds and drops a uniquely named isolated schema in the disposable database. It verifies first-upgrade preservation and safe reapplication. Never run the test suite against production.
 
+## Credit-card opening-balance audit before cutover
+
+No live account balances were audited during local implementation. Before cutover, record each card's stored `accounts.balance` with its review timestamp and compare it with a statement-anchored ledger calculation: statement-confirmed opening debt plus card expenses and transfers from the card, less card income and transfers to the card, through the same cutoff. Record the statement date, transaction coverage, derived amount, stored amount, and difference for each card. If a trustworthy starting statement or complete transaction coverage is unavailable, mark the comparison unresolved and obtain a statement or other source evidence before proposing a correction.
+
+Keep this reconciliation separate from Wallets' normalized monthly debt buckets. Those buckets preserve the current payment and cash-advance preview signs and month filters; they do not establish an opening balance. Never overwrite stored credit debt with a month-derived sum during fetch or use a page load to repair a discrepancy. Any correction needs a separate review with source evidence and explicit confirmation.
+
 ## Coordinated cutover
 
 1. Capture the deployed-schema evidence above and audit existing debt discrepancies without correcting balances automatically.

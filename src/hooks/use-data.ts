@@ -90,14 +90,19 @@ export function useDashboardStats(
           .lte("date", previousEnd)
       ]);
 
+      if (monthTxData.error) throw monthTxData.error;
+      if (lastMonthTxData.error) throw lastMonthTxData.error;
+
       const monthTransactions = monthTxData.data || [];
       const lastMonthTransactions = lastMonthTxData.data || [];
 
       // We need accounts to check for credit_card types (for transfers/debt payments)
-      const { data: accountsData } = await supabase
+      const { data: accountsData, error: accountsError } = await supabase
         .from("accounts")
         .select("id, type")
         .eq("user_id", user.id);
+
+      if (accountsError) throw accountsError;
       
       const accountTypeById = new Map<string, string>();
       (accountsData || []).forEach(a => accountTypeById.set(a.id, a.type));

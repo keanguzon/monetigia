@@ -19,11 +19,13 @@ import { ChevronDown, Plus, Wallet, Edit2, LayoutGrid, List } from "lucide-react
 import { useToast } from "@/components/ui/use-toast";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
-import { summaryPanelClass, summaryAmountClass, pageTitleClass } from "@/components/ui/financial-summary";
+import { summaryPanelClass, summaryAmountClass, pageTitleClass, summarizeWalletFunds, WalletFundsBreakdown } from "@/components/ui/financial-summary";
 import { motion, AnimatePresence } from "framer-motion";
 import { WalletTileCard } from "@/components/accounts/WalletTileCard";
 import { WalletLedgerView } from "@/components/accounts/WalletLedgerView";
 import { DebtScheduleSection } from "@/components/accounts/DebtScheduleSection";
+import { useAccounts } from "@/hooks/use-data";
+import { useGoals } from "@/hooks/use-goals";
 
 const AddAccountModal = dynamic(() => import("@/components/accounts/AddAccountModal"), {
   ssr: false,
@@ -36,6 +38,8 @@ const AddTransactionModal = dynamic(() => import("@/components/transactions/AddT
 export default function AccountsPage() {
   const supabase = createClient();
   const sb = supabase as any;
+  const accountsQuery = useAccounts();
+  const goals = useGoals();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
@@ -44,6 +48,8 @@ export default function AccountsPage() {
   const [interestRateDraft, setInterestRateDraft] = useState<Record<string, string>>({});
 
   const [isDebtLoading, setIsDebtLoading] = useState(false);
+  const [debtLoadError, setDebtLoadError] = useState<unknown>(null);
+  const [accountLoadError, setAccountLoadError] = useState<unknown>(null);
   const [debtByMonth, setDebtByMonth] = useState<Record<string, number>>({});
   const [expenseItemsByMonth, setExpenseItemsByMonth] = useState<Record<string, any[]>>({});
   const [selectedDebtMonths, setSelectedDebtMonths] = useState<string[]>([]);
@@ -62,8 +68,17 @@ export default function AccountsPage() {
   };
 
   useEffect(() => {
-    loadAccounts();
-  }, []);
+    if (accountsQuery.error) {
+      setAccountLoadError(accountsQuery.error);
+      setDebtLoadError(accountsQuery.error);
+      setAccounts([]);
+      setIsLoading(false);
+      setIsDebtLoading(false);
+      return;
+    }
+    if (accountsQuery.data === undefined) return;
+    void loadAccounts(accountsQuery.data);
+  }, [accountsQuery.data, accountsQuery.error]);
 
   useEffect(() => {
     setInterestRateDraft((prev) => {
@@ -235,181 +250,138 @@ export default function AccountsPage() {
 
   const isCustomAccount = (account: any) => !account.icon && account.name !== "Cash on Hand";
 
-  const loadAccounts = async () => {
+  const loadAccounts = async (providedAccounts?: any[]) => {
     setIsLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    setAccountLoadError(null);
+    setIsDebtLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) throw new Error("Not authenticated");
 
-    if (user?.id) {
-      let accountsList: any[] = [];
-
-      const { data, error } = await supabase
-        .from("accounts")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("display_order", { ascending: true })
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        const { data: fallbackData, error: fallbackErr } = await supabase
+      let accountsList: any[];
+      if (providedAccounts !== undefined) {
+        accountsList = providedAccounts;
+      } else {
+        const { data, error } = await supabase
           .from("accounts")
           .select("*")
           .eq("user_id", user.id)
+          .order("display_order", { ascending: true })
           .order("created_at", { ascending: true });
 
-        if (fallbackErr) {
-          console.error("Failed to load accounts", fallbackErr);
-          accountsList = [];
-        } else {
+        if (error) {
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from("accounts")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: true });
+          if (fallbackError) throw fallbackError;
           accountsList = fallbackData || [];
+        } else {
+          accountsList = data || [];
         }
-      } else {
-        accountsList = data || [];
       }
 
-      // Apply resilient fallback sorting using localStorage order if display_order is unpopulated
+      // Apply resilient fallback sorting using localStorage order if display_order is unpopulated.
       accountsList = sortAccountsWithFallback(accountsList, user.id);
       setAccounts(accountsList);
-
-      // Load credit-card (SpayLater) debt from transactions
-      setIsDebtLoading(true);
-      try {
-        const creditIds = accountsList
-          .filter((a: any) => a?.type === "credit_card")
-          .map((a: any) => a.id)
-          .filter(Boolean);
-
-        if (creditIds.length === 0) {
-          setDebtByMonth({});
-          setExpenseItemsByMonth({});
-          setSelectedDebtMonths([]);
-        } else {
-          const { data: txData, error: txErr } = await sb
-            .from("transactions")
-            .select(
-              "id, account_id, type, amount, description, date, transfer_to_account_id, category:categories(id,name,color), account:accounts!account_id(id,name,type)"
-            )
-            .eq("user_id", user.id)
-            .or(
-              `account_id.in.(${creditIds.join(",")}),transfer_to_account_id.in.(${creditIds.join(",")})`
-            )
-            .order("date", { ascending: false })
-            .limit(5000);
-
-          if (txErr) {
-            console.error("Failed to load debt transactions", txErr);
-            setDebtByMonth({});
-            setExpenseItemsByMonth({});
-            setSelectedDebtMonths([]);
-          } else {
-            const byMonth: Record<string, number> = {};
-            const itemsByMonth: Record<string, any[]> = {};
-            const byCreditAccount: Record<string, number> = {};
-            creditIds.forEach((id: string) => {
-              byCreditAccount[id] = 0;
-            });
-
-            (txData || []).forEach((t: any) => {
-              const monthKey = typeof t?.date === "string" ? t.date.slice(0, 7) : "unknown";
-              if (!byMonth[monthKey]) byMonth[monthKey] = 0;
-              if (!itemsByMonth[monthKey]) itemsByMonth[monthKey] = [];
-
-              const amt = Number(t?.amount || 0);
-              const isCreditSource = creditIds.includes(t?.account_id);
-              const isCreditDestination = creditIds.includes(t?.transfer_to_account_id);
-
-              // Debt math rules:
-              // - expense on credit_card increases debt
-              // - income on credit_card decreases debt
-              // - transfer TO credit_card decreases debt (payment)
-              // - transfer FROM credit_card increases debt (cash advance / movement)
-              if (t.type === "expense" && isCreditSource) {
-                byMonth[monthKey] += amt;
-                byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) + amt;
-                itemsByMonth[monthKey].push(t);
-              } else if (t.type === "income" && isCreditSource) {
-                byMonth[monthKey] -= amt;
-                byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) - amt;
-              } else if (t.type === "transfer") {
-                if (isCreditDestination) byMonth[monthKey] -= amt;
-                if (isCreditSource) byMonth[monthKey] += amt;
-                if (isCreditDestination) {
-                  byCreditAccount[t.transfer_to_account_id] = Number(byCreditAccount[t.transfer_to_account_id] || 0) - amt;
-                }
-                if (isCreditSource) {
-                  byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) + amt;
-                }
-              }
-            });
-
-            // Normalize month buckets so historical overpayments (negative month values)
-            // roll forward to later months instead of inflating visible month totals.
-            const normalizedByMonth: Record<string, number> = {};
-            const ascMonths = Object.keys(byMonth)
-              .filter((k) => k && k !== "unknown")
-              .sort((a, b) => (a < b ? -1 : 1));
-            let carry = 0;
-            for (const m of ascMonths) {
-              const raw = Number(byMonth[m] || 0);
-              const next = raw + carry;
-              if (next < 0) {
-                normalizedByMonth[m] = 0;
-                carry = next;
-              } else {
-                normalizedByMonth[m] = next;
-                carry = 0;
-              }
-            }
-
-            // Keep stored credit-card balances aligned with transaction-derived debt.
-            const nextCreditBalanceById: Record<string, number> = {};
-            creditIds.forEach((id: string) => {
-              nextCreditBalanceById[id] = Math.max(0, Number(byCreditAccount[id] || 0));
-            });
-
-            const creditUpdates = accountsList
-              .filter((a: any) => a?.type === "credit_card" && a?.id)
-              .map((a: any) => {
-                const nextBal = Number(nextCreditBalanceById[a.id] || 0);
-                const currentBal = Number(a?.balance || 0);
-                return { id: a.id, currentBal, nextBal };
-              })
-              .filter((u) => Math.abs(u.nextBal - u.currentBal) > 0.005);
-
-            if (creditUpdates.length > 0) {
-              const syncResults = await Promise.all(
-                creditUpdates.map((u) =>
-                  sb
-                    .from("accounts")
-                    .update({ balance: u.nextBal })
-                    .eq("id", u.id)
-                    .eq("user_id", user.id)
-                )
-              );
-
-              const hasSyncError = syncResults.some((r: any) => !!r?.error);
-              if (hasSyncError) {
-                console.error("Failed to sync one or more credit-card balances from debt history", syncResults);
-              } else {
-                accountsList = accountsList.map((a: any) =>
-                  a?.type === "credit_card" && a?.id
-                    ? { ...a, balance: Number(nextCreditBalanceById[a.id] || 0) }
-                    : a
-                );
-                setAccounts(accountsList);
-              }
-            }
-
-            setDebtByMonth(normalizedByMonth);
-            setExpenseItemsByMonth(itemsByMonth);
-          }
-        }
-      } finally {
-        setIsDebtLoading(false);
+      if (providedAccounts === undefined) {
+        await accountsQuery.mutate(accountsList, { revalidate: false });
       }
+
+      const creditIds = accountsList
+        .filter((account: any) => account?.type === "credit_card")
+        .map((account: any) => account.id)
+        .filter(Boolean);
+
+      if (creditIds.length === 0) {
+        setDebtByMonth({});
+        setExpenseItemsByMonth({});
+        setSelectedDebtMonths([]);
+        setDebtLoadError(null);
+        return;
+      }
+
+      let txData: any[] | null;
+      let txError: unknown;
+      try {
+        const result = await sb
+          .from("transactions")
+          .select(
+            "id, account_id, type, amount, description, date, transfer_to_account_id, category:categories(id,name,color), account:accounts!account_id(id,name,type)"
+          )
+          .eq("user_id", user.id)
+          .or(`account_id.in.(${creditIds.join(",")}),transfer_to_account_id.in.(${creditIds.join(",")})`)
+          .order("date", { ascending: false })
+          .limit(5000);
+        txData = result.data;
+        txError = result.error;
+      } catch (error) {
+        txData = null;
+        txError = error;
+      }
+
+      if (txError) {
+        setDebtLoadError(txError);
+        setDebtByMonth({});
+        setExpenseItemsByMonth({});
+        setSelectedDebtMonths([]);
+        return;
+      }
+
+      const byMonth: Record<string, number> = {};
+      const itemsByMonth: Record<string, any[]> = {};
+
+      (txData || []).forEach((transaction: any) => {
+        const monthKey = typeof transaction?.date === "string" ? transaction.date.slice(0, 7) : "unknown";
+        if (!byMonth[monthKey]) byMonth[monthKey] = 0;
+        if (!itemsByMonth[monthKey]) itemsByMonth[monthKey] = [];
+
+        const amount = Number(transaction?.amount || 0);
+        const isCreditSource = creditIds.includes(transaction?.account_id);
+        const isCreditDestination = creditIds.includes(transaction?.transfer_to_account_id);
+
+        // Credit expenses and advances add debt; card income and payments reduce it.
+        if (transaction.type === "expense" && isCreditSource) {
+          byMonth[monthKey] += amount;
+          itemsByMonth[monthKey].push(transaction);
+        } else if (transaction.type === "income" && isCreditSource) {
+          byMonth[monthKey] -= amount;
+        } else if (transaction.type === "transfer") {
+          if (isCreditDestination) byMonth[monthKey] -= amount;
+          if (isCreditSource) byMonth[monthKey] += amount;
+        }
+      });
+
+      // Carry historical overpayments into later months, matching the existing preview calculation.
+      const normalizedByMonth: Record<string, number> = {};
+      const ascendingMonths = Object.keys(byMonth)
+        .filter(month => month && month !== "unknown")
+        .sort((left, right) => (left < right ? -1 : 1));
+      let carry = 0;
+      for (const month of ascendingMonths) {
+        const next = Number(byMonth[month] || 0) + carry;
+        if (next < 0) {
+          normalizedByMonth[month] = 0;
+          carry = next;
+        } else {
+          normalizedByMonth[month] = next;
+          carry = 0;
+        }
+      }
+
+      setDebtLoadError(null);
+      setDebtByMonth(normalizedByMonth);
+      setExpenseItemsByMonth(itemsByMonth);
+    } catch (error) {
+      setAccountLoadError(error);
+      setDebtLoadError(error);
+    } finally {
+      setIsLoading(false);
+      setIsDebtLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleDragStart = (index: number) => {
@@ -465,13 +437,27 @@ export default function AccountsPage() {
     setIsEditingOrder(false);
   };
 
-  const totalBalance = accounts.reduce((sum, acc) => sum + Number(acc.balance), 0);
-
-  const currentMoney = useMemo(() => {
-    return accounts
-      .filter((a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false)
-      .reduce((sum, acc) => sum + Number(acc.balance), 0);
-  }, [accounts]);
+  const walletSummaryResult = useMemo(() => {
+    if (!goals.financeSnapshot) return { summary: null, error: null as unknown };
+    try {
+      const localInclusion = new Map(accounts.map(account => [account.id, account.include_in_networth]));
+      const summaryAccounts = (accountsQuery.data ?? accounts).map(account =>
+        localInclusion.has(account.id)
+          ? { ...account, include_in_networth: localInclusion.get(account.id) }
+          : account
+      );
+      return {
+        summary: summarizeWalletFunds(summaryAccounts, goals.financeSnapshot.wallets),
+        error: null as unknown,
+      };
+    } catch (error) {
+      return { summary: null, error };
+    }
+  }, [accounts, accountsQuery.data, goals.financeSnapshot]);
+  const walletSummaryError = accountsQuery.error || accountLoadError || goals.isError || walletSummaryResult.error ||
+    (!goals.isLoading && !goals.financeSnapshot ? new Error("Finance snapshot is unavailable") : null);
+  const walletSummaryLoading = isLoading || accountsQuery.isLoading || goals.isLoading;
+  const currentMoney = walletSummaryResult.summary ? Number(walletSummaryResult.summary.netWorth) : 0;
 
   const sortedMonths = useMemo(() => {
     const keys = Object.keys(debtByMonth).filter((k) => {
@@ -522,9 +508,9 @@ export default function AccountsPage() {
   }, [debtByMonth, isAllMonthsSelected, selectedDebtMonths, sortedMonths]);
 
   const previewMoney = useMemo(() => {
-    if (!previewAfterPay) return currentMoney;
+    if (!previewAfterPay || debtLoadError) return currentMoney;
     return currentMoney - selectedDebt;
-  }, [currentMoney, previewAfterPay, selectedDebt]);
+  }, [currentMoney, debtLoadError, previewAfterPay, selectedDebt]);
 
   const defaultCreditAccountId = useMemo(() => {
     return accounts.find((a) => a?.type === "credit_card")?.id;
@@ -552,7 +538,7 @@ export default function AccountsPage() {
             <div className="flex items-center gap-2.5">
               <h1 className={pageTitleClass}>Wallets</h1>
               <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                {isLoading ? <Skeleton className="h-4 w-14" /> : `${accounts.length} Total`}
+                {walletSummaryLoading ? <Skeleton className="h-4 w-14" /> : accountLoadError ? "Unavailable" : `${accounts.length} Total`}
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -562,7 +548,7 @@ export default function AccountsPage() {
         </div>
 
         {/* ─── Editorial Balance Masthead (No nested card-in-card) ─── */}
-        <div className={summaryPanelClass} aria-busy={isLoading}>
+        <div className={summaryPanelClass} aria-busy={walletSummaryLoading}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -572,16 +558,22 @@ export default function AccountsPage() {
               </div>
               <div className="flex flex-wrap items-baseline gap-2.5">
                 <div className={`${summaryAmountClass} text-foreground`}>
-                  {isLoading ? <Skeleton className="h-9 w-48" /> : formatCurrency(previewAfterPay ? previewMoney : currentMoney)}
+                  {walletSummaryLoading ? <Skeleton className="h-9 w-48" /> : walletSummaryError || !walletSummaryResult.summary ? (
+                    <span>Unavailable</span>
+                  ) : (
+                    <output aria-label="Net worth balance" data-money={previewAfterPay && !debtLoadError ? previewMoney.toFixed(2) : walletSummaryResult.summary.netWorth}>
+                      {formatCurrency(previewAfterPay && !debtLoadError ? previewMoney : currentMoney)}
+                    </output>
+                  )}
                 </div>
-                {previewAfterPay && (
+                {previewAfterPay && !debtLoadError && !walletSummaryError && (
                   <span className="text-xs tabular-nums text-muted-foreground font-medium">
                     (reflecting -{formatCurrency(Math.abs(selectedDebt))} debt deduction)
                   </span>
                 )}
               </div>
               <div className="text-xs text-muted-foreground">
-                {isLoading ? <Skeleton className="h-4 w-64 max-w-full" /> : <>Aggregated balance across {accounts.filter((a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false).length} accounts (excluding credit card debt).</>}
+                {walletSummaryLoading ? <Skeleton className="h-4 w-64 max-w-full" /> : walletSummaryError ? "Wallet balance details are unavailable." : <>Aggregated balance across {(accountsQuery.data ?? accounts).filter((a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false).length} accounts (excluding credit card debt).</>}
               </div>
             </div>
 
@@ -590,13 +582,13 @@ export default function AccountsPage() {
               <div className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-2.5 py-1.5 text-xs">
                 <span className="text-muted-foreground">Outstanding Debt:</span>
                 <span className="font-heading tabular-nums font-bold text-rose-600 dark:text-rose-400">
-                  {isDebtLoading ? "..." : `-${formatCurrency(Math.abs(selectedDebt))}`}
+                  {isDebtLoading ? "..." : debtLoadError ? "Unavailable" : `-${formatCurrency(Math.abs(selectedDebt))}`}
                 </span>
               </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 text-xs font-medium bg-background" disabled={isDebtLoading || sortedMonths.length === 0}>
+                  <Button size="sm" variant="outline" className="h-8 text-xs font-medium bg-background" disabled={isDebtLoading || !!debtLoadError || sortedMonths.length === 0}>
                     {isAllMonthsSelected ? "All months" : selectedMonthsLabel}
                     <ChevronDown className="ml-1.5 h-3.5 w-3.5 opacity-70" />
                   </Button>
@@ -651,13 +643,18 @@ export default function AccountsPage() {
                 size="sm"
                 variant={previewAfterPay ? "secondary" : "outline"}
                 onClick={() => setPreviewAfterPay((v) => !v)}
-                disabled={isDebtLoading}
+                disabled={isDebtLoading || !!debtLoadError}
                 className="h-8 text-xs font-medium"
               >
                 {previewAfterPay ? "Deduct Debt: Active" : "Deduct Debt: Off"}
               </Button>
             </div>
           </div>
+          <WalletFundsBreakdown
+            summary={walletSummaryResult.summary}
+            isLoading={walletSummaryLoading}
+            error={walletSummaryError}
+          />
         </div>
 
         {/* ─── Wallets & Accounts Section (No outer card, Dual-View: Tiles & Ledger) ─── */}
@@ -822,6 +819,10 @@ export default function AccountsPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+          ) : !isLoading && accountLoadError ? (
+            <p role="alert" className="rounded-xl border border-border/60 bg-card/20 px-4 py-6 text-center text-sm text-muted-foreground">
+              Wallets could not be loaded. Refresh the page to try again.
+            </p>
           ) : !isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 rounded-xl border border-dashed border-border/60 bg-card/20 text-center">
               <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
@@ -845,14 +846,20 @@ export default function AccountsPage() {
         </div>
 
         {/* ─── PayLater & Credit Schedule (No outer card, hairline statement ledger) ─── */}
-        <DebtScheduleSection
-          isDebtLoading={isDebtLoading}
-          sortedMonths={sortedMonths}
-          debtByMonth={debtByMonth}
-          expenseItemsByMonth={expenseItemsByMonth}
-          onPayDebt={handlePayDebt}
-          defaultCreditAccountId={defaultCreditAccountId}
-        />
+        {debtLoadError ? (
+          <p role="alert" className="text-sm text-muted-foreground">
+            Credit debt history could not be loaded. Refresh the page to try again.
+          </p>
+        ) : (
+          <DebtScheduleSection
+            isDebtLoading={isDebtLoading}
+            sortedMonths={sortedMonths}
+            debtByMonth={debtByMonth}
+            expenseItemsByMonth={expenseItemsByMonth}
+            onPayDebt={handlePayDebt}
+            defaultCreditAccountId={defaultCreditAccountId}
+          />
+        )}
       </div >
 
       {/* Add Wallet Modal */}
@@ -860,7 +867,7 @@ export default function AccountsPage() {
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          loadAccounts();
+          void goals.refresh().catch(() => undefined);
         }}
         existingAccounts={accounts.map((acc) => ({ icon: acc.icon, is_savings: acc.is_savings }))}
       />

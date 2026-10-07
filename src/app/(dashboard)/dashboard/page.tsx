@@ -68,11 +68,12 @@ export default function DashboardPage() {
 
   const { currentStart, currentEnd, previousStart, previousEnd } = getDateRange(dateRange);
 
-  const { data: accounts = [], isLoading: isLoadingAccounts } = useAccounts();
-  const { data: transactions = [], isLoading: isLoadingTx } = useRecentTransactions();
-  const { data: stats, isLoading: isLoadingStats } = useDashboardStats(currentStart, currentEnd, previousStart, previousEnd);
+  const { data: accounts = [], isLoading: isLoadingAccounts, error: accountsError } = useAccounts();
+  const { data: transactions = [], isLoading: isLoadingTx, error: transactionsError } = useRecentTransactions();
+  const { data: stats, isLoading: isLoadingStats, error: statsError } = useDashboardStats(currentStart, currentEnd, previousStart, previousEnd);
 
   const loading = isLoadingAccounts || isLoadingTx || isLoadingStats;
+  const dataError = accountsError || transactionsError || statsError;
   const monthlyIncome = stats?.monthlyIncome || 0;
   const monthlyExpenses = stats?.monthlyExpenses || 0;
   const lastMonthIncome = stats?.lastMonthIncome || 0;
@@ -145,6 +146,22 @@ export default function DashboardPage() {
           </p>
         </div>
         <SummarySkeleton columns={4} />
+      </div>
+    );
+  }
+
+  if (dataError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className={pageTitleClass}>Dashboard</h2>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Your financial overview at a glance.
+          </p>
+        </div>
+        <p role="alert" className={summaryPanelClass + " text-sm text-muted-foreground"}>
+          Your financial overview could not be loaded. Refresh the page to try again.
+        </p>
       </div>
     );
   }

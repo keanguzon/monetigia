@@ -18,10 +18,11 @@ const db = vi.hoisted(() => ({
   cashId: "30000000-0000-4000-8000-000000000001",
   bankId: "30000000-0000-4000-8000-000000000002",
   debtId: "30000000-0000-4000-8000-000000000003",
+  accounts: [] as any[],
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push() {}, refresh() {} }), usePathname: () => "/dashboard" }));
 vi.mock("@/hooks/use-data", () => ({
-  useAccounts: () => ({ data: [{ id: db.cashId, balance: 10000, type: "cash" }], isLoading: false }),
+  useAccounts: () => ({ data: db.accounts, isLoading: false, error: null }),
   useRecentTransactions: () => ({ data: [], isLoading: false }),
   useDashboardStats: () => ({ data: { monthlyIncome: 15000, monthlyExpenses: 5000, lastMonthIncome: 12000, lastMonthExpenses: 4000 }, isLoading: false }),
 }));
@@ -79,7 +80,7 @@ vi.mock("@/lib/supabase/client", () => {
           walletReservations: [],
           legacyTaggedAmount: "0.00",
         })),
-        wallets: [],
+        wallets: [{ accountId: db.cashId, actual: "10000.00", reserved: "0.00", available: "10000.00" }],
       }, error: null };
       });
       const builder: any = {
@@ -117,7 +118,13 @@ function Progress() {
 }
 
 const config = { dedupingInterval: 0, revalidateOnFocus: false };
-beforeEach(() => { db.transactions = []; db.commands = []; db.failInsert = false; db.delayLoad = null; });
+beforeEach(() => {
+  db.transactions = [];
+  db.commands = [];
+  db.failInsert = false;
+  db.delayLoad = null;
+  db.accounts = [{ id: db.cashId, name: "Cash", type: "cash", currency: "PHP", is_active: true, include_in_networth: true, balance: 10000 }];
+});
 afterEach(cleanup);
 
 test("goal shortcut selects the goal, leaves wallet empty and resets between openings", async () => {
