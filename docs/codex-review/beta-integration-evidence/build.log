@@ -1,0 +1,79 @@
+
+> monetigia@1.0.0 build
+> next build
+
+   ▲ Next.js 14.1.0
+   - Environments: .env
+
+   Creating an optimized production build ...
+Compiler edge-server unexpectedly exited with code: null and signal: SIGTERM
+Browserslist: browsers data (caniuse-lite) is 10 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./src/app/(dashboard)/accounts/page.tsx
+83:6  Warning: React Hook useEffect has a missing dependency: 'loadAccounts'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/categories/page.tsx
+141:6  Warning: React Hook useEffect has a missing dependency: 'loadCategories'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/transactions/page.tsx
+59:6  Warning: React Hook useEffect has a missing dependency: 'loadTransactions'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/forms/AddAccountForm.tsx
+41:6  Warning: React Hook useEffect has a missing dependency: 'icon'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/transactions/AddTransactionModal.tsx
+80:6  Warning: React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/20) ...
+
+   Generating static pages (5/20)
+
+   Generating static pages (10/20)
+
+   Generating static pages (15/20)
+
+ ✓ Generating static pages (20/20)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ λ /                                    11.7 kB         169 kB
+├ ○ /_not-found                          0 B                0 B
+├ λ /accounts                            52.7 kB         259 kB
+├ λ /accounts/new                        4.61 kB         155 kB
+├ λ /api/storage/ensure-profiles-bucket  0 B                0 B
+├ λ /api/user/upload-avatar              0 B                0 B
+├ λ /auth/callback                       0 B                0 B
+├ λ /categories                          5.92 kB         152 kB
+├ λ /dashboard                           7.26 kB         212 kB
+├ ○ /forgot-password                     153 B          84.6 kB
+├ λ /goals                               24.8 kB         238 kB
+├ ○ /login                               153 B          84.6 kB
+├ ○ /manifest.webmanifest                0 B                0 B
+├ ○ /mobile-app                          15.7 kB         114 kB
+├ ○ /register                            153 B          84.6 kB
+├ ○ /reset-password                      153 B          84.6 kB
+├ λ /settings                            9.64 kB         160 kB
+├ λ /transactions                        8.96 kB         197 kB
+└ ○ /verify-email                        153 B          84.6 kB
++ First Load JS shared by all            84.4 kB
+  ├ chunks/445-ced4d3755578f531.js       28.9 kB
+  ├ chunks/c7a895e9-af4bf0f833c77794.js  53.4 kB
+  └ other shared chunks (total)          2.17 kB
+
+
+ƒ Middleware                             160 kB
+
+○  (Static)   prerendered as static content
+λ  (Dynamic)  server-rendered on demand using Node.js
+
+Exit Code: 0

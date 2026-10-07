@@ -1,0 +1,80 @@
+
+> monetigia@1.0.0 test
+> node --test tests/navigation-goals.test.cjs tests/local-preview-csp.test.cjs && vitest run
+
+✔ development allows only the configured normalized HTTP(S) loopback API origin (15.1303ms)
+✔ only a configured HTTP loopback API suppresses upgrade-insecure-requests in development (5.9678ms)
+✔ production and nondevelopment headers remain byte-equivalent even with a loopback API configured (12.9717ms)
+✔ development rejects nonloopback, unsupported protocols, credentials, malformed URLs and control-character injection (21.7571ms)
+✔ a configured loopback URL cannot add path, query, fragment or encoded header directives to CSP (3.1119ms)
+✔ navigation ignores same route, fragments, external links and modified clicks (40.9447ms)
+✔ allocation events preserve combined progress and never infer legacy funding (94.397ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 506.9948
+
+ RUN  v3.2.7 C:/Users/PC/.codex/worktrees/goal-reservations/monetigia
+
+ ✓ tests/legacy-goals.test.tsx (7 tests) 2778ms
+   ✓ unreviewed goal opens review and cannot spend or reserve legacy tagged money  525ms
+   ✓ review explains fake savings correction and only imports explicitly selected cash spending  785ms
+   ✓ history errors block confirmation and unknown outcomes retry the same request with frozen selections  377ms
+   ✓ transaction dialog blocks an unreviewed default goal before requesting a quote  380ms
+ ✓ tests/transaction-history-page.test.tsx (2 tests) 3431ms
+   ✓ transactions history pagination > loads older rows, shows a retry after a read error, and retries the same page  3076ms
+   ✓ transactions history pagination > confirms that deleting one installment leaves the remaining schedule  353ms
+ ✓ tests/settings.test.tsx (27 tests) 4379ms
+   ✓ settings page > shows a settings-shaped loading state while the profile is loading  495ms
+   ✓ settings page > shows a profile error and lets the person retry loading  341ms
+   ✓ settings page > saves a changed name and reports success only after a returned user row  703ms
+   ✓ settings page > keeps the typed name and shows an error when saving fails  456ms
+ ✓ tests/goal-actions.test.tsx (23 tests) 4902ms
+   ✓ goal reservation actions > reserving for a goal uses the reservation dialog and does not quote or create an expense  1172ms
+   ✓ goal reservation actions > release changes reservations without changing actual wallet balance  497ms
+   ✓ goal reservation actions > move lists only owned active goals and keeps the selected wallet  562ms
+   ✓ goal reservation actions > changing goal or reopening clears entered amount and wallet selection  319ms
+   ✓ goal reservation actions > cancel and rejected commands leave the finance snapshot untouched  423ms
+   ✓ goal reservation actions > unknown save retries the same request even after the selected goal changes  417ms
+ ✓ tests/transaction-release.test.tsx (26 tests) 5170ms
+   ✓ ordinary expense shows Laptop release, declining writes nothing, then confirmation writes once  1668ms
+   ✓ editing Amount removes the prior release confirmation  532ms
+   ✓ editing Account removes the prior release confirmation  444ms
+   ✓ switching transaction type invalidates a release review  338ms
+   ✓ custom release inputs quote the chosen goals before allowing confirmation  524ms
+   ✓ an unknown dialog save survives closure and reopening before another transaction can be entered  507ms
+ ✓ tests/goal-finance-hooks.test.tsx (10 tests) 467ms
+ ✓ tests/wallet-reservations.test.tsx (12 tests) 3493ms
+   ✓ newer debt refresh survives an older response (old failure: false)  546ms
+   ✓ late authentication cannot replace newer account metadata  438ms
+   ✓ unmount after a query error invalidates a manual modal-close reload before it overwrites the account cache  569ms
+   ✓ Wallets keeps stored card debt while preserving credit previews and filters  693ms
+ ✓ tests/transaction-history.test.tsx (16 tests) 664ms
+   ✓ installment history row > expands from the whole header with keyboard input and deletes one installment  475ms
+ ✓ tests/sidebar-breakpoint.test.tsx (1 test) 260ms
+ ✓ tests/navigation.test.tsx (2 tests) 181ms
+ ✓ tests/theme-transition.test.tsx (5 tests) 176ms
+ ✓ tests/goal-finance-client.test.ts (6 tests) 18ms
+ ✓ tests/goal-summary.test.ts (39 tests) 50ms
+ ✓ tests/installment-dates.test.ts (4 tests) 4ms
+ ✓ tests/settings-viewport.test.tsx (1 test) 2ms
+ ✓ tests/contributions.test.tsx (11 tests) 5470ms
+   ✓ goal shortcut selects the goal, leaves wallet empty and resets between openings  747ms
+   ✓ Expense sends its explicit goal meaning and refreshes progress  776ms
+   ✓ Transfer sends its explicit goal meaning and refreshes progress  907ms
+   ✓ Income sends its explicit goal meaning and refreshes progress  553ms
+   ✓ installment purchase date and due date stay separate, preserve edits, and reset on reopen  490ms
+   ✓ installment preview uses exact centavos and submits purchase date separately from its schedule  498ms
+   ✓ debt payment month follows its chosen payment date  362ms
+   ✓ credit goal-tagged installments remain informational and do not reserve funds  507ms
+
+ Test Files  16 passed (16)
+      Tests  192 passed (192)
+   Start at  15:36:23
+   Duration  13.74s (transform 3.15s, setup 0ms, collect 22.48s, tests 31.45s, environment 22.43s, prepare 3.51s)
+
+Exit Code: 0
