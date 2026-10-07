@@ -50,7 +50,10 @@ function FacebookMark() {
 
 function LandingPageInner() {
   const [rememberMe, setRememberMe] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
+  const [pendingProvider, setPendingProvider] = useState<"google" | "facebook" | null>(null);
+  const isLoading = pendingProvider !== null;
+  const isGooglePending = pendingProvider === "google";
+  const isFacebookPending = pendingProvider === "facebook";
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -73,7 +76,7 @@ function LandingPageInner() {
   }, [redirectTo, router, supabase]);
 
   const handleOAuthLogin = async (provider: "google" | "facebook") => {
-    setIsLoading(true);
+    setPendingProvider(provider);
     try {
       saveRememberMePreference(rememberMe);
 
@@ -98,7 +101,7 @@ function LandingPageInner() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setPendingProvider(null);
     }
   };
 
@@ -164,20 +167,20 @@ function LandingPageInner() {
                     onClick={() => handleOAuthLogin("google")}
                     disabled={isLoading}
                     className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-md bg-green-800 px-4 text-sm font-semibold text-white transition-colors hover:bg-green-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-                    aria-busy={isLoading}
+                    aria-busy={isGooglePending}
                   >
-                    {isLoading ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <GoogleMark />}
-                    <span>{isLoading ? "Opening Google sign-in..." : "Start with Google"}</span>
+                    {isGooglePending ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <GoogleMark />}
+                    <span>{isGooglePending ? "Opening Google sign-in..." : "Start with Google"}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleOAuthLogin("facebook")}
                     disabled={isLoading}
                     className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-md border border-muted-foreground bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
-                    aria-busy={isLoading}
+                    aria-busy={isFacebookPending}
                   >
-                    {isLoading ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FacebookMark />}
-                    <span>{isLoading ? "Opening Facebook sign-in..." : "Continue with Facebook"}</span>
+                    {isFacebookPending ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FacebookMark />}
+                    <span>{isFacebookPending ? "Opening Facebook sign-in..." : "Continue with Facebook"}</span>
                   </button>
                 </div>
 

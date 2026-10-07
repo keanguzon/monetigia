@@ -70,6 +70,10 @@ Copy this prompt to the new AI:
 
 The Git bundle does not contain this conversation. This document supplies portable project context. A copied chat transcript can supplement it, but the receiving AI should verify current source/status rather than treating old statements as current results.
 
+## October 8 integration update
+
+The latest user authorization supersedes beta: build/typecheck, merge and push completed code to origin/main. Two hotfixes address All months opening-debt omission and visible transaction save/quote feedback. Landing refresh is included; OAuth pending copy is specific to the selected provider. See MAIN_RELEASE_VERIFICATION.md and its evidence for current verification and browser limitations. The existing-debt/selection/title-edit plan remains deferred. After main is pushed, another PC can clone GitHub main instead of transferring the old feature bundle; environments and disposable database state remain private and separate. Verify the actual remote HEAD before continuing. Do not apply production migrations or implement deferred scope merely because these documents exist.
+
 ## Latest Settings delivery
 
 Settings, shared theme transition timing, fixed transaction header/footer and responsive sidebar are complete. The final source passed 192 Vitest + 7 Node tests, typecheck, lint (five baseline warnings), and production build. See SETTINGS_VERIFICATION.md. The feature branch is authorized for push, while beta merge and deployment remain unapproved. Other PCs should clone the feature branch from GitHub after push; the refreshed source-PC bundle is an offline alternative. Private environment files and local database state are separate from Git.

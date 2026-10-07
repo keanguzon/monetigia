@@ -143,6 +143,8 @@ User observed wallet credit balance PHP 6,600 while All months Outstanding Debt 
 
 Status: recorded, not fixed. Preserve initial balance; do not create a duplicate PHP 5,000 expense. Follow-up must reconcile opening debt with transaction-derived monthly amounts and define treatment of undated opening debt without double counting.
 
+October 8 update: the bounded All months hotfix now uses current credit-wallet balances, including opening debt; selected months are labeled Scheduled Debt. Review and automated regression checks passed. Current in-app browser account data was unavailable, so a fresh populated-data comparison remains a manual follow-up. This does not implement dated opening-debt schedules or the larger existing-debt plan. See MAIN_RELEASE_VERIFICATION.md.
+
 ## Newly agreed debt work
 
 Design and implementation tasks are saved in docs/superpowers/specs/2026-10-07-existing-debt-selection-design.md and docs/superpowers/plans/2026-10-07-existing-debt-selection.md. These are planning artifacts only. User also observed PHP 400 payment deletion restored Cash to 10,000 and card debt to 7,000. New user instruction authorizes building and integrating current completed code into origin/beta; the opening-debt bug remains known, not fixed by documentation.
