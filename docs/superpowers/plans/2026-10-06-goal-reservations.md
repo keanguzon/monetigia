@@ -225,13 +225,13 @@ Define `AllocationEvent` from the new database row, including `reserved_delta`, 
 
 **Interfaces:** `useTransactionSubmit()` exposes `quote(draft, releases?)`, `confirm()`, `reset()`, plus phase/error/saved/quote state. Phases: `editing`, `quoting`, `review`, `saving`, `saved`. One request UUID belongs to one confirmed attempt and persists through unknown outcomes/retries. Editing the draft invalidates its quote and confirmation.
 
-- [ ] Write tests: 28,000 ordinary expense shows exact Laptop 3,000 warning before saving; declining writes nothing; accepting calls one transaction command with that quote; editing amounts or wallet invalidates the warning; `STALE_QUOTE` returns to review with fresh amounts and requires another confirmation.
-- [ ] Test custom release breakdown across several goals, disabled duplicate submits, unknown network outcome retry with the same request ID, and saved-but-refresh-failed feedback. A zero-release quote may proceed directly without an extra confirmation dialog. Ordinary actual insufficiency stays a clear inline error.
+- [x] Write tests: 28,000 ordinary expense shows exact Laptop 3,000 warning before saving; declining writes nothing; accepting calls one transaction command with that quote; editing amounts or wallet invalidates the warning; `STALE_QUOTE` returns to review with fresh amounts and requires another confirmation.
+- [x] Test custom release breakdown across several goals, disabled duplicate submits, unknown network outcome retry with the same request ID, and saved-but-refresh-failed feedback. A zero-release quote may proceed directly without an extra confirmation dialog. Ordinary actual insufficiency stays a clear inline error.
 
   Pin `release requires explicit confirmation`: before clicking confirmation, `expect(applyFinancialCommand).not.toHaveBeenCalled()`; after clicking `Release funds and save`, `expect(applyFinancialCommand).toHaveBeenCalledTimes(1)`. Retain an unresolved request across dialog closure in the submit controller; recover it with the same UUID before allowing a replacement save. Do not discard an unknown outcome as cancellation.
-- [ ] Run `npx vitest run tests/transaction-release.test.tsx`; expect red. Replace all insert-then-update sequences, including installments, with Task 6 transport. Keep the normal Expense default and `defaultAccountId` callers. Set aside never opens this dialog. Spend from goal preselects the goal but never invents an amount or wallet.
-- [ ] Give transfer goal association an explicit meaning: carry reservation to another cash wallet, or spend a debt-goal reservation on a credit payment. Income excludes goal tags. Credit purchase association is informational and says it does not fund the goal. Do not restore the removed standalone transaction page/form; its redirect already exists.
-- [ ] Route deletion through `delete_transaction` and refresh both local transaction list and shared financial caches. Detail views show goal-spending/carried-reservation information distinctly from unrelated auto-releases. Replace obsolete contribution assertions with behavior tests; retain cancellation/reset/installment coverage. Run focused suites plus TypeScript; commit: `feat: confirm automatic goal releases in transaction flow`.
+- [x] Run `npx vitest run tests/transaction-release.test.tsx`; expect red. Replace all insert-then-update sequences, including installments, with Task 6 transport. Keep the normal Expense default and `defaultAccountId` callers. Set aside never opens this dialog. Spend from goal preselects the goal but never invents an amount or wallet.
+- [x] Give transfer goal association an explicit meaning: carry reservation to another cash wallet, or spend a debt-goal reservation on a credit payment. Income excludes goal tags. Credit purchase association is informational and says it does not fund the goal. Do not restore the removed standalone transaction page/form; its redirect already exists.
+- [x] Route deletion through `delete_transaction` and refresh both local transaction list and shared financial caches. Detail views show goal-spending/carried-reservation information distinctly from unrelated auto-releases. Replace obsolete contribution assertions with behavior tests; retain cancellation/reset/installment coverage. Run focused suites plus TypeScript; commit: `feat: confirm automatic goal releases in transaction flow`.
 
 ## Task 9: Wallet and dashboard balances remain truthful
 
@@ -291,6 +291,7 @@ Define `AllocationEvent` from the new database row, including `reserved_delta`, 
 ## Execution handoff
 
 Review this plan and its companion spec before product implementation. For this change, prefer subagent-driven execution with a fresh review after each task because a mistake in atomic writes or migration can corrupt financial balances. Native execution with one final independent branch review is the lower-cost alternative. The user chose subagent-driven execution and accepted combined progress on 2026-10-06. Local implementation and commits are authorized; remote pushes remain prohibited pending final check.
+
 
 
 

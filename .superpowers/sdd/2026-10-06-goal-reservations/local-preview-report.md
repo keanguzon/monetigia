@@ -36,5 +36,13 @@ One local auth user was created for browser UI setup: `local-preview+20261006235
 - A read-only auth request returned the same fixture user (HTTP 200); a request to the Next preview with the private cookie reached the authenticated dashboard redirect (HTTP 307).
 - The bootstrap route returned HTTP 302 with only the two expected cookie names and an empty body; following its cookies against the preview produced the authenticated dashboard redirect. No UI screenshots or acceptance actions were performed.
 
+## Follow-up after interrupted preview
+
+- On 2026-10-07, all listeners on 55439, 55440, 55441, 3107, and 3108 were absent; saved proxy, PostgREST, preview, and bootstrap PIDs were also absent, and `pg_ctl status` reported no running server. This accounts for the current connection-refused result.
+- Restarted the ignored local DB harness and preview. PostgreSQL, proxy, PostgREST, Next, and cookie bootstrap now listen on `127.0.0.1` at their expected ports. The listener processes and saved preview command were checked against the local paths/commands.
+- Read only the fixture URL: `http://127.0.0.1:55440`. Requests to `http://localhost:3107/` returned 200 and unauthenticated `http://localhost:55440/auth/v1/user` returned 401. A localhost-origin OPTIONS request from `http://localhost:3107` returned 204 with that origin reflected in `Access-Control-Allow-Origin`.
+- `localhost` resolves `::1` before `127.0.0.1`; the tested PowerShell requests succeeded. All owned listeners currently bind IPv4 loopback. The worktree's `node_modules` is a junction to the main workspace dependencies.
+- The existing trace contained only requests with `origin:null` (SSR), so it does not establish why the earlier browser request was `ERR_BLOCKED_BY_CLIENT`. The proxy source and `.pre-debug` copy have identical hashes; the metadata-only request trace remains available for a fresh browser probe. No auth/session values were read or printed.
+
 
 
