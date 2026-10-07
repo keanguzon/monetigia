@@ -51,7 +51,8 @@ BEGIN
   IF current_user='authenticated' THEN
     IF NEW.user_id IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
     IF TG_TABLE_NAME='accounts' THEN
-      IF NEW.balance IS NULL OR NEW.balance<0 OR NEW.currency IS DISTINCT FROM 'PHP' OR NEW.is_active IS DISTINCT FROM true THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+      IF NEW.balance IS NULL OR NEW.balance::text IN ('NaN','Infinity','-Infinity') OR NEW.balance<0 OR NEW.balance>=10000000000000
+        OR NEW.currency IS DISTINCT FROM 'PHP' OR NEW.is_active IS DISTINCT FROM true THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
     ELSE
       IF NEW.current_amount IS DISTINCT FROM 0 OR NEW.is_completed IS DISTINCT FROM false OR NEW.status<>'active'
         OR NEW.review_state<>'confirmed' OR NEW.completed_at IS NOT NULL OR NEW.archived_at IS NOT NULL THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
@@ -59,12 +60,29 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
+CREATE OR REPLACE FUNCTION public.guard_goal_money() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+DECLARE v_amount numeric;
+BEGIN
+  IF current_user='authenticated' THEN
+    v_amount := CASE WHEN TG_ARGV[0]='target_amount' THEN NEW.target_amount ELSE NEW.allocation_per_cycle END;
+    IF v_amount IS NULL OR v_amount::text IN ('NaN','Infinity','-Infinity') OR v_amount<0 OR v_amount>=10000000000000 THEN
+      RAISE EXCEPTION 'INVALID_STATE';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.guard_goal_money() FROM PUBLIC,anon,authenticated,service_role;
 DROP TRIGGER IF EXISTS financial_identity_guard ON public.accounts;
 CREATE TRIGGER financial_identity_guard BEFORE UPDATE OR DELETE ON public.accounts FOR EACH ROW EXECUTE FUNCTION public.guard_financial_identity();
 DROP TRIGGER IF EXISTS financial_opening_guard ON public.accounts;
 CREATE TRIGGER financial_opening_guard BEFORE INSERT ON public.accounts FOR EACH ROW EXECUTE FUNCTION public.guard_financial_opening();
 DROP TRIGGER IF EXISTS financial_opening_guard ON public.goals;
 CREATE TRIGGER financial_opening_guard BEFORE INSERT ON public.goals FOR EACH ROW EXECUTE FUNCTION public.guard_financial_opening();
+DROP TRIGGER IF EXISTS goal_target_money_guard ON public.goals;
+CREATE TRIGGER goal_target_money_guard BEFORE INSERT OR UPDATE OF target_amount ON public.goals FOR EACH ROW EXECUTE FUNCTION public.guard_goal_money('target_amount');
+DROP TRIGGER IF EXISTS goal_allocation_money_guard ON public.goals;
+CREATE TRIGGER goal_allocation_money_guard BEFORE INSERT OR UPDATE OF allocation_per_cycle ON public.goals FOR EACH ROW EXECUTE FUNCTION public.guard_goal_money('allocation_per_cycle');
 
 -- Unknown deployed definer RPCs fail closed until their complete signatures and bodies are reviewed.
 DO $$ DECLARE v_function record; BEGIN

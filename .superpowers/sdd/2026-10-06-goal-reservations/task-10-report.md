@@ -48,3 +48,14 @@ GREEN covering run: `node .superpowers/local-db/run-test.mjs tests/database/migr
 ## Remaining gates
 
 Task 10 implementation and automated checks are complete. Independent review and root's Task 11 rendered/lint/build gate remain. Deployment additionally requires authorized backup/debt/schema/function/grant preflight. In particular, the real old deletion RPC is still unverified; the local fixture test does not establish its deployed name, signature or body.
+
+## Review fix round 1: finite authenticated money writes
+
+Independent review found PostgreSQL numeric `NaN` bypassed the opening balance's NULL/negative check. The same typed numeric domain permits `NaN` in directly editable goal target/allocation amounts. These are authenticated direct-write guards; no legacy values are automatically rewritten and privileged fixture setup remains available.
+
+- Opening balances now explicitly reject nonfinite, null, negative and out-of-range values. Goal target/allocation guards apply on creation and when each money column is explicitly updated. Separate column triggers allow unrelated metadata/target edits to leave an untouched legacy invalid allocation intact for separate review. The trigger helper has pinned search path and no direct PUBLIC/anon/authenticated/service_role execution grants.
+- Mirrored migration 006 in the reproducible schema and added the existing-invalid-money audit to deployment preflight. The typed numeric columns still determine decimal rounding; this fix makes no new promise to reject excess input scale before PostgreSQL's column conversion.
+- RED: `node .superpowers/local-db/run-test.mjs tests/database/migration-security.test.mjs` exited 1 with 9 passed / 3 failed. Ordinary authenticated HTTP opening `NaN`, goal creation `NaN` target, and goal update `NaN` target unexpectedly succeeded. Each failure explicitly asserted that the write must be denied.
+- GREEN: the same focused command exited 0, 12/12 passed. Tests cover both goal money columns on insert/update, `NaN`, positive/negative infinity, malformed numeric text, null, negative and overflow values, zero/positive/max finite openings, valid goal creation/target recomputation, unchanged actual/reserved balances, and retained untouched legacy invalid allocation after reapplication.
+- Full final verification: `npm run test:db` with ignored disposable environment only exited 0, 69/69 passed; `npm test` exited 0, Node 2/2 and Vitest 9 files / 130 tests; `npx tsc --noEmit` exited 0. No runtime test warnings. The reservations after-hook restored current migrations and the preview user's data was not reset.
+- Files: migration 006, schema.sql, migration-security tests, rollout checklist and this report. No root plan/progress/review edits, live database changes, dependencies, push, merge or deployment.

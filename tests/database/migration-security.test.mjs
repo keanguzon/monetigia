@@ -190,3 +190,49 @@ test('ordered migrations and reproducible schema preserve imported history and f
   const denied = await queryAdmin("SELECT has_table_privilege('authenticated','public.transactions','INSERT') AS tx,has_column_privilege('authenticated','public.accounts','balance','UPDATE') AS balance,has_column_privilege('authenticated','public.goals','status','UPDATE') AS lifecycle,has_function_privilege('authenticated','public.goal_transaction_apply(uuid,jsonb,jsonb)','EXECUTE') AS helper");
   assert.deepEqual(denied, [{ tx: false, balance: false, lifecycle: false, helper: false }]);
 });
+
+test('authenticated opening balances reject nonfinite and invalid domain values while finite zero and positive wallets work', async t => {
+  const f = await setup(t), initial = await snap(f);
+  for (const balance of ['NaN','Infinity','-Infinity','not-a-number','-0.01','10000000000000.00',null]) {
+    const result = await f.owner.client.from('accounts').insert({ user_id: f.owner.id, name: 'Invalid opening', type: 'cash', balance });
+    assert.ok(result.error, `Opening balance ${balance} must be denied`);
+    assert.deepEqual(await snap(f), initial);
+  }
+  for (const balance of ['0.00','0.01','9999999999999.99']) {
+    const row = requireSuccess(await f.owner.client.from('accounts').insert({ user_id: f.owner.id, name: 'Finite opening', type: 'cash', balance }).select().single());
+    assert.equal((await snap(f)).wallets.find(w => w.accountId === row.id).actual, balance);
+  }
+});
+
+test('authenticated goal creation rejects nonfinite target and allocation money without poisoning the finance snapshot', async t => {
+  const f = await setup(t), initial = await snap(f);
+  for (const field of ['target_amount','allocation_per_cycle']) for (const amount of ['NaN','Infinity','-Infinity','not-a-number','-0.01','10000000000000.00',null]) {
+    const result = await f.owner.client.from('goals').insert({ user_id: f.owner.id, name: 'Invalid goal money', target_amount: '5000.00', allocation_per_cycle: '0.00', [field]: amount });
+    assert.ok(result.error, `${field} ${amount} must be denied`);
+    assert.deepEqual(await snap(f), initial);
+  }
+  const row = requireSuccess(await f.owner.client.from('goals').insert({ user_id: f.owner.id, name: 'Finite goal', target_amount: '9999999999999.99', allocation_per_cycle: '0.00' }).select().single());
+  assert.equal((await snap(f)).goals.find(g => g.goalId === row.id).target_amount, '9999999999999.99');
+});
+
+test('authenticated goal money edits reject nonfinite values, preserve valid derived target edits and leave untouched legacy invalid amounts intact', async t => {
+  const f = await setup(t);
+  requireSuccess(await apply(f, { kind: 'reserve', goalId: f.owner.goal.id, accountId: f.owner.account.id, amount: '1000.00' }));
+  const initial = await snap(f);
+  for (const field of ['target_amount','allocation_per_cycle']) for (const amount of ['NaN','Infinity','-Infinity','not-a-number','-0.01','10000000000000.00',null]) {
+    const result = await f.owner.client.from('goals').update({ [field]: amount }).eq('id', f.owner.goal.id);
+    assert.ok(result.error, `${field} ${amount} must be denied`);
+    assert.deepEqual(await snap(f), initial);
+  }
+  requireSuccess(await f.owner.client.from('goals').update({ target_amount: '2000.00', allocation_per_cycle: '0.01' }).eq('id', f.owner.goal.id));
+  const after = await snap(f);
+  assert.equal(totals(f, after).progressPercent, 50);
+  assert.equal(totals(f, after).reserved, '1000.00');
+  assert.equal(wallet(f, after).actual, '30000.00');
+  requireSuccess(await f.admin.from('goals').update({ allocation_per_cycle: 'NaN' }).eq('id', f.owner.goal.id));
+  await applyMigration('202610060006_goal_write_guards.sql');
+  requireSuccess(await f.owner.client.from('goals').update({ target_amount: '3000.00', name: 'Legacy reviewed separately' }).eq('id', f.owner.goal.id));
+  const { queryAdmin } = await databaseRuntime();
+  const old = await queryAdmin(`SELECT allocation_per_cycle::text AS allocation,target_amount::text AS target FROM public.goals WHERE id='${f.owner.goal.id}'::uuid`);
+  assert.deepEqual(old, [{ allocation: 'NaN', target: '3000.00' }]);
+});
