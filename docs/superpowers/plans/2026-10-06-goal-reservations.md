@@ -211,13 +211,13 @@ Define `AllocationEvent` from the new database row, including `reserved_delta`, 
 
 **Interfaces:** `GoalFundsDialog` takes `goalId`, `mode: "reserve" | "release" | "move"`, `open`, `onOpenChange`; `GoalCompletionDialog` takes goalId and closing status; `GoalHistoryDialog` takes goalId. All resolve wallets/amounts from Task 6, never from stale caller-provided balances. Spend action opens `AddTransactionModal` with existing `defaultGoalId`.
 
-- [ ] Write user-facing tests: Set aside changes reservation without an expense; Release changes no actual balance; move offers owned active goals in the same wallet; closure asks about leftovers; changing goal/opening resets amount and selections; cancelled/failed dialogs change no totals.
-- [ ] Assert card labels distinguish reserved and spent, active Saving/Funded is derived, completed cards show `Completed` and true spending, and reopening preserves history. Test 3,000 Date/2,000 spent/1,000 reserved presentation against the selected progress default. Archive replaces irreversible goal deletion.
+- [x] Write user-facing tests: Set aside changes reservation without an expense; Release changes no actual balance; move offers owned active goals in the same wallet; closure asks about leftovers; changing goal/opening resets amount and selections; cancelled/failed dialogs change no totals.
+- [x] Assert card labels distinguish reserved and spent, active Saving/Funded is derived, completed cards show `Completed` and true spending, and reopening preserves history. Test 3,000 Date/2,000 spent/1,000 reserved presentation against the selected progress default. Archive replaces irreversible goal deletion.
 
   Pin `set aside uses reservation dialog`: `expect(screen.getByRole("dialog", { name: /set aside/i })).toBeVisible()` and assert the transaction submission adapter was not called.
-- [ ] Run `npx vitest run tests/goal-actions.test.tsx`; expect red. Build compact forms with existing Radix Dialog, inline errors, disabled pending submits, amount guidance, and accessible names/focus. History includes set aside, release, confirmed automatic release, spending, moves, and reversal entries with real wallet names.
-- [ ] Match skeletons to new card amounts/actions/history and keep summary placeholders during loading. Replace old guidance with: `Set aside money in a wallet to fund a goal. Spending from that goal uses its reserved funds. Monthly and kinsenas targets estimate completion only.`
-- [ ] Verify keyboard opening, Tab, Escape, and focus return with Testing Library. Run focused tests and TypeScript; commit: `feat: add goal reservation and completion actions`.
+- [x] Run `npx vitest run tests/goal-actions.test.tsx`; expect red. Build compact forms with existing Radix Dialog, inline errors, disabled pending submits, amount guidance, and accessible names/focus. History includes set aside, release, confirmed automatic release, spending, moves, and reversal entries with real wallet names.
+- [x] Match skeletons to new card amounts/actions/history and keep summary placeholders during loading. Replace old guidance with: `Set aside money in a wallet to fund a goal. Spending from that goal uses its reserved funds. Monthly and kinsenas targets estimate completion only.`
+- [x] Verify keyboard opening, Tab, Escape, and focus return with Testing Library. Run focused tests and TypeScript; commit: `feat: add goal reservation and completion actions`.
 
 ## Task 8: Transaction dialog release review and deletion integration
 
