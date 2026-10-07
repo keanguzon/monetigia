@@ -50,6 +50,10 @@ export function GoalCompletionDialog({ goalId, status, open, onOpenChange }: Goa
     setError(null);
     let command = retryCommand.current;
     if (!command) {
+      if (isLoading || isError) {
+        setError("Goal funds must load before closing this goal.");
+        return;
+      }
       if (!goal || goal.status !== "active" || goal.review_state !== "confirmed") {
         setError("Confirm this goal before closing it.");
         return;
@@ -110,12 +114,12 @@ export function GoalCompletionDialog({ goalId, status, open, onOpenChange }: Goa
       await Promise.all([refresh(), walletMetadata.refresh()]);
       setError(null);
     } catch {
-      setError("Wallet details still could not load. Try again.");
+      setError("Goal funds or wallet details still could not load. Try again.");
     }
   }
 
   const label = status === "completed" ? "Complete goal" : "Cancel goal";
-  const walletDataError = Boolean(isError || walletMetadata.error);
+  const walletDataError = Boolean(walletMetadata.error);
   const busy = pending || walletMetadata.isLoading || isLoading;
   const disabled = busy || goal?.status !== "active" || goal.review_state !== "confirmed" || unknownOutcome.current;
   return (
@@ -125,7 +129,7 @@ export function GoalCompletionDialog({ goalId, status, open, onOpenChange }: Goa
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:p-6" onOpenAutoFocus={() => { opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }} onCloseAutoFocus={event => { if (opener.current?.isConnected) { event.preventDefault(); opener.current.focus(); } }} onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onPointerDownOutside={event => { if (pending) event.preventDefault(); }}>
           <Dialog.Title className="text-lg font-semibold">{label}</Dialog.Title>
           <Dialog.Description className="mt-1 text-sm text-muted-foreground">{goal?.name ?? "Goal"} will keep its recorded spending in history.</Dialog.Description>
-          {leftoverCents > 0 && (
+          {!isError && !isLoading && leftoverCents > 0 && (
             <div className="mt-4 space-y-3 rounded-lg border border-border/70 p-3">
               <p className="text-sm font-medium">PHP {leftovers} remains reserved</p>
               <ul className="space-y-1 text-xs text-muted-foreground">
@@ -151,9 +155,10 @@ export function GoalCompletionDialog({ goalId, status, open, onOpenChange }: Goa
               )}
             </div>
           )}
-          {leftoverCents === 0 && <p className="mt-4 text-sm text-muted-foreground">No reservations remain. Your recorded spending stays in history.</p>}
+          {!isError && !isLoading && leftoverCents === 0 && <p className="mt-4 text-sm text-muted-foreground">No reservations remain. Your recorded spending stays in history.</p>}
+          {isError && <div className="mt-4 space-y-2"><p role="alert" className="text-sm text-destructive">Goal funds could not load. Load them before closing this goal.</p><Button type="button" variant="outline" className="h-11 min-h-11" onClick={() => void retryLoad()}>Retry loading</Button></div>}
           {walletDataError && leftoverCents > 0 && <div className="mt-4 space-y-2"><p role="alert" className="text-sm text-destructive">Wallet details could not load, so the remaining funds cannot be reviewed.</p><Button type="button" variant="outline" className="min-h-11" onClick={() => void retryLoad()}>Retry loading</Button></div>}
-          {busy && !pending && <p role="status" className="mt-4 text-sm text-muted-foreground">Loading wallet details…</p>}
+          {busy && !pending && <p role="status" className="mt-4 text-sm text-muted-foreground">{isLoading ? "Loading goal funds…" : "Loading wallet details…"}</p>}
           {error && <p role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
           {refreshError ? (
             <div className="mt-4 space-y-3" role="status">
@@ -163,7 +168,7 @@ export function GoalCompletionDialog({ goalId, status, open, onOpenChange }: Goa
           ) : (
             <form onSubmit={submit} className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" className="h-11 min-h-11" disabled={pending} onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" className="h-11 min-h-11" disabled={pending || (!recoveringUnknown && (busy || (walletDataError && leftoverCents > 0) || goal?.status !== "active" || goal.review_state !== "confirmed"))}>{pending ? "Saving…" : recoveringUnknown ? "Retry same request" : label}</Button>
+              <Button type="submit" className="h-11 min-h-11" disabled={pending || (!recoveringUnknown && (busy || isError || (walletDataError && leftoverCents > 0) || goal?.status !== "active" || goal.review_state !== "confirmed"))}>{pending ? "Saving…" : recoveringUnknown ? "Retry same request" : label}</Button>
             </form>
           )}
         </Dialog.Content>

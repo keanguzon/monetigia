@@ -3,6 +3,23 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+declare module "vitest" {
+  interface Assertion<T = any> {
+    toBeVisible(): T;
+  }
+}
+
+expect.extend({
+  toBeVisible(element: HTMLElement) {
+    let visible = element.isConnected;
+    for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+      const style = window.getComputedStyle(ancestor);
+      if (ancestor.hidden || style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || style.opacity === "0") visible = false;
+    }
+    return { pass: visible, message: () => `Expected element ${visible ? "not " : ""}to be visible` };
+  },
+});
+
 const state = vi.hoisted(() => ({
   finance: null as any,
   refresh: vi.fn(),
@@ -12,6 +29,7 @@ const state = vi.hoisted(() => ({
   operations: [] as any[],
   walletError: null as any,
   financeError: null as any,
+  financeLoading: false,
   historyError: null as any,
   readCalls: [] as any[],
 }));
@@ -23,7 +41,7 @@ vi.mock("@/hooks/use-goal-finance", () => ({
 }));
 
 vi.mock("@/hooks/use-goals", () => ({
-  useGoals: () => ({ goals: state.finance?.goals ?? [], financeSnapshot: state.finance, userId, refresh: state.refresh, isLoading: false, isError: state.financeError }),
+  useGoals: () => ({ goals: state.finance?.goals ?? [], financeSnapshot: state.finance, userId, refresh: state.refresh, isLoading: state.financeLoading, isError: state.financeError }),
   getProjection: () => ({ count: 0, unit: "months", projectedDate: null, monthlyAmount: 0, kinsenasAmount: 0 }),
 }));
 
@@ -105,6 +123,7 @@ beforeEach(() => {
   state.operations = [];
   state.walletError = null;
   state.financeError = null;
+  state.financeLoading = false;
   state.historyError = null;
   state.readCalls = [];
   state.refresh.mockReset().mockResolvedValue(undefined);
@@ -119,6 +138,9 @@ describe("goal reservation actions", () => {
     render(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={() => {}} />);
 
     const dialog = screen.getByRole("dialog", { name: /set aside/i });
+    expect(screen.getByRole("dialog", { name: /set aside/i })).toBeVisible();
+    expect(state.apply).not.toHaveBeenCalled();
+    expect(state.apply.mock.calls.some(([, command]) => command.kind === "transaction")).toBe(false);
     expect(dialog.getAttribute("data-state")).toBe("open");
     expect(within(dialog).getAllByRole("option").map(option => option.textContent)).toEqual(["Choose a wallet", "GCash", "GoTyme"]);
     await user.selectOptions(within(dialog).getByLabelText(/wallet/i), gcashId);
@@ -129,6 +151,7 @@ describe("goal reservation actions", () => {
       kind: "reserve", goalId: laptopId, accountId: gcashId, amount: "500.00",
     }, undefined));
     expect(state.refresh).toHaveBeenCalledOnce();
+    expect(state.apply.mock.calls.some(([, command]) => command.kind === "transaction")).toBe(false);
     expect(state.finance.wallets[0].actual).toBe("30000.00");
   });
 
@@ -231,6 +254,14 @@ describe("goal reservation actions", () => {
     expect(within(dialog).getByRole("alert").textContent).toMatch(/could not load/i);
     expect(dialog.textContent).not.toMatch(/no wallet has money available/i);
   });
+
+  test("reservation amount and retry loading controls have mobile minimum heights", () => {
+    state.walletError = new Error("metadata unavailable");
+    render(<GoalFundsDialog goalId={laptopId} mode="reserve" open onOpenChange={() => {}} />);
+    const dialog = screen.getByRole("dialog", { name: /set aside/i });
+    expect(within(dialog).getByLabelText(/amount/i).classList.contains("min-h-11")).toBe(true);
+    expect(within(dialog).getByRole("button", { name: /retry loading/i }).classList.contains("min-h-11")).toBe(true);
+  });
 });
 
 describe("goal lifecycle presentation", () => {
@@ -269,6 +300,35 @@ describe("goal lifecycle presentation", () => {
 });
 
 describe("goal closure and history", () => {
+  test.each(["error", "loading"])("cached zero reservations do not permit closure while snapshot is %s", async condition => {
+    state.finance = makeSnapshot([makeGoal({ reserved: "0.00", walletReservations: [] })]);
+    state.financeError = condition === "error" ? new Error("snapshot unavailable") : null;
+    state.financeLoading = condition === "loading";
+    render(<GoalCompletionDialog goalId={laptopId} status="completed" open onOpenChange={() => {}} />);
+    const dialog = screen.getByRole("dialog", { name: /complete goal/i });
+    expect(dialog.textContent).not.toMatch(/no reservations remain/i);
+    expect(within(dialog).getByRole(condition === "error" ? "alert" : "status").textContent).toMatch(/goal funds/i);
+    expect((within(dialog).getByRole("button", { name: "Complete goal" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.submit(within(dialog).getByRole("button", { name: "Complete goal" }).closest("form")!);
+    expect(state.apply).not.toHaveBeenCalled();
+  });
+
+  test("unknown closure retries its original request despite a closed goal and snapshot error", async () => {
+    const user = userEvent.setup();
+    state.apply.mockRejectedValueOnce(new FinancialCommandError({ message: "Disconnected", outcome: "unknown" }));
+    const view = render(<GoalCompletionDialog goalId={laptopId} status="completed" open onOpenChange={() => {}} />);
+    await user.click(screen.getByLabelText(/release leftovers/i));
+    await user.click(screen.getByRole("button", { name: "Complete goal" }));
+    await screen.findByText(/could not confirm whether this was saved/i);
+    const firstAttempt = state.apply.mock.calls[0];
+    state.finance = makeSnapshot([makeGoal({ status: "completed", reserved: "0.00", walletReservations: [] })]);
+    state.financeError = new Error("snapshot unavailable");
+    view.rerender(<GoalCompletionDialog goalId={laptopId} status="completed" open onOpenChange={() => {}} />);
+    await user.click(screen.getByRole("button", { name: /retry same request/i }));
+    await waitFor(() => expect(state.apply).toHaveBeenCalledTimes(2));
+    expect(state.apply.mock.calls[1]).toEqual(firstAttempt);
+  });
+
   test("closure asks whether to release or move leftover reservations", async () => {
     const user = userEvent.setup();
     render(<GoalCompletionDialog goalId={laptopId} status="completed" open onOpenChange={() => {}} />);

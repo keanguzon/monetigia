@@ -159,7 +159,7 @@ export function GoalFundsDialog({ goalId, mode, open, onOpenChange }: GoalFundsD
           <Dialog.Description className="mt-1 text-sm text-muted-foreground">{goal?.name ?? "Goal"} · PHP amounts</Dialog.Description>
 
           {error && <p role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-          {walletDataError && <div className="mt-4 space-y-2"><p role="alert" className="text-sm text-destructive">Wallet balances or details could not load. Reservation options are unavailable.</p><Button type="button" variant="outline" onClick={() => void retryLoad()}>Retry loading</Button></div>}
+          {walletDataError && <div className="mt-4 space-y-2"><p role="alert" className="text-sm text-destructive">Wallet balances or details could not load. Reservation options are unavailable.</p><Button type="button" variant="outline" className="h-11 min-h-11" onClick={() => void retryLoad()}>Retry loading</Button></div>}
           {busy && !pending && <p role="status" className="mt-4 text-sm text-muted-foreground">Loading wallet balances…</p>}
           {refreshError ? (
             <div className="mt-4 space-y-3" role="status">
@@ -191,7 +191,7 @@ export function GoalFundsDialog({ goalId, mode, open, onOpenChange }: GoalFundsD
 
                 <div className="space-y-1.5">
                   <label htmlFor="goal-funds-amount" className="text-sm font-medium">Amount (PHP)</label>
-                  <Input id="goal-funds-amount" type="text" inputMode="decimal" autoComplete="off" value={amountText} onChange={event => setAmountText(event.target.value)} placeholder="0.00" />
+                  <Input id="goal-funds-amount" className="h-11 min-h-11" type="text" inputMode="decimal" autoComplete="off" value={amountText} onChange={event => setAmountText(event.target.value)} placeholder="0.00" />
                   <p className="text-xs text-muted-foreground">Enter an amount up to PHP {selectedWallet?.eligibleAmount ?? "0.00"}.</p>
                 </div>
                 {disabledForGoal && <p className="text-sm text-amber-700 dark:text-amber-300">This goal must be active and confirmed before you can change its reservations.</p>}

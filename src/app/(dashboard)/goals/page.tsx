@@ -150,7 +150,7 @@ export default function GoalsPage() {
             {totals.active.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No active goals.</p> : <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{totals.active.map(renderGoal)}</div>}
           </section>
           {totals.closed.length > 0 && <section className="space-y-3 border-t border-border/30 pt-6">
-            <button type="button" aria-expanded={showClosed} onClick={() => setShowClosed(value => !value)} className="flex min-h-10 items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+            <button type="button" aria-expanded={showClosed} onClick={() => setShowClosed(value => !value)} className="flex min-h-11 items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" /><span>Closed Goals ({totals.closed.length})</span>{showClosed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
             {showClosed && <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-2 lg:grid-cols-3">{totals.closed.map(renderGoal)}</div>}
