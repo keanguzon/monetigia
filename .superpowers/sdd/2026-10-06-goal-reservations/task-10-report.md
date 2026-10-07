@@ -59,3 +59,13 @@ Independent review found PostgreSQL numeric `NaN` bypassed the opening balance's
 - GREEN: the same focused command exited 0, 12/12 passed. Tests cover both goal money columns on insert/update, `NaN`, positive/negative infinity, malformed numeric text, null, negative and overflow values, zero/positive/max finite openings, valid goal creation/target recomputation, unchanged actual/reserved balances, and retained untouched legacy invalid allocation after reapplication.
 - Full final verification: `npm run test:db` with ignored disposable environment only exited 0, 69/69 passed; `npm test` exited 0, Node 2/2 and Vitest 9 files / 130 tests; `npx tsc --noEmit` exited 0. No runtime test warnings. The reservations after-hook restored current migrations and the preview user's data was not reset.
 - Files: migration 006, schema.sql, migration-security tests, rollout checklist and this report. No root plan/progress/review edits, live database changes, dependencies, push, merge or deployment.
+
+## Review fix round 2: authenticated target amounts must be positive
+
+The scoped re-review of round 1 found that direct authenticated goal writes still accepted a zero target, although the application contract requires a positive target. Allocation-per-cycle remains allowed to be zero.
+
+- The goal money trigger now rejects `target_amount <= 0` while retaining the existing zero-allowed allocation rule. The migration and reproducible schema contain identical `guard_goal_money` definitions.
+- Added authenticated insert and update coverage for string and numeric zero targets, unchanged snapshots after rejection, a positive one-cent target, a zero allocation, and target edits that preserve existing reservations and recompute progress.
+- Focused verification: `node .superpowers/local-db/run-test.mjs tests/database/migration-security.test.mjs` exited 0, 14/14 passed.
+- Full native database verification: `npm run test:db` exited 0, 71/71 passed, 0 failures, 0 skipped. The command received only the ignored disposable-local database environment. The reservation suite's cleanup reapplied migrations 004–006, leaving the preview database on current migration 006.
+- No TypeScript sources changed. No live project, preview account data, plan/progress/review documents, push, merge, or deployment was changed by this fix round.

@@ -236,3 +236,34 @@ test('authenticated goal money edits reject nonfinite values, preserve valid der
   const old = await queryAdmin(`SELECT allocation_per_cycle::text AS allocation,target_amount::text AS target FROM public.goals WHERE id='${f.owner.goal.id}'::uuid`);
   assert.deepEqual(old, [{ allocation: 'NaN', target: '3000.00' }]);
 });
+
+test('authenticated zero-target goal creation is denied while positive targets with zero allocation remain valid', async t => {
+  const f = await setup(t), initial = await snap(f);
+  for (const target_amount of ['0.00',0]) {
+    const result = await f.owner.client.from('goals').insert({ user_id: f.owner.id, name: 'Zero target', target_amount, allocation_per_cycle: '0.00' });
+    assert.equal(result.error?.message, 'INVALID_STATE');
+    assert.deepEqual(await snap(f), initial);
+  }
+  const row = requireSuccess(await f.owner.client.from('goals').insert({ user_id: f.owner.id, name: 'Small positive target', target_amount: '0.01', allocation_per_cycle: '0.00' }).select().single());
+  const after = (await snap(f)).goals.find(g => g.goalId === row.id);
+  assert.equal(after.target_amount, '0.01');
+  assert.equal(after.allocation_per_cycle, '0.00');
+});
+
+test('authenticated zero-target updates leave the snapshot intact and zero-allocation target edits still recompute progress', async t => {
+  const f = await setup(t);
+  requireSuccess(await apply(f, { kind: 'reserve', goalId: f.owner.goal.id, accountId: f.owner.account.id, amount: '1000.00' }));
+  const initial = await snap(f);
+  for (const target_amount of ['0.00',0]) {
+    const result = await f.owner.client.from('goals').update({ target_amount }).eq('id', f.owner.goal.id);
+    assert.equal(result.error?.message, 'INVALID_STATE');
+    assert.deepEqual(await snap(f), initial);
+  }
+  requireSuccess(await f.owner.client.from('goals').update({ target_amount: '2000.00', allocation_per_cycle: '0.00' }).eq('id', f.owner.goal.id));
+  const after = await snap(f);
+  assert.equal(totals(f, after).target_amount, '2000.00');
+  assert.equal(totals(f, after).allocation_per_cycle, '0.00');
+  assert.equal(totals(f, after).progressPercent, 50);
+  assert.equal(totals(f, after).reserved, '1000.00');
+  assert.equal(wallet(f, after).actual, '30000.00');
+});

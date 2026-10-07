@@ -1006,7 +1006,8 @@ DECLARE v_amount numeric;
 BEGIN
   IF current_user='authenticated' THEN
     v_amount := CASE WHEN TG_ARGV[0]='target_amount' THEN NEW.target_amount ELSE NEW.allocation_per_cycle END;
-    IF v_amount IS NULL OR v_amount::text IN ('NaN','Infinity','-Infinity') OR v_amount<0 OR v_amount>=10000000000000 THEN
+    IF v_amount IS NULL OR v_amount::text IN ('NaN','Infinity','-Infinity') OR v_amount<0 OR v_amount>=10000000000000
+      OR (TG_ARGV[0]='target_amount' AND v_amount<=0) THEN
       RAISE EXCEPTION 'INVALID_STATE';
     END IF;
   END IF;
