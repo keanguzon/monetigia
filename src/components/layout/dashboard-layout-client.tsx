@@ -16,12 +16,17 @@ interface DashboardLayoutClientProps {
 export function DashboardLayoutClient({ user, children }: DashboardLayoutClientProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
 
-  // Close sidebar when resizing to lg breakpoint
   useEffect(() => {
+    let desktop = window.innerWidth >= 1024;
+    setIsDesktop(desktop);
     const handleResize = () => {
-      if (window.innerWidth >= 1024) {
+      const nextDesktop = window.innerWidth >= 1024;
+      if (nextDesktop !== desktop) {
         setIsSidebarOpen(false);
+        desktop = nextDesktop;
+        setIsDesktop(nextDesktop);
       }
     };
 
@@ -35,6 +40,7 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         isCollapsed={isSidebarCollapsed}
+        isDesktop={isDesktop}
         onCollapsedChange={setIsSidebarCollapsed}
       />
       <div

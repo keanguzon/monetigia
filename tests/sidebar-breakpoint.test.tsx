@@ -1,0 +1,36 @@
+import React from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
+vi.mock("next/navigation", () => ({ usePathname: () => "/settings" }));
+vi.mock("next/image", () => ({ default: (props: any) => <img {...props} /> }));
+vi.mock("@/components/layout/navigation-provider", () => ({ useNavigation: () => ({ pendingHref: null }) }));
+vi.mock("@/components/layout/navigation-link", () => ({ NavigationLink: (props: any) => <a {...props} /> }));
+vi.mock("@/components/layout/header", () => ({ Header: ({ onMenuClick }: any) => <button onClick={onMenuClick}>Open navigation</button> }));
+import { DashboardLayoutClient } from "@/components/layout/dashboard-layout-client";
+afterEach(cleanup);
+
+test("desktop collapse preserves mobile labels and a breakpoint crossing closes the drawer", () => {
+  Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1280 });
+  render(<DashboardLayoutClient user={null}>Content</DashboardLayoutClient>);
+  fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+  expect(screen.getByText("Wallets")).toBeTruthy();
+  fireEvent.click(screen.getByText("Open navigation"));
+  expect(document.querySelector(".bg-black\\/50")).toBeTruthy();
+  window.innerWidth = 375;
+  fireEvent(window, new Event("resize"));
+  expect(document.querySelector(".bg-black\\/50")).toBeNull();
+  expect(document.querySelector("aside")?.hasAttribute("inert")).toBe(true);
+  fireEvent.click(screen.getByText("Open navigation"));
+  expect(document.querySelector("aside")?.hasAttribute("inert")).toBe(false);
+  window.innerWidth = 375;
+  fireEvent(window, new Event("resize"));
+  expect(document.querySelector(".bg-black\\/50")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Close navigation" }));
+  expect(document.querySelector(".bg-black\\/50")).toBeNull();
+  fireEvent.click(screen.getByText("Open navigation"));
+  window.innerWidth = 1280;
+  fireEvent(window, new Event("resize"));
+  expect(document.querySelector(".bg-black\\/50")).toBeNull();
+  expect(screen.getByRole("button", { name: "Expand navigation" })).toBeTruthy();
+  expect(document.querySelector("aside")?.hasAttribute("inert")).toBe(false);
+});

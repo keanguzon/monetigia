@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement approved tasks one at a time. Steps use checkbox syntax for tracking.
 
-**Status:** Draft for user review. Documentation only; this request does not authorize implementing these follow-ups. Settings ideas below are recommendations, not approved features. Split navigation/Settings into a separate reviewed design before execution.
+**Status:** Settings Task 4 first release approved October 7 after the user said to proceed. Implement profile, Light/Dark/System, truthful installation guidance, account/sign-out and financial help using existing services. Other follow-ups remain pending. Export, hide amounts and additional account controls are outside this approval.
 
 **Goal:** Preserve manual QA findings and make Monetigia easier to navigate and manage on mobile and in standalone PWA mode.
 
@@ -10,7 +10,7 @@
 
 **Tech Stack:** Next.js 14, React, Tailwind, Radix dialogs, SWR, Supabase/PostgreSQL.
 
-**Spec:** User instructions and QA findings from 2026-10-07, captured below. A navigation/Settings design still needs approval before product implementation.
+**Spec:** User instructions and QA findings from 2026-10-07, captured below. Navigation still needs design approval. Settings first release was approved and implemented.
 
 ## Confirmed requests and findings
 
@@ -31,7 +31,7 @@
 
 ## Global constraints
 
-- Work on codex/goal-reservations until integration is separately authorized; no remote push, merge or deployment.
+- Work on codex/goal-reservations until integration is separately authorized; push is now authorized after verification; no beta merge or deployment.
 - Preserve ongoing manual QA and existing uncommitted changes. Do not reset seed data without explicit instruction.
 - Existing Manrope/Bricolage typography and shared primary green; ENERGY 1 / RHYTHM 2 / MOTION 1.
 - 44px minimum touch targets; safe-area padding; keyboard focus; reduced motion; 375px, 768px and 1280px in both themes.
@@ -81,7 +81,7 @@
 - [ ] Reserve bottom content space plus env(safe-area-inset-bottom); hide/disable navigation appropriately behind dialogs. Check virtual keyboard, standalone mode, scrolling and 200% text zoom.
 - [ ] Verify at all target widths/themes, reduced motion and cached/cold navigation; review before commit.
 
-## Task 4: Useful Settings redesign (proposal)
+## Task 4: Useful Settings redesign (completed first release)
 
 **Files:** Modify src/app/(dashboard)/settings/page.tsx; extract sections under src/components/settings/ when useful. Reuse existing theme provider, profile API and installed auth facilities. Create preference hook only after verifying user_preferences table, RLS and actual persistence.
 
@@ -96,10 +96,10 @@
 
 **Later, separate scope:** account deletion, push reminders, backup/import, cross-device preferences and local app lock. Do not ship switches for these before capabilities exist.
 
-- [ ] User reviews first-release feature selection and design. Prefer grouped settings rows with Goals typography/surfaces rather than reproducing old stacked cards.
-- [ ] Add behavior tests for selected controls: persistence/reload, system theme, failure/retry, sign-out and real install availability. Export tests apply only if export is approved.
-- [ ] Implement approved sections with native inputs, accessible labels, 44px controls and pending/error feedback. Preserve OAuth profile functionality.
-- [ ] Verify light/dark/system, profile upload, preference failures, installed/browser modes and keyboard/mobile layouts; review before commit.
+- [x] User reviews first-release feature selection and design. Prefer grouped settings rows with Goals typography/surfaces rather than reproducing old stacked cards.
+- [x] Add behavior tests for selected controls: persistence/reload, system theme, failure/retry, sign-out and real install availability. Export tests apply only if export is approved.
+- [x] Implement approved sections with native inputs, accessible labels, 44px controls and pending/error feedback. Preserve OAuth profile functionality.
+- [x] Verify approved controls with behavioral tests, theme/layout browser checks and independent review; live upload/sign-out and physical iOS checks remain explicitly limited in SETTINGS_VERIFICATION.md.
 
 ## Task 5: PWA acceptance and final handoff
 
@@ -133,4 +133,6 @@ Use the existing Monetigia logo for Safari/iOS Add to Home Screen with a correct
 
 ## Latest execution status
 
-Installment scope and icon assets implemented and verified; see docs/codex-review/INSTALLMENT_HISTORY_VERIFICATION.md. The later model override allows Sol low/medium and Luna max for coding (medium/high for lighter checks); no new Astra or Sol high. Local commit comes before user QA; push follows QA authorization. Settings, navigation, restore and popup tasks above remain pending.
+Installment scope and icon assets implemented and verified; see docs/codex-review/INSTALLMENT_HISTORY_VERIFICATION.md. The later model override allows Sol low/medium and Luna max for coding (medium/high for lighter checks); no new Astra or Sol high. The latest user instruction authorizes commit and push after Settings and footer fixes. Settings first release is complete; navigation, restore and popup remain pending. See SETTINGS_VERIFICATION.md for final integrated evidence.
+
+Root delivery status: approved Settings first release, shared theme timing, fixed modal footer and sidebar breakpoint fixes passed review and fresh integrated verification. Physical PWA acceptance and Tasks 1–3 remain pending; do not mark them complete.

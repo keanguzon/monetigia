@@ -2,35 +2,15 @@
 
 import * as React from "react"
 import { Moon, Sun } from "lucide-react"
-import { useTheme } from "next-themes"
+import { useThemeTransition } from "@/hooks/use-theme-transition"
 
 export function ModeToggle() {
-  const { theme, setTheme, resolvedTheme } = useTheme()
-  const timeoutRef = React.useRef<number | null>(null)
+  const { theme, applyTheme, resolvedTheme } = useThemeTransition()
 
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => {
     setMounted(true)
   }, [])
-
-  const applyTheme = (t: string) => {
-    const root = document.documentElement
-    root.classList.add("theme-transitioning")
-    if (timeoutRef.current) {
-      window.clearTimeout(timeoutRef.current)
-      timeoutRef.current = null
-    }
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTheme(t)
-        // Keep in sync with the 150ms transition
-        timeoutRef.current = window.setTimeout(() => {
-          root.classList.remove("theme-transitioning")
-          timeoutRef.current = null
-        }, 160)
-      })
-    })
-  }
 
   const handleToggle = () => {
     if (theme === 'light') applyTheme('dark')

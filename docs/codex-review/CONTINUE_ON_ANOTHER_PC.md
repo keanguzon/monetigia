@@ -10,7 +10,7 @@ Read this before changing code. This records current work and the user's instruc
 - Active feature checkout: `C:/Users/PC/.codex/worktrees/goal-reservations/monetigia`.
 - Goal reservation architecture tasks 1 through 11 were committed before this installment work. Previous HEAD was `d9592d0`; prior verification report is `docs/codex-review/GOAL_RESERVATIONS_VERIFICATION.md`.
 - Latest scope: grouped installment history, purchase versus due dates, bounded full-history loading, modal polish, right-side expansion, dropdown inset, subtle press feedback, and iOS logo assets. See `docs/superpowers/plans/2026-10-07-installment-history.md` and `docs/codex-review/INSTALLMENT_HISTORY_VERIFICATION.md`.
-- Latest instruction: local build/commit, user QA, then push. Do not push until user finishes QA and authorizes it. Do not merge into beta or deploy without separate authorization.
+- Latest instruction: finish Settings and fixed transaction-modal header/footer, verify locally, then commit and push the feature branch. This supersedes the earlier wait-for-QA push instruction. Do not merge into beta or deploy without separate authorization.
 - Preserve local QA data and existing changes. Never reset the local database merely to obtain a clean fixture.
 
 ## User's working rules
@@ -51,7 +51,8 @@ Read this before changing code. This records current work and the user's instruc
 - User reported passing reservation/release/move, overspend decline/confirm, active and completed expense deletion, reopen at zero, and archive hiding a goal. These are user-reported, not fresh audit claims.
 - Root browser tested a three-installment local disposable purchase, distinct purchase/due dates, Jan31 schedule, exact split, auto-close, grouping, keyboard expansion and individual deletion. Temporary acceptance rows were removed; existing user QA rows retained.
 - Follow `INSTALLMENT_HISTORY_VERIFICATION.md` for current regression QA. Read wallet baselines first; GCash was previously zero, then funded for testing, so do not prescribe an assumed balance.
-- Deferred, documentation only: overspend popup instead of inline notice; discoverable archived-goal restore; iOS-inspired glass mobile bottom navigation; useful Settings redesign. See `2026-10-07-manual-qa-follow-ups.md`. User has not approved the Settings feature selection/design.
+- Settings first release is now authorized: profile, existing theme control, real install availability/guidance, sign-out and financial help. Settings is complete; see SETTINGS_VERIFICATION.md for fresh 192 Vitest + 7 Node results, typecheck/build success, five baseline lint warnings, review and browser evidence. Export/privacy/new account controls remain outside this scope.
+- Deferred, documentation only: overspend popup instead of inline notice; discoverable archived-goal restore; iOS-inspired glass mobile bottom navigation. See `2026-10-07-manual-qa-follow-ups.md`.
 - iOS icon PNG sizes and HTML/manifest URLs are verified locally. Physical Safari/iPhone Add to Home Screen is still a manual device check; manifest alone does not establish offline support.
 
 ## Continue on another PC
@@ -65,6 +66,10 @@ Read this before changing code. This records current work and the user's instruc
 
 Copy this prompt to the new AI:
 
-> Continue Monetigia from the current `codex/goal-reservations` checkout. First read AGENTS.md, docs/codex-review/CONTINUE_ON_ANOTHER_PC.md, docs/codex-review/INSTALLMENT_HISTORY_VERIFICATION.md, and both October 7 plans. Antislop during is active. Preserve financial invariants and local data. Use Luna max for Luna coding and medium/high for lighter checks; Sol low/medium when warranted; no new Astra or Sol high. Use subagents with review for meaningful tasks. Tell me the actual branch/status and next manual QA step. Do not implement deferred Settings/navigation/restore/popup scope, push, merge or deploy without my instruction. Never invent prior test results or assume fixture balances.
+> Continue Monetigia from the current `codex/goal-reservations` checkout. First read AGENTS.md, docs/codex-review/CONTINUE_ON_ANOTHER_PC.md, docs/codex-review/INSTALLMENT_HISTORY_VERIFICATION.md, and both October 7 plans. Antislop during is active. Preserve financial invariants and local data. Use Luna max for Luna coding and medium/high for lighter checks; Sol low/medium when warranted; no new Astra or Sol high. Use subagents with review for meaningful tasks. Tell me the actual branch/status and next manual QA step. Do not implement deferred navigation/restore/popup scope or optional Settings extras, push, merge or deploy without my instruction. Never invent prior test results or assume fixture balances.
 
 The Git bundle does not contain this conversation. This document supplies portable project context. A copied chat transcript can supplement it, but the receiving AI should verify current source/status rather than treating old statements as current results.
+
+## Latest Settings delivery
+
+Settings, shared theme transition timing, fixed transaction header/footer and responsive sidebar are complete. The final source passed 192 Vitest + 7 Node tests, typecheck, lint (five baseline warnings), and production build. See SETTINGS_VERIFICATION.md. The feature branch is authorized for push, while beta merge and deployment remain unapproved. Other PCs should clone the feature branch from GitHub after push; the refreshed source-PC bundle is an offline alternative. Private environment files and local database state are separate from Git.
