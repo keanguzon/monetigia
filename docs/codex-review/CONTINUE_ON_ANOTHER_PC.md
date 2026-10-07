@@ -73,3 +73,5 @@ The Git bundle does not contain this conversation. This document supplies portab
 ## Latest Settings delivery
 
 Settings, shared theme transition timing, fixed transaction header/footer and responsive sidebar are complete. The final source passed 192 Vitest + 7 Node tests, typecheck, lint (five baseline warnings), and production build. See SETTINGS_VERIFICATION.md. The feature branch is authorized for push, while beta merge and deployment remain unapproved. Other PCs should clone the feature branch from GitHub after push; the refreshed source-PC bundle is an offline alternative. Private environment files and local database state are separate from Git.
+
+Latest authorization: user requested fresh build then integration/push to origin/beta on October 7. New existing-debt/selection/title-edit work is saved in docs/superpowers/plans/2026-10-07-existing-debt-selection.md and its linked design; not implemented. Initial-debt summary omission remains known. User confirmed repayment deletion restored Cash 10,000 and debt 7,000.

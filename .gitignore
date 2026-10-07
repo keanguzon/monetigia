@@ -87,3 +87,6 @@ scripts/
 !supabase/migrations/202610060005_goal_lifecycle_operations.sql
 !supabase/migrations/202610060006_goal_write_guards.sql
 !supabase/migrations/202610070001_installment_purchase_dates.sql
+
+!docs/superpowers/plans/2026-10-07-existing-debt-selection.md
+!docs/superpowers/specs/2026-10-07-existing-debt-selection-design.md

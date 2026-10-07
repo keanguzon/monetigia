@@ -136,3 +136,13 @@ Use the existing Monetigia logo for Safari/iOS Add to Home Screen with a correct
 Installment scope and icon assets implemented and verified; see docs/codex-review/INSTALLMENT_HISTORY_VERIFICATION.md. The later model override allows Sol low/medium and Luna max for coding (medium/high for lighter checks); no new Astra or Sol high. The latest user instruction authorizes commit and push after Settings and footer fixes. Settings first release is complete; navigation, restore and popup remain pending. See SETTINGS_VERIFICATION.md for final integrated evidence.
 
 Root delivery status: approved Settings first release, shared theme timing, fixed modal footer and sidebar breakpoint fixes passed review and fresh integrated verification. Physical PWA acceptance and Tasks 1–3 remain pending; do not mark them complete.
+
+## Manual QA finding — opening debt omitted (October 7)
+
+User observed wallet credit balance PHP 6,600 while All months Outstanding Debt showed PHP 1,600 after a PHP 400 debt payment. Source inspection confirms the month summary derives only from transactions and excludes the initial PHP 5,000 account debt. The All months label and Deduct Debt preview therefore understate total debt in this fixture. Payment accounting itself was user-verified: Cash 10,000 -> 9,600; debt 7,000 -> 6,600.
+
+Status: recorded, not fixed. Preserve initial balance; do not create a duplicate PHP 5,000 expense. Follow-up must reconcile opening debt with transaction-derived monthly amounts and define treatment of undated opening debt without double counting.
+
+## Newly agreed debt work
+
+Design and implementation tasks are saved in docs/superpowers/specs/2026-10-07-existing-debt-selection-design.md and docs/superpowers/plans/2026-10-07-existing-debt-selection.md. These are planning artifacts only. User also observed PHP 400 payment deletion restored Cash to 10,000 and card debt to 7,000. New user instruction authorizes building and integrating current completed code into origin/beta; the opening-debt bug remains known, not fixed by documentation.
