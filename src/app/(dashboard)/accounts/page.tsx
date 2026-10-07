@@ -474,6 +474,7 @@ export default function AccountsPage() {
   const walletSummaryError = accountsQuery.error || accountLoadError || goals.isError || walletSummaryResult.error ||
     (!goals.isLoading && !goals.financeSnapshot ? new Error("Finance snapshot is unavailable") : null);
   const walletSummaryLoading = isLoading || accountsQuery.isLoading || goals.isLoading;
+
   const currentMoney = walletSummaryResult.summary ? Number(walletSummaryResult.summary.netWorth) : 0;
 
   const sortedMonths = useMemo(() => {

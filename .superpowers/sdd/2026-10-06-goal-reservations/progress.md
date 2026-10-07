@@ -162,3 +162,8 @@ USERBROWSERCONSOLE definitiveCSP connect-src excludeslocalAPI127.0.0.1:55440. Ro
 Task10 fixround1e5683bf native69/Vitest130+Node2/TSCpass; re-reviewNaNclosedbuttarget0violatesPositiveMoneySchema. Fixround2 target-specificpositive check/tests after currentseparateCSPcommit; allocation0valid. Sameworker serial, independentre-reviewrequired.
 
 Task10 fixround2 committed9148353; freshLun high scoped re-reviewApproved, all zero-target findings closed withzeroallocation retained;14focused/71DBverified. Task10 UI+DB implementation has full native unit/type verification from taskreport. DevelopmentCSP fix05dbd19 and HTTP-upgrade follow-up8cb894c independently reviewed clean; CSP5/5. Browser now authenticates and loads Dashboard/account data and Wallet tiles; Wallet finance summary still reports Unavailable after its snapshot RPC returns HTTP200, recorded unresolved. Task10 complete. User stop boundary: noTask11, push, merge, deployment, or live migration.
+
+
+User resumed the plan and explicitly authorized Task 11 on 2026-10-07, superseding prior stop-after-Task-10 boundary. No push/merge/live deployment/migration. SDD script helpers were not installed in this workspace, so controller created task-11-brief.md directly from Task 11 plan text plus explicit carry-forward constraints. Task11 base fe07df9; selected GPT-6 Luna max as available user's model and broad implementation/test executor.
+
+Task 11: complete (whole-flow verification passed: tsc 0, npm test 138/138, test:db 71/71, lint 6 baseline warnings, build 20/20 pages; browser matrix verified; GOAL_RESERVATIONS_VERIFICATION.md recorded). Branch codex/goal-reservations ready for merge review into beta.

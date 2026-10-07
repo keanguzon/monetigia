@@ -9,6 +9,7 @@ export function useGoalFinance(userId: string | null) {
   const { mutate: mutateCache } = useSWRConfig();
   const { cache } = useSWRConfig();
   const [snapshotUserId, setSnapshotUserId] = useState(userId);
+  const previousUserId = useRef(userId);
   const selectedUser = useRef({ userId, revision: 0 });
   if (selectedUser.current.userId !== userId) {
     selectedUser.current = { userId, revision: selectedUser.current.revision + 1 };
@@ -24,7 +25,7 @@ export function useGoalFinance(userId: string | null) {
     const snapshot = await fetchGoalFinance(userId ?? undefined, isCurrentRequest);
     if (isCurrentRequest()) setSnapshotUserId(userId);
     return snapshot;
-  }, [userId, selectedUser.current.revision]);
+  }, [userId]);
   const { data: cachedData, error, isLoading, mutate } = useSWR<GoalFinanceSnapshot>(key, fetchForUser);
 
   useEffect(() => setSnapshotUserId(userId), [userId]);
@@ -37,7 +38,9 @@ export function useGoalFinance(userId: string | null) {
   }, []);
 
   useEffect(() => {
-    if (userId !== null) return;
+    const signedOutUserId = previousUserId.current;
+    previousUserId.current = userId;
+    if (userId !== null || signedOutUserId === null) return;
     void mutateCache(
       cacheKey => Array.isArray(cacheKey) && (cacheKey[0] === "goalFinance" || cacheKey[0] === "goalHistory" || cacheKey[0] === "goalWalletMetadata"),
       () => undefined,

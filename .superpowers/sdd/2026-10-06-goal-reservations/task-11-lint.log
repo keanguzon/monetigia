@@ -1,0 +1,27 @@
+
+> monetigia@1.0.0 lint
+> next lint
+
+
+./src/app/(dashboard)/accounts/page.tsx
+83:6  Warning: React Hook useEffect has a missing dependency: 'loadAccounts'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/categories/page.tsx
+141:6  Warning: React Hook useEffect has a missing dependency: 'loadCategories'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/settings/page.tsx
+35:6  Warning: React Hook useEffect has a missing dependency: 'loadProfile'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/transactions/page.tsx
+41:6  Warning: React Hook useEffect has a missing dependency: 'loadTransactions'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/forms/AddAccountForm.tsx
+41:6  Warning: React Hook useEffect has a missing dependency: 'icon'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/transactions/AddTransactionModal.tsx
+77:6  Warning: React Hook useEffect has missing dependencies: 'loadData' and 'submit'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/hooks/use-goal-finance.ts
+28:6  Warning: React Hook useCallback has an unnecessary dependency: 'selectedUser.current.revision'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules

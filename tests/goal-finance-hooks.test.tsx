@@ -88,6 +88,32 @@ test("user-scoped snapshots never show another user's wallets and logout clears 
   await waitFor(() => expect(screen.getByLabelText("wallet").textContent).toBe("100.00"));
 });
 
+test("an unauthenticated finance consumer does not clear a mounted user's snapshot", async () => {
+  state.rpc.mockResolvedValue({ data: makeSnapshot(userOne, "100.00"), error: null });
+
+  function IdleFinanceConsumer() {
+    useGoalFinance(null);
+    return null;
+  }
+
+  function Probe({ showIdleConsumer }: { showIdleConsumer: boolean }) {
+    const finance = useGoalFinance(userOne);
+    return <>
+      <output aria-label="wallet">{finance.data?.wallets[0]?.actual ?? "empty"}</output>
+      {showIdleConsumer && <IdleFinanceConsumer />}
+    </>;
+  }
+
+  const view = render(<Probe showIdleConsumer={false} />, { wrapper });
+  await waitFor(() => expect(screen.getByLabelText("wallet").textContent).toBe("100.00"));
+
+  view.rerender(<Probe showIdleConsumer />);
+
+  await waitFor(() => expect(screen.getByLabelText("wallet").textContent).toBe("100.00"));
+  expect((cache.get(unstable_serialize(["goalFinance", userOne])) as any)?.data).toBeDefined();
+  expect(state.rpc).toHaveBeenCalledTimes(1);
+});
+
 test("refresh revalidates the goal snapshot, history, and existing financial views", async () => {
   const calls = new Map<string, number>();
   state.rpc.mockImplementation(async () => ({ data: makeSnapshot(userOne, "100.00"), error: null }));
