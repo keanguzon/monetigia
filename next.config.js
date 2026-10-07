@@ -1,3 +1,17 @@
+function developmentSupabaseOrigin() {
+  if (process.env.NODE_ENV !== "development") return null;
+  const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (typeof configuredUrl !== "string" || /[\u0000-\u0020\u007f]/.test(configuredUrl)) return null;
+  try {
+    const url = new URL(configuredUrl);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.MONETIGIA_BUILD_DIR || ".next",
@@ -11,6 +25,7 @@ const nextConfig = {
     ];
   },
   async headers() {
+    const localApiOrigin = developmentSupabaseOrigin();
     return [
       {
         source: "/(.*)",
@@ -36,7 +51,7 @@ const nextConfig = {
               // Images: self + Supabase storage + OAuth avatars + data URIs
               "img-src 'self' data: blob: https://*.supabase.co https://avatars.githubusercontent.com https://lh3.googleusercontent.com",
               // API connections: self + Supabase
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+              `connect-src 'self' https://*.supabase.co wss://*.supabase.co${localApiOrigin ? ` ${localApiOrigin}` : ""}`,
               // Frames: Supabase auth uses an iframe for session refresh
               "frame-src 'self' https://*.supabase.co",
               "object-src 'none'",
