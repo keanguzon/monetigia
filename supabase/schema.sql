@@ -722,6 +722,7 @@ DECLARE
   v_tx public.transactions%ROWTYPE; v_src public.accounts%ROWTYPE; v_dst public.accounts%ROWTYPE;
   v_operation uuid; v_result jsonb; v_row record; v_events jsonb := '[]'::jsonb;
   v_reserved numeric; v_delta numeric; v_src_balance numeric; v_dst_balance numeric;
+  v_reservations jsonb := '[]'::jsonb; v_spent_ids jsonb := '[]'::jsonb; v_value jsonb;
 BEGIN
   IF v_owner IS NULL THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
   v_kind := p_command->>'kind';
@@ -729,9 +730,32 @@ BEGIN
     RETURN public.goal_transaction_apply(p_request_id,p_command,p_quote);
   END IF;
   IF p_request_id IS NULL OR p_command IS NULL OR jsonb_typeof(p_command)<>'object' OR p_quote IS NOT NULL
-    OR v_kind IS NULL OR v_kind NOT IN ('close','reopen','archive','delete_transaction') THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    OR v_kind IS NULL OR v_kind NOT IN ('close','reopen','archive','delete_transaction','adopt_legacy') THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
   BEGIN
-    IF v_kind='delete_transaction' THEN
+    IF v_kind='adopt_legacy' THEN
+      IF jsonb_typeof(p_command->'goalId') IS DISTINCT FROM 'string'
+        OR jsonb_typeof(p_command->'status') IS DISTINCT FROM 'string' OR p_command->>'status' NOT IN ('active','completed','cancelled')
+        OR jsonb_typeof(p_command->'reservations') IS DISTINCT FROM 'array'
+        OR jsonb_typeof(p_command->'spentTransactionIds') IS DISTINCT FROM 'array'
+        OR p_command - ARRAY['kind','goalId','status','reservations','spentTransactionIds'] <> '{}'::jsonb THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+      v_goal_id := (p_command->>'goalId')::uuid;
+      FOR v_value IN SELECT value FROM jsonb_array_elements(p_command->'reservations') LOOP
+        IF jsonb_typeof(v_value->'accountId') IS DISTINCT FROM 'string' OR jsonb_typeof(v_value->'amount') IS DISTINCT FROM 'string'
+          OR v_value - ARRAY['accountId','amount'] <> '{}'::jsonb
+          OR (v_value->>'amount') !~ '^(0|[1-9][0-9]{0,12})\.[0-9]{2}$'
+          OR (v_value->>'amount')::numeric<=0 THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+        v_reservations := v_reservations || jsonb_build_array(jsonb_build_object('accountId',(v_value->>'accountId')::uuid,'amount',v_value->>'amount'));
+      END LOOP;
+      FOR v_value IN SELECT value FROM jsonb_array_elements(p_command->'spentTransactionIds') LOOP
+        IF jsonb_typeof(v_value)<>'string' THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+        v_spent_ids := v_spent_ids || jsonb_build_array((v_value#>>'{}')::uuid);
+      END LOOP;
+      IF (SELECT count(*)<>count(DISTINCT value->>'accountId') FROM jsonb_array_elements(v_reservations))
+        OR (SELECT count(*)<>count(DISTINCT value) FROM jsonb_array_elements(v_spent_ids)) THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+      SELECT coalesce(jsonb_agg(value ORDER BY value->>'accountId'),'[]') INTO v_reservations FROM jsonb_array_elements(v_reservations);
+      SELECT coalesce(jsonb_agg(value ORDER BY value#>>'{}'),'[]') INTO v_spent_ids FROM jsonb_array_elements(v_spent_ids);
+      v_command := jsonb_build_object('kind',v_kind,'goalId',v_goal_id,'status',p_command->>'status','reservations',v_reservations,'spentTransactionIds',v_spent_ids);
+    ELSIF v_kind='delete_transaction' THEN
       IF jsonb_typeof(p_command->'transactionId') IS DISTINCT FROM 'string' THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
       v_transaction_id := (p_command->>'transactionId')::uuid;
       v_command := jsonb_build_object('kind',v_kind,'transactionId',v_transaction_id);
@@ -753,7 +777,7 @@ BEGIN
           CASE WHEN v_target_id IS NOT NULL THEN jsonb_build_object('mode','move','goalId',v_target_id) ELSE p_command->'leftovers' END);
       END IF;
     END IF;
-    IF p_command<>v_command THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    IF v_kind<>'adopt_legacy' AND p_command<>v_command THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
   EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'INVALID_STATE'; END;
   v_hash := encode(sha256(convert_to(v_command::text,'UTF8')),'hex');
   PERFORM id FROM public.users WHERE id=v_owner FOR UPDATE;
@@ -766,7 +790,45 @@ BEGIN
   END IF;
   PERFORM id FROM public.goals WHERE user_id=v_owner ORDER BY id FOR UPDATE;
   PERFORM id FROM public.accounts WHERE user_id=v_owner ORDER BY id FOR UPDATE;
-  IF v_kind<>'delete_transaction' THEN
+  IF v_kind='adopt_legacy' THEN
+    SELECT * INTO v_goal FROM public.goals WHERE user_id=v_owner AND id=v_goal_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+    IF v_goal.review_state<>'needs_review' OR v_goal.archived_at IS NOT NULL
+      OR EXISTS(SELECT 1 FROM public.goal_allocation_events WHERE user_id=v_owner AND goal_id=v_goal_id)
+      OR (p_command->>'status'<>'active' AND jsonb_array_length(v_reservations)>0) THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    FOR v_value IN SELECT value FROM jsonb_array_elements(v_reservations) LOOP
+      SELECT * INTO v_src FROM public.accounts WHERE user_id=v_owner AND id=(v_value->>'accountId')::uuid;
+      IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+      IF v_src.is_active IS DISTINCT FROM true OR v_src.currency IS DISTINCT FROM 'PHP' OR v_src.type='credit_card' THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+      SELECT coalesce(sum(reserved_delta),0) INTO v_reserved FROM public.goal_allocation_events WHERE user_id=v_owner AND account_id=v_src.id;
+      IF coalesce(v_src.balance,0)-v_reserved<(v_value->>'amount')::numeric THEN RAISE EXCEPTION 'INSUFFICIENT_AVAILABLE'; END IF;
+    END LOOP;
+    FOR v_value IN SELECT value FROM jsonb_array_elements(v_spent_ids) LOOP
+      SELECT * INTO v_tx FROM public.transactions WHERE user_id=v_owner AND id=(v_value#>>'{}')::uuid FOR UPDATE;
+      IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+      SELECT * INTO v_src FROM public.accounts WHERE user_id=v_owner AND id=v_tx.account_id;
+      IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+      IF v_src.type='credit_card' OR v_src.currency IS DISTINCT FROM 'PHP' OR v_src.is_active IS DISTINCT FROM true
+        OR v_tx.amount<=0 OR EXISTS(SELECT 1 FROM public.goal_allocation_events WHERE transaction_id=v_tx.id AND kind IN ('spend','legacy_spent')) THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+      IF v_tx.type='transfer' THEN
+        SELECT * INTO v_dst FROM public.accounts WHERE user_id=v_owner AND id=v_tx.transfer_to_account_id;
+        IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+        IF v_goal.category IS DISTINCT FROM 'debt' OR v_dst.type<>'credit_card' OR v_dst.currency IS DISTINCT FROM 'PHP' OR v_dst.is_active IS DISTINCT FROM true THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+      ELSIF v_tx.type<>'expense' OR v_tx.transfer_to_account_id IS NOT NULL THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    END LOOP;
+    INSERT INTO public.financial_operations(user_id,request_id,command_hash,command) VALUES(v_owner,p_request_id,v_hash,v_command) RETURNING id INTO v_operation;
+    FOR v_value IN SELECT value FROM jsonb_array_elements(v_reservations) LOOP
+      INSERT INTO public.goal_allocation_events(user_id,goal_id,account_id,operation_id,kind,reserved_delta)
+        VALUES(v_owner,v_goal_id,(v_value->>'accountId')::uuid,v_operation,'reserve',(v_value->>'amount')::numeric);
+    END LOOP;
+    FOR v_value IN SELECT value FROM jsonb_array_elements(v_spent_ids) LOOP
+      SELECT * INTO v_tx FROM public.transactions WHERE user_id=v_owner AND id=(v_value#>>'{}')::uuid;
+      INSERT INTO public.goal_allocation_events(user_id,goal_id,account_id,operation_id,kind,reserved_delta,spent_delta,transaction_id)
+        VALUES(v_owner,v_goal_id,v_tx.account_id,v_operation,'legacy_spent',0,v_tx.amount,v_tx.id);
+    END LOOP;
+    UPDATE public.goals SET review_state='confirmed',status=p_command->>'status',is_completed=(p_command->>'status'='completed'),
+      completed_at=CASE WHEN p_command->>'status'='completed' THEN coalesce(completed_at,now()) ELSE NULL END WHERE user_id=v_owner AND id=v_goal_id;
+  ELSIF v_kind<>'delete_transaction' THEN
     SELECT * INTO v_goal FROM public.goals WHERE user_id=v_owner AND id=v_goal_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
     IF v_goal.review_state<>'confirmed' THEN RAISE EXCEPTION 'NEEDS_REVIEW'; END IF;
@@ -873,5 +935,85 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.goal_finance_apply(uuid,jsonb,jsonb) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.goal_finance_apply(uuid,jsonb,jsonb) TO authenticated,service_role;
+NOTIFY pgrst, 'reload schema';
+COMMIT;
+
+BEGIN;
+CREATE UNIQUE INDEX IF NOT EXISTS allocation_legacy_spent_once ON public.goal_allocation_events(transaction_id) WHERE kind='legacy_spent';
+
+REVOKE ALL ON public.transactions,public.goal_allocation_events,public.financial_operations FROM PUBLIC,anon,authenticated;
+GRANT SELECT ON public.transactions,public.goal_allocation_events,public.financial_operations TO authenticated;
+REVOKE ALL ON public.accounts,public.goals FROM PUBLIC,anon,authenticated;
+-- Remove column grants left by previous deployments before applying the reviewed allowlist.
+DO $$ DECLARE v_table text; v_columns text; BEGIN
+  FOREACH v_table IN ARRAY ARRAY['accounts','goals','transactions','goal_allocation_events','financial_operations'] LOOP
+    SELECT string_agg(quote_ident(attname),',') INTO v_columns FROM pg_attribute WHERE attrelid=('public.'||v_table)::regclass AND attnum>0 AND NOT attisdropped;
+    EXECUTE format('REVOKE ALL (%s) ON public.%I FROM PUBLIC,anon,authenticated',v_columns,v_table);
+  END LOOP;
+END $$;
+GRANT SELECT ON public.accounts,public.goals TO authenticated;
+GRANT INSERT(user_id,name,type,balance,currency,color,icon,is_active,is_savings,interest_rate,include_in_networth,display_order) ON public.accounts TO authenticated;
+GRANT UPDATE(name,color,icon,display_order,interest_rate,include_in_networth) ON public.accounts TO authenticated;
+GRANT DELETE ON public.accounts TO authenticated;
+GRANT INSERT(user_id,name,target_amount,current_amount,target_date,color,icon,is_completed,is_priority,category,allocation_per_cycle,allocation_frequency) ON public.goals TO authenticated;
+GRANT UPDATE(name,target_amount,target_date,color,icon,is_priority,category,allocation_per_cycle,allocation_frequency) ON public.goals TO authenticated;
+DO $$ DECLARE v_table text; BEGIN
+  FOREACH v_table IN ARRAY ARRAY['accounts','goals','transactions','goal_allocation_events','financial_operations'] LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',v_table);
+    EXECUTE format('DROP POLICY IF EXISTS finance_owner_boundary ON public.%I',v_table);
+    EXECUTE format('CREATE POLICY finance_owner_boundary ON public.%I AS RESTRICTIVE FOR ALL TO authenticated USING(auth.uid()=user_id) WITH CHECK(auth.uid()=user_id)',v_table);
+  END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.guard_financial_identity() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+BEGIN
+  IF TG_OP='DELETE' THEN
+    IF NOT EXISTS(SELECT 1 FROM public.users WHERE id=OLD.user_id) THEN RETURN OLD; END IF;
+    IF EXISTS(SELECT 1 FROM public.goal_allocation_events WHERE account_id=OLD.id)
+      OR EXISTS(SELECT 1 FROM public.transactions WHERE account_id=OLD.id OR transfer_to_account_id=OLD.id) THEN
+      RAISE EXCEPTION 'Wallet with financial history cannot be deleted' USING ERRCODE='23503';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF TG_TABLE_NAME='accounts' AND TG_OP='UPDATE' THEN
+    IF (NEW.id,NEW.user_id,NEW.type,NEW.currency,NEW.is_active) IS DISTINCT FROM (OLD.id,OLD.user_id,OLD.type,OLD.currency,OLD.is_active)
+      AND EXISTS(SELECT 1 FROM public.goal_allocation_events WHERE account_id=OLD.id) THEN
+      RAISE EXCEPTION 'Wallet identity with allocation history cannot change' USING ERRCODE='55000';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.guard_financial_opening() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+BEGIN
+  IF current_user='authenticated' THEN
+    IF NEW.user_id IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'NOT_ALLOWED'; END IF;
+    IF TG_TABLE_NAME='accounts' THEN
+      IF NEW.balance IS NULL OR NEW.balance<0 OR NEW.currency IS DISTINCT FROM 'PHP' OR NEW.is_active IS DISTINCT FROM true THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    ELSE
+      IF NEW.current_amount IS DISTINCT FROM 0 OR NEW.is_completed IS DISTINCT FROM false OR NEW.status<>'active'
+        OR NEW.review_state<>'confirmed' OR NEW.completed_at IS NOT NULL OR NEW.archived_at IS NOT NULL THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS financial_identity_guard ON public.accounts;
+CREATE TRIGGER financial_identity_guard BEFORE UPDATE OR DELETE ON public.accounts FOR EACH ROW EXECUTE FUNCTION public.guard_financial_identity();
+DROP TRIGGER IF EXISTS financial_opening_guard ON public.accounts;
+CREATE TRIGGER financial_opening_guard BEFORE INSERT ON public.accounts FOR EACH ROW EXECUTE FUNCTION public.guard_financial_opening();
+DROP TRIGGER IF EXISTS financial_opening_guard ON public.goals;
+CREATE TRIGGER financial_opening_guard BEFORE INSERT ON public.goals FOR EACH ROW EXECUTE FUNCTION public.guard_financial_opening();
+
+-- Unknown deployed definer RPCs fail closed until their complete signatures and bodies are reviewed.
+DO $$ DECLARE v_function record; BEGIN
+  FOR v_function IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public' AND p.prokind='f' AND (p.prosecdef OR p.proname LIKE 'goal_%' OR p.proname LIKE 'guard_financial_%')
+      AND p.oid NOT IN ('public.goal_finance_snapshot()'::regprocedure,'public.goal_transaction_quote(jsonb,jsonb)'::regprocedure,'public.goal_finance_apply(uuid,jsonb,jsonb)'::regprocedure)
+  LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated,service_role',v_function.signature); END LOOP;
+END $$;
+REVOKE ALL ON FUNCTION public.goal_finance_snapshot(),public.goal_transaction_quote(jsonb,jsonb),public.goal_finance_apply(uuid,jsonb,jsonb) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.goal_finance_snapshot(),public.goal_transaction_quote(jsonb,jsonb),public.goal_finance_apply(uuid,jsonb,jsonb) TO authenticated,service_role;
 NOTIFY pgrst, 'reload schema';
 COMMIT;

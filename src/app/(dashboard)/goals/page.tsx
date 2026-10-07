@@ -14,6 +14,7 @@ import AddTransactionModal from "@/components/transactions/AddTransactionModal";
 import { GoalFundsDialog } from "@/components/goals/GoalFundsDialog";
 import { GoalCompletionDialog } from "@/components/goals/GoalCompletionDialog";
 import { GoalHistoryDialog } from "@/components/goals/GoalHistoryDialog";
+import { LegacyGoalReviewDialog } from "@/components/goals/LegacyGoalReviewDialog";
 import { GoalCardSkeleton } from "@/components/goals/GoalCardSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SummarySkeleton, summaryPanelClass } from "@/components/ui/financial-summary";
@@ -31,6 +32,7 @@ export default function GoalsPage() {
   const [fundsAction, setFundsAction] = useState<FundsAction | null>(null);
   const [closingAction, setClosingAction] = useState<ClosingAction | null>(null);
   const [historyGoalId, setHistoryGoalId] = useState<string | null>(null);
+  const [reviewGoalId, setReviewGoalId] = useState<string | null>(null);
 
   const totals = useMemo(() => {
     let targetCents = 0;
@@ -90,7 +92,7 @@ export default function GoalsPage() {
       onRelease={goalId => setFundsAction({ goalId, mode: "release" })}
       onMove={goalId => setFundsAction({ goalId, mode: "move" })}
       onClose={(goalId, status) => setClosingAction({ goalId, status })}
-      onHistory={setHistoryGoalId} />
+      onHistory={setHistoryGoalId} onReview={setReviewGoalId} />
   );
 
   return (
@@ -163,6 +165,7 @@ export default function GoalsPage() {
       <GoalFundsDialog goalId={fundsAction?.goalId ?? ""} mode={fundsAction?.mode ?? "reserve"} open={fundsAction !== null} onOpenChange={open => { if (!open) setFundsAction(null); }} />
       <GoalCompletionDialog goalId={closingAction?.goalId ?? ""} status={closingAction?.status ?? "completed"} open={closingAction !== null} onOpenChange={open => { if (!open) setClosingAction(null); }} />
       <GoalHistoryDialog goalId={historyGoalId ?? ""} open={historyGoalId !== null} onOpenChange={open => { if (!open) setHistoryGoalId(null); }} />
+      <LegacyGoalReviewDialog goalId={reviewGoalId ?? ""} open={reviewGoalId !== null} onOpenChange={open => { if (!open) setReviewGoalId(null); }} />
     </div>
   );
 }

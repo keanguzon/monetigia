@@ -83,3 +83,4 @@ scripts/
 
 !supabase/migrations/202610060004_goal_transaction_operations.sql
 !supabase/migrations/202610060005_goal_lifecycle_operations.sql
+!supabase/migrations/202610060006_goal_write_guards.sql

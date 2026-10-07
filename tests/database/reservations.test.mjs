@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, test } from 'node:test';
+import { after, before, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, requireSuccess } from './helpers.mjs';
@@ -16,6 +16,9 @@ before(async () => {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   throw new Error('PostgREST did not reload goal_finance_snapshot');
+});
+after(async () => {
+  for (const filename of ['202610060004_goal_transaction_operations.sql','202610060005_goal_lifecycle_operations.sql','202610060006_goal_write_guards.sql']) await applyMigration(filename);
 });
 
 async function setup(t) {
@@ -86,7 +89,7 @@ test('foreign and missing account/goal references fail without writes', async t 
 test('credit, non-PHP and inactive wallets cannot be reserved', async t => {
   const f = await setup(t);
   for (const overrides of [{ type: 'credit_card' }, { currency: 'USD' }, { is_active: false }]) {
-    const wallet = requireSuccess(await f.owner.client.from('accounts').insert({ user_id: f.owner.id, name: 'Ineligible', type: 'cash', balance: '30000.00', ...overrides }).select().single());
+    const wallet = requireSuccess(await f.admin.from('accounts').insert({ user_id: f.owner.id, name: 'Ineligible', type: 'cash', balance: '30000.00', ...overrides }).select().single());
     await expectFailure(f, command(f, 'reserve', '1.00', { accountId: wallet.id }), 'NOT_ALLOWED');
   }
 });
@@ -102,7 +105,7 @@ test('closed, archived and unreviewed goals reject allocation changes', async t 
 test('reallocation validates destination and rejects moving to the same goal', async t => {
   const f = await setup(t);
   requireSuccess(await apply(f, command(f)));
-  const destination = requireSuccess(await f.owner.client.from('goals').insert({ user_id: f.owner.id, name: 'Closed', target_amount: '1000.00', status: 'completed' }).select().single());
+  const destination = requireSuccess(await f.admin.from('goals').insert({ user_id: f.owner.id, name: 'Closed', target_amount: '1000.00', status: 'completed' }).select().single());
   await expectFailure(f, command(f, 'reallocate', '1.00', { destinationGoalId: destination.id }), 'INVALID_STATE');
   requireSuccess(await f.admin.from('goals').update({ status: 'active', review_state: 'needs_review' }).eq('id', destination.id));
   await expectFailure(f, command(f, 'reallocate', '1.00', { destinationGoalId: destination.id }), 'NEEDS_REVIEW');
@@ -160,7 +163,7 @@ test('concurrent duplicate requests append a single event', async t => {
 test('snapshot is owned, read-only, retains archived metadata and separates legacy tags', async t => {
   const f = await setup(t);
   requireSuccess(await f.admin.from('goals').update({ review_state: 'needs_review', current_amount: '999.99' }).eq('id', f.owner.goal.id));
-  const archived = requireSuccess(await f.owner.client.from('goals').insert({ user_id: f.owner.id, name: 'Historical name', target_amount: '5000.00', status: 'cancelled', archived_at: '2026-10-06T00:00:00Z' }).select().single());
+  const archived = requireSuccess(await f.admin.from('goals').insert({ user_id: f.owner.id, name: 'Historical name', target_amount: '5000.00', status: 'cancelled', archived_at: '2026-10-06T00:00:00Z' }).select().single());
   for (const [type, amount] of [['expense', '123.45'], ['transfer', '76.55'], ['income', '500.00']]) {
     requireSuccess(await f.admin.from('transactions').insert({ user_id: f.owner.id, account_id: f.owner.account.id, goal_id: f.owner.goal.id, type, amount, date: '2026-10-06' }));
   }

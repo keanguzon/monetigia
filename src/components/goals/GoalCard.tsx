@@ -36,15 +36,17 @@ interface GoalCardProps {
   onMove: (goalId: string) => void;
   onHistory: (goalId: string) => void;
   onClose?: (goalId: string, status: "completed" | "cancelled") => void;
+  onReview?: (goalId: string) => void;
 }
 
-export function GoalCard({ goal, onEdit, onDelete, onToggleComplete, onContribute, onReserve, onRelease, onMove, onHistory, onClose }: GoalCardProps) {
+export function GoalCard({ goal, onEdit, onDelete, onToggleComplete, onContribute, onReserve, onRelease, onMove, onHistory, onClose, onReview }: GoalCardProps) {
   const projection = getProjection(goal);
   const progressCents = toMinorUnits(goal.financeAmounts.progress);
   const targetCents = toMinorUnits(goal.financeAmounts.target);
   const isCompleted = goal.status === "completed";
   const isCancelled = goal.status === "cancelled";
   const isActive = goal.status === "active";
+  const needsReview = goal.review_state === "needs_review";
   const activeFunded = isActive && progressCents >= targetCents;
   const displayedProgress = isCompleted ? goal.spent : goal.financeAmounts.progress;
   const percent = isCompleted ? (targetCents ? Math.min(100, toMinorUnits(goal.spent) / targetCents * 100) : 0) : goal.progressPercent;
@@ -78,15 +80,15 @@ export function GoalCard({ goal, onEdit, onDelete, onToggleComplete, onContribut
               <DropdownMenu.Content align="end" sideOffset={6} className="z-[60] min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
                 <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onHistory(goal.id)}><History className="h-4 w-4" />View history</DropdownMenu.Item>
                 <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onEdit(goal)}><Edit2 className="h-4 w-4" />Edit goal</DropdownMenu.Item>
-                {isActive && <>
+                {isActive && !needsReview && <>
                   <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onRelease(goal.id)} disabled={!hasReservations}>Release funds</DropdownMenu.Item>
                   <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onMove(goal.id)} disabled={!hasReservations}>Move reservation</DropdownMenu.Item>
                   <DropdownMenu.Separator className="my-1 h-px bg-border" />
                   <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onClose ? onClose(goal.id, "completed") : onToggleComplete(goal.id, true)}>Complete goal</DropdownMenu.Item>
                   <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onClose?.(goal.id, "cancelled")}>Cancel goal</DropdownMenu.Item>
                 </>}
-                {isCompleted && <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onToggleComplete(goal.id, false)}><Circle className="h-4 w-4" />Reopen</DropdownMenu.Item>}
-                {!isActive && !hasReservations && <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm text-destructive outline-none focus:bg-accent" onSelect={() => onDelete(goal.id)}><Trash2 className="h-4 w-4" />Archive goal</DropdownMenu.Item>}
+                {isCompleted && !needsReview && <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm outline-none focus:bg-accent" onSelect={() => onToggleComplete(goal.id, false)}><Circle className="h-4 w-4" />Reopen</DropdownMenu.Item>}
+                {!isActive && !needsReview && !hasReservations && <DropdownMenu.Item className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm text-destructive outline-none focus:bg-accent" onSelect={() => onDelete(goal.id)}><Trash2 className="h-4 w-4" />Archive goal</DropdownMenu.Item>}
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
@@ -107,7 +109,8 @@ export function GoalCard({ goal, onEdit, onDelete, onToggleComplete, onContribut
         </div>
       </div>
 
-      {isActive && <div className="mt-2 grid grid-cols-2 gap-2">
+      {needsReview && <div className="mt-2 space-y-2"><p className="text-xs text-muted-foreground">Existing tags need review before they count as funding.</p><Button variant="outline" className="h-11 min-h-11 w-full" onClick={() => onReview?.(goal.id)}>Review existing funding</Button></div>}
+      {isActive && !needsReview && <div className="mt-2 grid grid-cols-2 gap-2">
         <Button variant="outline" size="sm" className="h-11 min-h-11" onClick={() => onReserve(goal.id)}>Set aside</Button>
         <Button size="sm" className="h-11 min-h-11" onClick={() => onContribute(goal.id)}>Spend from goal</Button>
       </div>}
@@ -120,8 +123,8 @@ export function GoalCard({ goal, onEdit, onDelete, onToggleComplete, onContribut
             : Number(goal.allocation_per_cycle) > 0 ? <div className="space-y-0.5"><span className="flex items-center gap-1 text-[11px] font-medium text-foreground"><Clock className="h-3 w-3 text-muted-foreground" />Saving · ~{projection.count} {projection.unit}</span>{formattedProjectedDate && <span className="block text-[10px] text-muted-foreground">Estimate: {formattedProjectedDate}</span>}</div>
             : <span className="text-[11px] text-muted-foreground">Saving</span>}
         </div>
-        {isActive && !activeFunded && <Button variant="ghost" size="sm" className="h-11 min-h-11 shrink-0 px-2 text-xs" onClick={() => onClose ? onClose(goal.id, "completed") : onToggleComplete(goal.id, true)}>Complete</Button>}
-        {isCompleted && <Button variant="ghost" size="sm" className="h-11 min-h-11 shrink-0 px-2 text-xs" onClick={() => onToggleComplete(goal.id, false)}>Reopen</Button>}
+        {isActive && !needsReview && !activeFunded && <Button variant="ghost" size="sm" className="h-11 min-h-11 shrink-0 px-2 text-xs" onClick={() => onClose ? onClose(goal.id, "completed") : onToggleComplete(goal.id, true)}>Complete</Button>}
+        {isCompleted && !needsReview && <Button variant="ghost" size="sm" className="h-11 min-h-11 shrink-0 px-2 text-xs" onClick={() => onToggleComplete(goal.id, false)}>Reopen</Button>}
       </div>
     </article>
   );

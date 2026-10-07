@@ -251,6 +251,10 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
       if (type === "transfer" && (!transferToAccountId || transferToAccountId === effectiveAccountId)) { setFormError("Choose a different destination wallet."); return; }
       const cashTransfer = type === "transfer" && !isDebtPayment;
       const selectedGoalId = type === "income" ? null : goalId || null;
+      if (selectedGoalId && financeSnapshot?.goals.find(goal => goal.id === selectedGoalId)?.review_state === "needs_review") {
+        setFormError("Review existing funding on the Goals page before using this goal.");
+        return;
+      }
       await submit.quote({
         type, accountId: effectiveAccountId, transferToAccountId: type === "transfer" ? transferToAccountId : null,
         categoryId: type === "transfer" ? null : categoryId || null, goalId: cashTransfer ? null : selectedGoalId,
