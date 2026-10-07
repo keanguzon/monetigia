@@ -24,3 +24,13 @@ Branch: `codex/goal-reservations`
 ## Review boundary
 
 No migration, schema, deployment, push, or merge was performed. The debt audit is documented for an authorized pre-cutover operator; it still requires statement evidence and a read-only review against the actual deployment data.
+
+## Review fix round 1
+
+- Added a monotonically increasing AccountsPage load revision. Every asynchronous boundary checks that its load remains current before writing state; stale catch/finally handlers cannot replace errors or clear loading. Account query changes/errors and effect cleanup invalidate outstanding loads, including on unmount.
+- Shared the effective account collection between the wallet summary and its account-count caption, including locally saved inclusion flags.
+- Added six focused behavior regressions: old debt success, old debt failure, old completion while the new load remains pending, delayed authentication with older account metadata, account-query failure while debt is pending, and the locally saved inclusion toggle's caption/amount scope.
+- TDD evidence: before the fix, the two stale debt cases removed the newer PHP 300 debt and the caption remained at one account after the amount rose to PHP 150,000 (3 failed, 5 passed). After the fix, all focused regressions pass.
+- Final verification: `npm test` exit 0, Node 2/2 and Vitest 8 files / 122 tests; Wallets test file 11/11. `npx tsc --noEmit` exit 0. Existing no-fabricated-zero, no-fetch-balance-write, preview and month-filter tests remain passing.
+- antislop scope gate PASS: the existing layout, visual styles, copy, wallet actions, APY controls, order, debt filters and previews were preserved. The only caption change is using the same account inclusion collection as the amounts; the toggle behavior test exercises that scope.
+- No dependencies, SQL, live database access, push or merge. Root ledger/plan/review files were not edited by this fix.

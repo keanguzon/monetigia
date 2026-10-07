@@ -1,6 +1,6 @@
 import React from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SWRConfig } from "swr";
 import AccountsPage from "@/app/(dashboard)/accounts/page";
@@ -29,6 +29,9 @@ const fixture = vi.hoisted(() => {
     accountWrites: [] as any[],
     applyCalls: [] as any[],
     accountReads: 0,
+    transactionResponses: [] as Promise<any>[],
+    transactionReads: 0,
+    authResponses: [] as Promise<any>[],
   };
 });
 
@@ -38,7 +41,7 @@ vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: vi.fn() 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: {
-      getUser: async () => ({ data: { user: { id: fixture.userId } }, error: null }),
+      getUser: async () => fixture.authResponses.shift() ?? ({ data: { user: { id: fixture.userId } }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
     from: (table: string) => {
@@ -63,6 +66,9 @@ vi.mock("@/lib/supabase/client", () => ({
             return Promise.resolve({ data: fixture.accounts, error: fixture.accountReadError }).then(resolve, reject);
           }
           if (table === "transactions") {
+            fixture.transactionReads += 1;
+            const pending = fixture.transactionResponses.shift();
+            if (pending) return pending.then(resolve, reject);
             return Promise.resolve({ data: fixture.transactions, error: fixture.transactionReadError }).then(resolve, reject);
           }
           return Promise.resolve({ data: [], error: null }).then(resolve, reject);
@@ -146,12 +152,89 @@ beforeEach(() => {
   fixture.accountWrites = [];
   fixture.applyCalls = [];
   fixture.accountReads = 0;
+  fixture.transactionReads = 0;
+  fixture.transactionResponses = [];
+  fixture.authResponses = [];
 });
 
 afterEach(() => {
   cleanup();
   cache.clear();
   vi.clearAllMocks();
+});
+
+test.each([false, true])("newer debt refresh survives an older response (old failure: %s)", async oldFailure => {
+  let resolveOld!: (value: any) => void;
+  fixture.transactionResponses = [new Promise(resolve => { resolveOld = resolve; })];
+  render(<><AccountsPage /><FinanceOperation command={{ kind: "reserve" }} label="Refresh finance" /></>, { wrapper });
+  await waitFor(() => expect(fixture.transactionReads).toBe(1));
+  fixture.accounts = makeAccounts().map(account => ({ ...account, name: account.id === fixture.cashId ? "Fresh wallet" : account.name }));
+  fixture.transactions = [{ ...makeTransactions()[4], amount: 300 }];
+  fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
+  await waitFor(() => expect(fixture.transactionReads).toBe(2));
+  await screen.findAllByText(`-${formatCurrency(300)}`);
+  await act(async () => resolveOld({ data: makeTransactions(), error: oldFailure ? new Error("stale debt failure") : null }));
+  expect(screen.queryAllByText(`-${formatCurrency(300)}`).length).toBeGreaterThan(0);
+  expect(screen.queryByText("Unavailable")).toBeNull();
+  expect(screen.getByText("Fresh wallet")).not.toBeNull();
+  expect(fixture.accountWrites).toHaveLength(0);
+});
+
+test("wallet inclusion toggle keeps the summary caption and balance in the same scope", async () => {
+  render(<AccountsPage />, { wrapper });
+  await screen.findByLabelText("Net worth balance");
+  fireEvent.click(document.getElementById(`tile-networth-${fixture.excludedId}`)!);
+  await waitFor(() => expect(screen.getByLabelText("Actual wallet balance").getAttribute("data-money")).toBe("150000.00"));
+  expect(screen.getByText(/Aggregated balance across 2 accounts/)).not.toBeNull();
+});
+
+test("an older completed load cannot end a newer debt loading state", async () => {
+  let resolveOld!: (value: any) => void;
+  let resolveNew!: (value: any) => void;
+  fixture.transactionResponses = [
+    new Promise(resolve => { resolveOld = resolve; }),
+    new Promise(resolve => { resolveNew = resolve; }),
+  ];
+  render(<><AccountsPage /><FinanceOperation command={{ kind: "reserve" }} label="Refresh finance" /></>, { wrapper });
+  await waitFor(() => expect(fixture.transactionReads).toBe(1));
+  fixture.accounts = makeAccounts().map(account => ({ ...account, name: `${account.name} refreshed` }));
+  fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
+  await waitFor(() => expect(fixture.transactionReads).toBe(2));
+  await act(async () => resolveOld({ data: makeTransactions(), error: null }));
+  expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain("...");
+  expect(screen.queryByLabelText("Net worth balance")).toBeNull();
+  await act(async () => resolveNew({ data: [{ ...makeTransactions()[4], amount: 300 }], error: null }));
+  expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain(`-${formatCurrency(300)}`);
+});
+
+test("late authentication cannot replace newer account metadata", async () => {
+  render(<><AccountsPage /><FinanceOperation command={{ kind: "reserve" }} label="Refresh finance" /></>, { wrapper });
+  await screen.findByLabelText("Net worth balance");
+  let resolveAuth!: (value: any) => void;
+  const authenticated = { data: { user: { id: fixture.userId } }, error: null };
+  fixture.authResponses = [Promise.resolve(authenticated), new Promise(resolve => { resolveAuth = resolve; })];
+  fixture.accounts = makeAccounts().map(account => ({ ...account, name: account.id === fixture.cashId ? "Old wallet" : account.name }));
+  fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
+  await waitFor(() => expect(fixture.authResponses).toHaveLength(0));
+  fixture.accounts = makeAccounts().map(account => ({ ...account, name: account.id === fixture.cashId ? "Newest wallet" : account.name }));
+  fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
+  await screen.findByText("Newest wallet");
+  await act(async () => resolveAuth(authenticated));
+  expect(screen.getByText("Newest wallet")).not.toBeNull();
+  expect(screen.queryByText("Old wallet")).toBeNull();
+});
+
+test("an account query failure invalidates outstanding debt reads", async () => {
+  let resolveOld!: (value: any) => void;
+  fixture.transactionResponses = [new Promise(resolve => { resolveOld = resolve; })];
+  render(<><AccountsPage /><FinanceOperation command={{ kind: "reserve" }} label="Refresh finance" /></>, { wrapper });
+  await waitFor(() => expect(fixture.transactionReads).toBe(1));
+  fixture.accountReadError = new Error("accounts unavailable");
+  fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
+  await screen.findByText(/wallet balances could not be loaded/i);
+  await act(async () => resolveOld({ data: makeTransactions(), error: null }));
+  expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain("Unavailable");
+  expect(screen.queryByLabelText("Net worth balance")).toBeNull();
 });
 
 test("reservations update the mounted Wallets summary without changing its net worth", async () => {

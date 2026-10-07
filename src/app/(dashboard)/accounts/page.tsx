@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ export default function AccountsPage() {
   const supabase = createClient();
   const sb = supabase as any;
   const accountsQuery = useAccounts();
+  const loadRevision = useRef(0);
   const goals = useGoals();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -68,6 +69,7 @@ export default function AccountsPage() {
   };
 
   useEffect(() => {
+    loadRevision.current += 1;
     if (accountsQuery.error) {
       setAccountLoadError(accountsQuery.error);
       setDebtLoadError(accountsQuery.error);
@@ -78,6 +80,7 @@ export default function AccountsPage() {
     }
     if (accountsQuery.data === undefined) return;
     void loadAccounts(accountsQuery.data);
+    return () => { loadRevision.current += 1; };
   }, [accountsQuery.data, accountsQuery.error]);
 
   useEffect(() => {
@@ -251,6 +254,8 @@ export default function AccountsPage() {
   const isCustomAccount = (account: any) => !account.icon && account.name !== "Cash on Hand";
 
   const loadAccounts = async (providedAccounts?: any[]) => {
+    const revision = ++loadRevision.current;
+    const isCurrentLoad = () => revision === loadRevision.current;
     setIsLoading(true);
     setAccountLoadError(null);
     setIsDebtLoading(true);
@@ -258,6 +263,7 @@ export default function AccountsPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      if (!isCurrentLoad()) return;
       if (!user?.id) throw new Error("Not authenticated");
 
       let accountsList: any[];
@@ -271,12 +277,15 @@ export default function AccountsPage() {
           .order("display_order", { ascending: true })
           .order("created_at", { ascending: true });
 
+        if (!isCurrentLoad()) return;
+
         if (error) {
           const { data: fallbackData, error: fallbackError } = await supabase
             .from("accounts")
             .select("*")
             .eq("user_id", user.id)
             .order("created_at", { ascending: true });
+          if (!isCurrentLoad()) return;
           if (fallbackError) throw fallbackError;
           accountsList = fallbackData || [];
         } else {
@@ -289,6 +298,7 @@ export default function AccountsPage() {
       setAccounts(accountsList);
       if (providedAccounts === undefined) {
         await accountsQuery.mutate(accountsList, { revalidate: false });
+        if (!isCurrentLoad()) return;
       }
 
       const creditIds = accountsList
@@ -322,6 +332,8 @@ export default function AccountsPage() {
         txData = null;
         txError = error;
       }
+
+      if (!isCurrentLoad()) return;
 
       if (txError) {
         setDebtLoadError(txError);
@@ -376,11 +388,14 @@ export default function AccountsPage() {
       setDebtByMonth(normalizedByMonth);
       setExpenseItemsByMonth(itemsByMonth);
     } catch (error) {
+      if (!isCurrentLoad()) return;
       setAccountLoadError(error);
       setDebtLoadError(error);
     } finally {
-      setIsLoading(false);
-      setIsDebtLoading(false);
+      if (isCurrentLoad()) {
+        setIsLoading(false);
+        setIsDebtLoading(false);
+      }
     }
   };
 
@@ -437,15 +452,18 @@ export default function AccountsPage() {
     setIsEditingOrder(false);
   };
 
+  const summaryAccounts = useMemo(() => {
+    const localInclusion = new Map(accounts.map(account => [account.id, account.include_in_networth]));
+    return (accountsQuery.data ?? accounts).map(account =>
+      localInclusion.has(account.id)
+        ? { ...account, include_in_networth: localInclusion.get(account.id) }
+        : account
+    );
+  }, [accounts, accountsQuery.data]);
+
   const walletSummaryResult = useMemo(() => {
     if (!goals.financeSnapshot) return { summary: null, error: null as unknown };
     try {
-      const localInclusion = new Map(accounts.map(account => [account.id, account.include_in_networth]));
-      const summaryAccounts = (accountsQuery.data ?? accounts).map(account =>
-        localInclusion.has(account.id)
-          ? { ...account, include_in_networth: localInclusion.get(account.id) }
-          : account
-      );
       return {
         summary: summarizeWalletFunds(summaryAccounts, goals.financeSnapshot.wallets),
         error: null as unknown,
@@ -453,7 +471,7 @@ export default function AccountsPage() {
     } catch (error) {
       return { summary: null, error };
     }
-  }, [accounts, accountsQuery.data, goals.financeSnapshot]);
+  }, [summaryAccounts, goals.financeSnapshot]);
   const walletSummaryError = accountsQuery.error || accountLoadError || goals.isError || walletSummaryResult.error ||
     (!goals.isLoading && !goals.financeSnapshot ? new Error("Finance snapshot is unavailable") : null);
   const walletSummaryLoading = isLoading || accountsQuery.isLoading || goals.isLoading;
@@ -573,7 +591,7 @@ export default function AccountsPage() {
                 )}
               </div>
               <div className="text-xs text-muted-foreground">
-                {walletSummaryLoading ? <Skeleton className="h-4 w-64 max-w-full" /> : walletSummaryError ? "Wallet balance details are unavailable." : <>Aggregated balance across {(accountsQuery.data ?? accounts).filter((a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false).length} accounts (excluding credit card debt).</>}
+                {walletSummaryLoading ? <Skeleton className="h-4 w-64 max-w-full" /> : walletSummaryError ? "Wallet balance details are unavailable." : <>Aggregated balance across {summaryAccounts.filter((a: any) => a?.type !== "credit_card" && a?.include_in_networth !== false).length} accounts (excluding credit card debt).</>}
               </div>
             </div>
 
