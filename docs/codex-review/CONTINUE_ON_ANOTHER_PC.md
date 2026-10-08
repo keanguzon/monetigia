@@ -1,3 +1,7 @@
+# Superseded transfer instructions
+
+Use [Beta 1.1 handoff](BETA_1_1_HANDOFF.md) and [resume prompt](RESUME_BETA_1_1_PROMPT.md). The following October 7 notes are historical; their branch and execution instructions are superseded.
+
 # Monetigia handoff, October 7, 2026
 
 Read this before changing code. This records current work and the user's instructions; it does not grant permission to implement deferred features.

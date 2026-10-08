@@ -138,3 +138,23 @@ test('final chronological state keeps debt event storage owner-readable and the 
       [{ cmd: 'SELECT', roles: '{authenticated}' }]);
   }
 });
+
+test('final chronological state dispatches corrections with only the existing public RPC grants', async () => {
+  const { queryAdmin } = await databaseRuntime();
+  const [state] = await queryAdmin(`SELECT
+    position('public.goal_debt_correction_apply' in pg_get_functiondef('public.goal_finance_apply(uuid,jsonb,jsonb)'::regprocedure))>0 AS dispatches_correction,
+    has_function_privilege('authenticated','public.goal_finance_apply(uuid,jsonb,jsonb)','EXECUTE') AS authenticated_dispatch,
+    has_function_privilege('service_role','public.goal_finance_apply(uuid,jsonb,jsonb)','EXECUTE') AS service_dispatch,
+    has_function_privilege('anon','public.goal_finance_apply(uuid,jsonb,jsonb)','EXECUTE') AS anonymous_dispatch,
+    has_function_privilege('authenticated','public.goal_debt_correction_apply(uuid,jsonb,jsonb)','EXECUTE') AS authenticated_handler,
+    has_function_privilege('service_role','public.goal_debt_correction_apply(uuid,jsonb,jsonb)','EXECUTE') AS service_handler`);
+
+  assert.deepEqual(state, {
+    dispatches_correction: true,
+    authenticated_dispatch: true,
+    service_dispatch: true,
+    anonymous_dispatch: false,
+    authenticated_handler: false,
+    service_handler: false,
+  });
+});
