@@ -10,9 +10,9 @@ Authoritative plan: `docs/superpowers/plans/2026-10-08-pending-rollout.md`. Deta
 
 Next, when the user authorizes coding: review 5.2b, then complete Tasks 6a/6b (debt snapshot, legacy adoption, existing debt forms), 7 (selection and unpaid corrections), 8 (description/title editing), and 9 (integrated verification and rollout). Check actual implementation before repeating any checklist item. Landing redesign remains deferred.
 
-## Agent policy
+## Planning boundary
 
-Preferred architecture when available: Sol 6.1 plans/orchestrates and Sol 6.1 Light reviews. The user is now on a Free plan where Sol is unavailable and resumed with Luna. Use models actually available; do not block waiting for Sol or pretend a delegation happened. Gemini Flash High is paused by the latest user instruction after quota/503/transport errors. Use scoped Luna Max for coding only after the user authorizes continuation; if no separate reviewer is available, report that and make the review limitation explicit. No Astra. Do not run two coders against the same scope.
+The user intends to make a fresh plan after transferring this checkpoint. This handoff records project status and requirements; it does not prescribe agent/model assignments. Let the user plan before coding.
 
 Gemini previously encountered 429 quota errors, 503 demand errors, and a disconnected MCP transport. The transport's exact cause was not diagnosed. One overly broad SQL proposal was rejected before application. Do not describe those errors as fixed without checking the bridge.
 
@@ -30,7 +30,7 @@ Gemini previously encountered 429 quota errors, 503 demand errors, and a disconn
 
 ## Transfer
 
-Clone branch `beta-1.1`, run `npm ci`, and restore the private `.env`. Global skills are in the local backup's `global-skills`; copy them into the new user's `.agents/skills`. Project skills are tracked in this repository. Read AGENTS.md and retain antislop `during` as the session choice.
+Clone branch `beta-1.1`, run `npm ci`, and restore the private `.env`. Global skills are in the local backup's `global-skills`; copy them into the new user's `.agents/skills`. Project skills are tracked in this repository. Read AGENTS.md and resolve its skill instructions in the new session.
 
 The local ZIP contains private setup and data exports. Keep it private. Do not commit those files. Codex login credentials are deliberately excluded: sign in again on the new PC. MCP config is a reference, not something to overwrite blindly; update absolute paths and reinstall dependencies. Application bundled skills/plugins are installed through the new Codex app.
 
