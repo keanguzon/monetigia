@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { X, ArrowUpRight, ArrowDownLeft, ArrowLeftRight } from "lucide-react";
@@ -9,7 +9,8 @@ import { GoalSelector } from "@/components/goals/GoalSelector";
 import { useTransactionSubmit } from "@/hooks/use-transaction-submit";
 import { useGoals } from "@/hooks/use-goals";
 import { parseMoney, splitInstallments } from "@/lib/goals/summary";
-import { GoalReleaseNotice } from "./GoalReleaseNotice";
+import { GoalReleaseDialog } from "./GoalReleaseDialog";
+import type { TransactionDraft, TransactionQuote } from "@/lib/goals/contracts";
 import * as Dialog from "@radix-ui/react-dialog";
 import { getFirstInstallmentDueDate, getInstallmentScheduleDates, isValidCalendarDate, toLocalDateInputValue } from "@/lib/transactions/installment-dates";
 
@@ -41,6 +42,44 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
   const [description, setDescription] = useState("");
   const [transferToAccountId, setTransferToAccountId] = useState<string>("");
   const isLoading = submit.phase === "saving" || submit.phase === "quoting";
+  const [reviewDisplay, setReviewDisplay] = useState<{ quote: TransactionQuote; draft: TransactionDraft } | null>(null);
+  const formContentRef = useRef<HTMLDivElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const retryButtonRef = useRef<HTMLButtonElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const formScrollRef = useRef<HTMLDivElement | null>(null);
+  const formScrollTop = useRef(0);
+  const wasReviewOpen = useRef(false);
+  const restoringFormFocus = useRef(false);
+  const currentReview = submit.phase === "review" && !submit.unresolved && submit.transactionQuote && submit.draft
+    ? { quote: submit.transactionQuote, draft: submit.draft } : null;
+  const displayReview = currentReview || (isLoading && !submit.unresolved ? reviewDisplay : null);
+  const reviewOpen = isOpen && !!displayReview;
+  useEffect(() => {
+    if (!isOpen || submit.unresolved || submit.phase === "editing" || submit.phase === "saved") setReviewDisplay(null);
+    else if (submit.phase === "review" && submit.transactionQuote && submit.draft) setReviewDisplay({ quote: submit.transactionQuote, draft: submit.draft });
+  }, [isOpen, submit.phase, submit.unresolved, submit.transactionQuote, submit.draft]);
+  useLayoutEffect(() => {
+    formContentRef.current?.toggleAttribute("inert", reviewOpen);
+    const returning = wasReviewOpen.current && !reviewOpen && isOpen;
+    if (returning) restoringFormFocus.current = true;
+    else if (reviewOpen || !isOpen) restoringFormFocus.current = false;
+    wasReviewOpen.current = reviewOpen;
+    if (!returning) return;
+    // Radix restores aria-hidden and autofocus during its deferred scope cleanup.
+    const timer = setTimeout(() => {
+      formContentRef.current?.removeAttribute("aria-hidden");
+      formContentRef.current?.removeAttribute("inert");
+      if (submit.unresolved) retryButtonRef.current?.focus();
+      else if (submit.phase === "editing") (submit.error ? errorRef.current : submitButtonRef.current)?.focus();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [reviewOpen, isOpen, submit.unresolved, submit.phase, submit.error]);
+  const retainFormScroll = React.useCallback((node: HTMLDivElement | null) => {
+    if (formScrollRef.current) formScrollTop.current = formScrollRef.current.scrollTop;
+    formScrollRef.current = node;
+    if (node) node.scrollTop = formScrollTop.current;
+  }, []);
   const [formError, setFormError] = useState("");
   const [carryAmount, setCarryAmount] = useState("");
   const [isDataLoading, setIsDataLoading] = useState(true);
@@ -298,10 +337,10 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
   if (!isOpen) return null;
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open && !isLoading) close(); }}>
+    <Dialog.Root modal={!reviewOpen} open={isOpen} onOpenChange={(open) => { if (!open && !isLoading && !reviewOpen) close(); }}>
       <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-      <Dialog.Content data-no-press-motion="" aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-xl" onEscapeKeyDown={(event) => { if (isLoading) event.preventDefault(); }} onPointerDownOutside={(event) => { if (isLoading) event.preventDefault(); }}>
+      <Dialog.Content ref={formContentRef} aria-hidden={reviewOpen || undefined} data-mobile-nav-blocking="" data-no-press-motion="" aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-xl" onEscapeKeyDown={(event) => { if (isLoading || reviewOpen) event.preventDefault(); }} onPointerDownOutside={(event) => { if (isLoading || reviewOpen) event.preventDefault(); }} onOpenAutoFocus={event => { if (reviewOpen || wasReviewOpen.current || restoringFormFocus.current) event.preventDefault(); }}>
         {/* Modal Header */}
         <div className="flex shrink-0 items-center justify-between p-6 border-b dark:border-slate-700">
           <Dialog.Title className="text-xl font-semibold">Add Transaction</Dialog.Title>
@@ -316,7 +355,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
         </div>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
-          <div className="min-h-0 overflow-y-auto">
+          <div ref={retainFormScroll} onScroll={event => { formScrollTop.current = event.currentTarget.scrollTop; }} className="min-h-0 overflow-y-auto">
           {dataError && <p role="alert" className="px-6 pt-4 text-sm text-red-700 dark:text-red-300">{dataError}</p>}
           <fieldset onChange={() => { submit.reset(); setFormError(""); }} disabled={isDataLoading || isLoading || submit.unresolved || submit.phase === "saved"} className="p-6 space-y-6 min-w-0">
             {/* Transaction Type Selector */}
@@ -607,17 +646,16 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
             </div>
           </fieldset>
 
-          {submit.phase === "review" && !submit.unresolved && submit.transactionQuote && submit.draft && <GoalReleaseNotice key={JSON.stringify(submit.transactionQuote)} quote={submit.transactionQuote} draft={submit.draft} snapshot={financeSnapshot} disabled={isLoading} onChange={releases => { void submit.quote(submit.draft!, releases); }} onConfirm={() => { void submit.confirm(); }} onCancel={submit.reset} />}
           </div>
           <div className="shrink-0 border-t dark:border-slate-700">
-            {(formError || submit.error) && (
+            {!reviewOpen && (formError || submit.error) && (
               <div className="max-h-28 overflow-y-auto overscroll-contain px-4 pt-3 sm:px-6">
-                <p role="alert" className="break-words text-sm text-red-700 dark:text-red-300">{formError || submit.error}</p>
+                <p ref={errorRef} tabIndex={-1} role="alert" className="break-words text-sm text-red-700 dark:text-red-300">{formError || submit.error}</p>
               </div>
             )}
             {submit.unresolved && (
               <div className="px-4 pt-3 sm:px-6">
-                <button type="button" disabled={isLoading} onClick={() => { void submit.confirm(); }} className="min-h-11 px-4 py-3 rounded-lg bg-primary text-slate-950 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary">Retry same transaction</button>
+                <button ref={retryButtonRef} type="button" disabled={isLoading} onClick={() => { void submit.confirm(); }} className="min-h-11 px-4 py-3 rounded-lg bg-primary text-slate-950 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary">Retry same transaction</button>
               </div>
             )}
             {submit.phase === "saved" && <p role="status" className="max-h-28 overflow-y-auto overscroll-contain break-words px-4 pt-3 text-sm sm:px-6">{submit.refreshError ? "Transaction saved. Some views could not refresh. Close and refresh the page; do not save it again." : "Transaction saved."}</p>}
@@ -632,6 +670,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
                 {submit.phase === "saved" ? "Close" : "Cancel"}
               </button>
               <button
+                ref={submitButtonRef}
                 type="submit"
                 disabled={isLoading || isDataLoading || !!dataError || accounts.length === 0 || submit.phase === "review" || submit.phase === "saved"}
                 className="flex-1 min-h-11 px-4 py-3 text-sm rounded-lg bg-primary text-slate-950 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 motion-reduce:transition-none font-medium hover:shadow-lg"
@@ -643,6 +682,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
         </form>
       </Dialog.Content>
       </Dialog.Portal>
+      {reviewOpen && displayReview && <GoalReleaseDialog open quote={displayReview.quote} draft={displayReview.draft} snapshot={financeSnapshot} busy={isLoading || submit.phase !== "review"} error={submit.error} returnFocusRef={submitButtonRef} onChange={releases => { if (submit.draft) void submit.quote(submit.draft, releases); }} onConfirm={() => { void submit.confirm(); }} onCancel={submit.reset} />}
     </Dialog.Root>
   );
 }

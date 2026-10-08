@@ -97,3 +97,7 @@ Reset custom UI when the authoritative quote changes using the existing keyed-no
 ## Material risks
 
 Radix parent/child focus ordering needs real browser checking; jsdom alone cannot prove that a background trap is suspended. A retained presentation quote must never become a save authority. Stale requotes can require confirmation with an empty release list. Unknown outcomes must leave the same-user recovery lane intact. Popup controls and long custom content must remain reachable without moving transaction-footer recovery back into the scroll body.
+
+## Execution correction
+
+Installed Radix switches Modal/NonModal content component types when parent modal changes, remounting form DOM. Root approved retaining the single-focus-owner modal toggle while preserving controlled draft state and explicitly restoring form scroll; literal DOM-mount preservation above is superseded by this correction. Authoritative financial controller is unchanged.
