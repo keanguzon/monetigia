@@ -1,582 +1,165 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import * as Dialog from "@radix-ui/react-dialog";
 import { useRouter } from "next/navigation";
+import { X, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { X, Plus } from "lucide-react";
 import { parseNonNegativeAmount, sanitizeColor } from "@/lib/utils";
-import type { Database } from "@/types/database";
 import { useAccounts } from "@/hooks/use-data";
+import { useGoals } from "@/hooks/use-goals";
+import { useDebt, useDebtAccountCreate } from "@/hooks/use-debt";
+import { ExistingDebtFields, validateExistingDebtFields, type ExistingDebtFieldsValue } from "./ExistingDebtFields";
+import type { Database } from "@/types/database";
 
-interface AccountOption {
-  type: "cash" | "bank" | "credit_card" | "e_wallet" | "investment";
-  icon: string;
-  name: string;
-  color: string;
-  isSavings: boolean;
-  isCustom?: boolean;
-}
-
+type AccountOption = { type: "cash" | "bank" | "credit_card" | "e_wallet" | "investment"; icon: string; name: string; color: string; isSavings: boolean };
 const accountOptions: AccountOption[] = [
-  // Wallet Category
   { type: "e_wallet", icon: "gcash.png", name: "GCash", color: "#007DFE", isSavings: false },
   { type: "e_wallet", icon: "maya.png", name: "Maya", color: "#10b981", isSavings: false },
   { type: "bank", icon: "gotyme.png", name: "GoTyme", color: "#06b6d4", isSavings: false },
   { type: "cash", icon: "", name: "Cash on Hand", color: "#86efac", isSavings: false },
-  // Savings Category
   { type: "e_wallet", icon: "gcash.png", name: "GCash Savings", color: "#007DFE", isSavings: true },
   { type: "e_wallet", icon: "maya.png", name: "Maya Savings", color: "#10b981", isSavings: true },
   { type: "bank", icon: "gotyme.png", name: "GoTyme Savings", color: "#06b6d4", isSavings: true },
   { type: "bank", icon: "seabank.png", name: "SeaBank Savings", color: "#FF6B00", isSavings: true },
-  // PayLater / Debt (tracked as credit_card)
   { type: "credit_card", icon: "Spaylater.png", name: "SPayLater", color: "#10b981", isSavings: false },
   { type: "credit_card", icon: "Metrobank.webp", name: "Metrobank", color: "#007DFE", isSavings: false },
   { type: "credit_card", icon: "tiktok.png", name: "TikTok PayLater", color: "#000000", isSavings: false },
 ];
-
-interface AddAccountModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  existingAccounts: Array<{ icon: string; is_savings: boolean }>;
-}
+type Category = "wallet" | "savings" | "paylater";
+interface AddAccountModalProps { isOpen: boolean; onClose: () => void; existingAccounts: Array<{ icon: string; is_savings: boolean }> }
+const inputClass = "min-h-11 w-full min-w-0 rounded-lg border px-4 py-2 dark:bg-slate-900 dark:border-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
+const actionClass = "min-h-11 rounded-lg border px-4 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50";
 
 export default function AddAccountModal({ isOpen, onClose, existingAccounts }: AddAccountModalProps) {
   const supabase = createClient();
   const router = useRouter();
   const { toast } = useToast();
   const { mutate: mutateAccounts } = useAccounts();
-
-  const [selectedAccount, setSelectedAccount] = useState<AccountOption | null>(null);
+  const { userId } = useGoals();
+  const creation = useDebtAccountCreate(userId);
+  const { refresh } = useDebt(userId);
+  const busy = useRef(false);
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (isOpen && !wasOpen.current) opener.current = typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  wasOpen.current = isOpen;
+  const handled = useRef<unknown>(null);
+  const [selected, setSelected] = useState<AccountOption | null>(null);
+  const [custom, setCustom] = useState<Category | null>(null);
+  const [name, setName] = useState("");
+  const [color, setColor] = useState("#10b981");
+  const [type, setType] = useState<"cash" | "bank" | "e_wallet">("e_wallet");
   const [balance, setBalance] = useState("");
-  const [interestRate, setInterestRate] = useState("");
+  const [interest, setInterest] = useState("");
   const [includeNetworth, setIncludeNetworth] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Custom wallet states
-  const [isCreatingCustom, setIsCreatingCustom] = useState(false);
-  const [customName, setCustomName] = useState("");
-  const [customColor, setCustomColor] = useState("#10b981");
-  const [customCategory, setCustomCategory] = useState<"wallet" | "savings" | "paylater">("wallet");
-  const [customType, setCustomType] = useState<"cash" | "bank" | "credit_card" | "e_wallet">("e_wallet");
-
-  type AccountInsert = Database["public"]["Tables"]["accounts"]["Insert"];
-
-  const customColors = [
-    "#10b981", "#06b6d4", "#3b82f6", "#8b5cf6",
-    "#ec4899", "#f43f5e", "#f59e0b", "#84cc16"
-  ];
-
-  // When account type changes, reset balance and adjust includeNetworth
-  React.useEffect(() => {
-    if (selectedAccount?.type === "credit_card") {
-      setBalance("0");
-      setIncludeNetworth(false); // Debt accounts shouldn't increase net worth
+  const [debts, setDebts] = useState<ExistingDebtFieldsValue>({ enabled: false, items: [] });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const credit = custom === "paylater" || selected?.type === "credit_card";
+  const savings = custom === "savings" || selected?.isSavings;
+  const frozen = creation.isSaving || creation.unresolved || !!creation.saved;
+  const resetDraft = () => { setSelected(null); setCustom(null); setName(""); setColor("#10b981"); setType("e_wallet"); setBalance(""); setInterest(""); setIncludeNetworth(true); setDebts({ enabled: false, items: [] }); setErrors({}); setError(null); };
+  useEffect(() => { if (isOpen && !frozen && !creation.pendingInput) resetDraft(); }, [isOpen, userId]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const pending = creation.pendingInput;
+    if (pending) {
+      const preset = accountOptions.find(option => option.name === pending.account.name && option.icon === pending.account.icon);
+      setSelected(preset ?? null); setCustom(preset ? null : "paylater"); setName(pending.account.name);
+      setColor(pending.account.color ?? "#10b981"); setIncludeNetworth(pending.account.include_in_networth);
+      setDebts({ enabled: pending.openingDebts.length > 0, items: pending.openingDebts.map(item => ({ clientId: item.clientId, name: item.name, mode: item.mode, amountText: item.amount, firstDueDate: item.firstDueDate, countText: String(item.count) })) });
     }
-  }, [selectedAccount]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedAccount && !isCreatingCustom) return;
-    if (isCreatingCustom && !customName.trim()) {
-      toast({ title: "Name required", description: "Please enter a name for your custom wallet", variant: "destructive" });
+  }, [isOpen, userId, creation.pendingInput]);
+  useEffect(() => { if (credit && !frozen) { setIncludeNetworth(false); setBalance("0"); } }, [credit, frozen]);
+  const finish = () => { handled.current = creation.saved; creation.reset(); resetDraft(); onClose(); router.refresh(); };
+  useEffect(() => { if (isOpen && creation.saved && handled.current !== creation.saved && !creation.isSaving && !creation.refreshError) finish(); }, [isOpen, creation.saved, creation.isSaving, creation.refreshError]);
+  const refreshOnly = async () => {
+    if (busy.current) return;
+    busy.current = true; setLoading(true); setError(null);
+    try { await refresh(); finish(); } catch { setError("Wallet saved. Views could not refresh. Try refreshing again."); }
+    finally { busy.current = false; setLoading(false); }
+  };
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (busy.current || loading || frozen || (!selected && !custom)) return;
+    setError(null);
+    const walletName = custom ? name.trim() : selected!.name;
+    if (!walletName || walletName.length > 60) { setError("Enter a wallet name of 60 characters or fewer."); return; }
+    if (credit) {
+      const validation = validateExistingDebtFields(debts);
+      if (!validation.success) { setErrors(validation.errors); return; }
+      setErrors({});
+      if (!userId) { setError("Sign in to add a wallet."); return; }
+      busy.current = true; setLoading(true);
+      try { await creation.create({ account: { name: walletName, type: "credit_card", currency: "PHP", color: sanitizeColor(custom ? color : selected!.color), icon: custom ? null : selected!.icon || null, is_savings: false, interest_rate: 0, include_in_networth: includeNetworth, display_order: 0 }, openingDebts: validation.openingDebts }); }
+      finally { busy.current = false; setLoading(false); }
       return;
     }
-
-    if (isCreatingCustom && customName.trim().length > 60) {
-      toast({ title: "Invalid name", description: "Wallet name must be 60 characters or fewer", variant: "destructive" });
-      return;
-    }
-
-    const parsedBalance = parseNonNegativeAmount(balance || "0");
-    if (parsedBalance === null) {
-      toast({ title: "Invalid balance", description: "Balance must be a non-negative amount", variant: "destructive" });
-      return;
-    }
-
-    const parsedInterest = Number(interestRate || "0");
-    if (!Number.isFinite(parsedInterest) || parsedInterest < 0 || parsedInterest > 100) {
-      toast({ title: "Invalid interest rate", description: "Interest rate must be between 0 and 100", variant: "destructive" });
-      return;
-    }
-
-    setIsLoading(true);
-
+    const amount = parseNonNegativeAmount(balance || "0");
+    const rate = Number(interest || "0");
+    if (amount === null) { setError("Balance must be a non-negative amount."); return; }
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100) { setError("Interest rate must be between 0 and 100."); return; }
+    busy.current = true; setLoading(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user?.id) {
-        toast({ title: "Not signed in", description: "You must be signed in to add accounts", variant: "destructive" });
-        return;
-      }
-
-      let accountData: AccountInsert;
-
-      if (isCreatingCustom) {
-        const isSavings = customCategory === "savings";
-        const isDebt = customCategory === "paylater";
-        const accountType = isDebt ? "credit_card" : customType;
-
-        accountData = {
-          user_id: user.id,
-          name: customName.trim(),
-          type: accountType,
-          balance: parsedBalance,
-          currency: "PHP",
-          color: sanitizeColor(customColor),
-          icon: "", // No icon for custom wallets
-          is_savings: isSavings,
-          interest_rate: isSavings ? parsedInterest : 0,
-          include_in_networth: isDebt ? false : includeNetworth,
-        };
-      } else {
-        accountData = {
-          user_id: user.id,
-          name: selectedAccount!.name,
-          type: selectedAccount!.type,
-          balance: parsedBalance,
-          currency: "PHP",
-          color: sanitizeColor(selectedAccount!.color),
-          icon: selectedAccount!.icon,
-          is_savings: selectedAccount!.isSavings,
-          interest_rate: selectedAccount!.isSavings ? parsedInterest : 0,
-          include_in_networth: includeNetworth,
-        };
-      }
-
-      const { error } = await supabase.from("accounts").insert([accountData]);
-
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-        return;
-      }
-
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) { setError("Sign in to add a wallet."); return; }
+      const account: Database["public"]["Tables"]["accounts"]["Insert"] = { user_id: user.id, name: walletName, type: custom ? type : selected!.type, balance: amount, currency: "PHP", color: sanitizeColor(custom ? color : selected!.color), icon: custom ? "" : selected!.icon, is_savings: !!savings, interest_rate: savings ? rate : 0, include_in_networth: includeNetworth };
+      const { error: insertError } = await supabase.from("accounts").insert([account]);
+      if (insertError) { setError(insertError.message); return; }
       toast({ title: "Account added", description: "Your account was created successfully." });
-
-      // Reset states
-      setSelectedAccount(null);
-      setIsCreatingCustom(false);
-      setCustomName("");
-      setCustomColor("#10b981");
-      setCustomCategory("wallet");
-      setBalance("");
-      setInterestRate("");
-
-      onClose();
-      // Optimistically trigger global SWR cache refresh
-      mutateAccounts();
-      router.refresh();
-    } catch (err) {
-      toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
+      resetDraft(); onClose(); void mutateAccounts(); router.refresh();
+    } catch { setError("An unexpected error occurred. Try again."); }
+    finally { busy.current = false; setLoading(false); }
   };
-
-  // Check if an account option is already added (duplicate check)
-  const isAccountDisabled = (option: AccountOption) => {
-    return existingAccounts.some(
-      (acc) => option.icon && acc.icon === option.icon && acc.is_savings === option.isSavings
-    );
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div data-mobile-nav-blocking="" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in duration-200" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl animate-in slide-in-from-bottom-4 duration-300"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-6 border-b dark:border-slate-700 flex-shrink-0">
-          <h3 className="text-xl font-semibold">Add New Account</h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200 hover:rotate-90"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="p-6 space-y-6 overflow-y-auto flex-1">
-            {/* Wallet Category */}
-            <div>
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Wallet</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {accountOptions
-                  .filter((opt) => !opt.isSavings && opt.type !== "credit_card")
-                  .map((option, idx) => {
-                    const isDisabled = isAccountDisabled(option);
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        disabled={isDisabled}
-                        onClick={() => !isDisabled && setSelectedAccount(option)}
-                        className={`
-                          flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                          ${isDisabled
-                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700"
-                            : selectedAccount === option
-                              ? "border-primary shadow-lg"
-                              : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
-                          }
-                        `}
-                        style={
-                          !isDisabled && selectedAccount === option
-                            ? { borderColor: option.color, boxShadow: `0 4px 12px ${option.color}40` }
-                            : {}
-                        }
-                      >
-                        <div className="w-12 h-12 mb-2 flex items-center justify-center bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700">
-                          {option.icon ? (
-                            <Image src={`/logos/${option.icon}`} alt={option.name} width={40} height={40} className="w-10 h-10 object-contain" />
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth="2">
-                              <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path>
-                              <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path>
-                              <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path>
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium text-center">{option.name.split(" ")[0]}</span>
-                      </button>
-                    );
+  return <Dialog.Root open={isOpen} onOpenChange={open => { if (!open) onClose(); }}>
+    <Dialog.Portal>
+      <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+      <Dialog.Content data-mobile-nav-blocking="" aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[calc(100%-1rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl bg-white shadow-xl dark:bg-slate-800"
+        onCloseAutoFocus={event => { if (opener.current?.isConnected) { event.preventDefault(); opener.current.focus(); } }}>
+        <div className="flex shrink-0 items-center justify-between border-b p-4 sm:px-6 dark:border-slate-700"><Dialog.Title className="text-xl font-semibold">Add New Account</Dialog.Title><button type="button" aria-label="Close add wallet" onClick={onClose} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><X className="h-5 w-5" /></button></div>
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            {(error || creation.error) && <p role="alert" className="mb-4 text-sm text-destructive">{error || creation.error}</p>}
+            {creation.unresolved && <div className="mb-4 space-y-2"><p role="status" className="text-sm">This save is unconfirmed. The original wallet and debts are frozen.</p><button type="button" disabled={creation.isSaving || loading} onClick={() => void creation.retry()} className={actionClass}>Retry same save</button></div>}
+            {creation.saved && !!creation.refreshError && <div className="mb-4 space-y-2"><p role="status" className="text-sm">Wallet saved. Views could not refresh.</p><button type="button" disabled={loading} onClick={() => void refreshOnly()} className={actionClass}>Refresh views</button></div>}
+            <fieldset disabled={frozen || loading} className="min-w-0 space-y-6">
+              {([['wallet', 'Wallet'], ['savings', 'Savings'], ['paylater', 'PayLater / Debt']] as const).map(([category, label]) => <div key={category}>
+                <h4 className="mb-3 text-sm font-semibold uppercase text-muted-foreground">{label}</h4>
+                {category === "paylater" && <p className="mb-3 text-xs text-muted-foreground">Track your buy-now-pay-later purchases. Your cash won&apos;t decrease until you record a payment.</p>}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {accountOptions.filter(option => category === "savings" ? option.isSavings : category === "paylater" ? option.type === "credit_card" : !option.isSavings && option.type !== "credit_card").map(option => {
+                    const disabled = !!option.icon && existingAccounts.some(account => account.icon === option.icon && account.is_savings === option.isSavings);
+                    return <button key={option.name} type="button" aria-label={option.name === "Cash on Hand" ? "Cash" : option.name} disabled={disabled || frozen || loading} onClick={() => { setSelected(option); setCustom(null); }} className={`flex min-h-11 flex-col items-center rounded-xl border-2 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${disabled ? 'cursor-not-allowed opacity-40' : selected === option ? 'border-primary' : 'border-gray-200 dark:border-slate-700 hover:border-primary/50'}`}>
+                      <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg border bg-white dark:bg-slate-900 dark:border-slate-700">{option.icon ? <Image src={`/logos/${option.icon}`} alt="" width={40} height={40} className="h-10 w-10 object-contain" /> : <span className="text-xl" aria-hidden="true">₱</span>}</div>
+                      <span className="text-xs font-medium leading-tight">{option.name === "Cash on Hand" ? "Cash" : option.name}</span>
+                    </button>;
                   })}
-                {/* Custom Wallet Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreatingCustom(true);
-                    setSelectedAccount(null);
-                    setCustomCategory("wallet");
-                  }}
-                  className={`
-                    flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                    ${isCreatingCustom && customCategory === "wallet"
-                      ? "border-primary shadow-lg"
-                      : "border-dashed border-gray-300 dark:border-slate-600 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    }
-                  `}
-                >
-                  <div className="w-12 h-12 mb-2 flex items-center justify-center bg-primary/10 rounded-lg">
-                    <Plus className="h-6 w-6 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium text-center">Custom</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Savings Category */}
-            <div>
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Savings</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {accountOptions
-                  .filter((opt) => opt.isSavings)
-                  .map((option, idx) => {
-                    const isDisabled = isAccountDisabled(option);
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        disabled={isDisabled}
-                        onClick={() => !isDisabled && setSelectedAccount(option)}
-                        className={`
-                          flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                          ${isDisabled
-                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700"
-                            : selectedAccount === option
-                              ? "border-primary shadow-lg"
-                              : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
-                          }
-                        `}
-                        style={
-                          !isDisabled && selectedAccount === option
-                            ? { borderColor: option.color, boxShadow: `0 4px 12px ${option.color}40` }
-                            : {}
-                        }
-                      >
-                        <div className="w-12 h-12 mb-2 flex items-center justify-center bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700">
-                          {option.icon ? (
-                            <Image src={`/logos/${option.icon}`} alt={option.name} width={40} height={40} className="w-10 h-10 object-contain" />
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth="2">
-                              <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path>
-                              <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path>
-                              <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path>
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium text-center">{option.name.split(" ")[0]}</span>
-                      </button>
-                    );
-                  })}
-                {/* Custom Savings Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreatingCustom(true);
-                    setSelectedAccount(null);
-                    setCustomCategory("savings");
-                  }}
-                  className={`
-                    flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                    ${isCreatingCustom && customCategory === "savings"
-                      ? "border-primary shadow-lg"
-                      : "border-dashed border-gray-300 dark:border-slate-600 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    }
-                  `}
-                >
-                  <div className="w-12 h-12 mb-2 flex items-center justify-center bg-primary/10 rounded-lg">
-                    <Plus className="h-6 w-6 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium text-center">Custom</span>
-                </button>
-              </div>
-            </div>
-
-            {/* PayLater / Debt Category */}
-            <div>
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase mb-3">PayLater / Debt</h4>
-              <p className="text-xs text-muted-foreground mb-3">
-                Track your buy-now-pay-later purchases. Your cash won&apos;t decrease until you record a payment.
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {accountOptions
-                  .filter((opt) => !opt.isSavings && opt.type === "credit_card")
-                  .map((option, idx) => {
-                    const isDisabled = isAccountDisabled(option);
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        disabled={isDisabled}
-                        onClick={() => !isDisabled && setSelectedAccount(option)}
-                        className={`
-                          flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                          ${isDisabled
-                            ? "opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700"
-                            : selectedAccount === option
-                              ? "border-primary shadow-lg"
-                              : "border-gray-200 dark:border-slate-700 hover:border-primary/50"
-                          }
-                        `}
-                        style={
-                          !isDisabled && selectedAccount === option
-                            ? { borderColor: option.color, boxShadow: `0 4px 12px ${option.color}40` }
-                            : {}
-                        }
-                      >
-                        <div className="w-12 h-12 mb-2 flex items-center justify-center bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700">
-                          {option.icon ? (
-                            <Image src={`/logos/${option.icon}`} alt={option.name} width={40} height={40} className="w-10 h-10 object-contain" />
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth="2">
-                              <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-                              <path d="M2 10h20"></path>
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-xs font-medium text-center leading-tight">{option.name}</span>
-                      </button>
-                    );
-                  })}
-                {/* Custom PayLater Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreatingCustom(true);
-                    setSelectedAccount(null);
-                    setCustomCategory("paylater");
-                  }}
-                  className={`
-                    flex flex-col items-center p-4 border-2 rounded-xl transition-all
-                    ${isCreatingCustom && customCategory === "paylater"
-                      ? "border-primary shadow-lg"
-                      : "border-dashed border-gray-300 dark:border-slate-600 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    }
-                  `}
-                >
-                  <div className="w-12 h-12 mb-2 flex items-center justify-center bg-primary/10 rounded-lg">
-                    <Plus className="h-6 w-6 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium text-center">Custom</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Custom Wallet Form */}
-            {isCreatingCustom && (
-              <div className="space-y-4 p-4 border-2 border-primary/20 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                <h4 className="text-sm font-semibold">Create Custom {customCategory === "wallet" ? "Wallet" : customCategory === "savings" ? "Savings Account" : "PayLater Account"}</h4>
-
-                {/* Account Name */}
-                <div>
-                  <label htmlFor="customName" className="block text-sm font-medium mb-2">
-                    Account Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="customName"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-slate-900 dark:border-slate-700"
-                    placeholder="e.g., My Cash, Emergency Fund, Credit Card"
-                    required
-                  />
+                  <button type="button" disabled={frozen || loading} onClick={() => { setCustom(category); setSelected(null); }} className={`flex flex-col items-center rounded-xl border-2 border-dashed p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${custom === category ? 'border-primary' : 'border-gray-300 dark:border-slate-600'}`}><span className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10"><Plus className="h-6 w-6 text-primary" /></span><span className="text-sm font-medium">Custom</span></button>
                 </div>
-
-                {/* Color Picker */}
-                <div>
-                  <label htmlFor="customColor" className="block text-sm font-medium mb-2">
-                    Color *
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      id="customColor"
-                      value={customColor}
-                      onChange={(e) => setCustomColor(e.target.value)}
-                      className="w-16 h-10 rounded cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={customColor}
-                      onChange={(e) => setCustomColor(e.target.value)}
-                      className="flex-1 px-4 py-2 border rounded-lg dark:bg-slate-900 dark:border-slate-700 font-mono text-sm"
-                      placeholder="#3b82f6"
-                      pattern="^#[0-9A-Fa-f]{6}$"
-                    />
-                  </div>
-                </div>
-
-                {/* Account Type */}
-                <div>
-                  <label htmlFor="customType" className="block text-sm font-medium mb-2">
-                    Account Type *
-                  </label>
-                  <select
-                    id="customType"
-                    value={customType}
-                    onChange={(e) => setCustomType(e.target.value as "cash" | "bank" | "e_wallet" | "credit_card")}
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-slate-900 dark:border-slate-700"
-                    required
-                  >
-                    {customCategory === "wallet" && (
-                      <>
-                        <option value="cash">Cash</option>
-                        <option value="bank">Bank Account</option>
-                        <option value="e_wallet">E-Wallet</option>
-                      </>
-                    )}
-                    {customCategory === "savings" && (
-                      <>
-                        <option value="bank">Bank Savings</option>
-                        <option value="e_wallet">E-Wallet Savings</option>
-                      </>
-                    )}
-                    {customCategory === "paylater" && (
-                      <option value="credit_card">Credit Card / PayLater</option>
-                    )}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {/* Show form fields only if an account is selected or creating custom */}
-            {(selectedAccount || isCreatingCustom) && (
-              <>
-                {/* Include in Net Worth - hide for debt accounts */}
-                {((selectedAccount && selectedAccount.type !== "credit_card") || (isCreatingCustom && customCategory !== "paylater")) && (
-                  <div className="flex items-start space-x-2">
-                    <input
-                      type="checkbox"
-                      id="includeNetworth"
-                      checked={includeNetworth}
-                      onChange={(e) => setIncludeNetworth(e.target.checked)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <label htmlFor="includeNetworth" className="text-sm font-medium cursor-pointer">
-                        Include in Total Net Worth
-                      </label>
-                      <p className="text-xs text-muted-foreground">
-                        Uncheck if you don&apos;t want this account counted in your total net worth
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Initial Balance / Debt */}
-                <div>
-                  <label htmlFor="balance" className="block text-sm font-medium mb-2">
-                    {((selectedAccount && selectedAccount.type === "credit_card") || (isCreatingCustom && customCategory === "paylater")) ? "Initial Debt (if any)" : "Initial Balance"}
-                  </label>
-                  {((selectedAccount && selectedAccount.type === "credit_card") || (isCreatingCustom && customCategory === "paylater")) && (
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Usually leave this at 0. Only enter an amount if you already have existing debt to track.
-                    </p>
-                  )}
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">₱</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      id="balance"
-                      value={balance}
-                      onChange={(e) => setBalance(e.target.value)}
-                      className="w-full pl-8 pr-4 py-2 border rounded-lg dark:bg-slate-900 dark:border-slate-700"
-                      placeholder="0.00"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Interest Rate (only for savings) */}
-                {((selectedAccount && selectedAccount.isSavings) || (isCreatingCustom && customCategory === "savings")) && (
-                  <div>
-                    <label htmlFor="interestRate" className="block text-sm font-medium mb-2">
-                      Interest Rate (% per year)
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      id="interestRate"
-                      value={interestRate}
-                      onChange={(e) => setInterestRate(e.target.value)}
-                      className="w-full px-4 py-2 border rounded-lg dark:bg-slate-900 dark:border-slate-700"
-                      placeholder="0.00"
-                    />
-                  </div>
-                )}
-              </>
-            )}
+              </div>)}
+              {custom && <div className="space-y-4 rounded-xl border-2 border-primary/20 bg-slate-50 p-4 dark:bg-slate-800/50">
+                <h4 className="text-sm font-semibold">Create Custom {custom === "wallet" ? "Wallet" : custom === "savings" ? "Savings Account" : "PayLater Account"}</h4>
+                <div><label htmlFor="customName" className="mb-2 block text-sm font-medium">Account Name *</label><input id="customName" value={name} onChange={e => setName(e.target.value)} className={inputClass} required maxLength={60} /></div>
+                <div><label htmlFor="customColor" className="mb-2 block text-sm font-medium">Color *</label><div className="flex min-w-0 gap-3"><input id="customColor" type="color" value={color} onChange={e => setColor(e.target.value)} className="h-11 w-16 shrink-0" /><input aria-label="Color hex value" value={color} onChange={e => setColor(e.target.value)} className={inputClass} pattern="^#[0-9A-Fa-f]{6}$" /></div></div>
+                <div><label htmlFor="customType" className="mb-2 block text-sm font-medium">Account Type *</label><select id="customType" value={custom === "paylater" ? "credit_card" : type} onChange={e => setType(e.target.value as typeof type)} className={inputClass}>{custom === "paylater" ? <option value="credit_card">Credit Card / PayLater</option> : <>{custom === "wallet" && <option value="cash">Cash</option>}<option value="bank">{custom === "savings" ? "Bank Savings" : "Bank Account"}</option><option value="e_wallet">{custom === "savings" ? "E-Wallet Savings" : "E-Wallet"}</option></>}</select></div>
+              </div>}
+              {(selected || custom) && <>
+                {!credit && <div><label className="flex min-h-11 items-center gap-2 text-sm font-medium"><input type="checkbox" checked={includeNetworth} onChange={e => setIncludeNetworth(e.target.checked)} />Include in Total Net Worth</label><p className="text-xs text-muted-foreground">Uncheck if you don&apos;t want this account counted in your total net worth</p></div>}
+                {credit ? <ExistingDebtFields value={debts} onChange={setDebts} disabled={frozen || loading} errors={errors} /> : <div><label htmlFor="balance" className="mb-2 block text-sm font-medium">Initial Balance</label><input id="balance" value={balance} onChange={e => setBalance(e.target.value)} type="text" inputMode="decimal" placeholder="0.00" className={inputClass} required /></div>}
+                {savings && <div><label htmlFor="interestRate" className="mb-2 block text-sm font-medium">Interest Rate (% per year)</label><input id="interestRate" value={interest} onChange={e => setInterest(e.target.value)} inputMode="decimal" className={inputClass} placeholder="0.00" /></div>}
+              </>}
+            </fieldset>
           </div>
-
-          {/* Modal Footer */}
-          <div className="flex gap-3 p-6 border-t dark:border-slate-700">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={(!selectedAccount && (!isCreatingCustom || !customName.trim())) || isLoading}
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isLoading ? "Adding..." : "Add Account"}
-            </button>
+          <div className="flex shrink-0 gap-3 border-t p-4 sm:px-6 dark:border-slate-700" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
+            <button type="button" onClick={onClose} className={`${actionClass} flex-1`}>Cancel</button>
+            {!creation.unresolved && !creation.saved && <button type="submit" disabled={(!selected && (!custom || !name.trim())) || loading || frozen} className={`${actionClass} flex-1 border-primary bg-primary text-green-950 hover:bg-primary/90`}>{loading || creation.isSaving ? "Saving..." : "Create Wallet"}</button>}
           </div>
         </form>
-      </div>
-    </div>
-  );
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>;
 }
