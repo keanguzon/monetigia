@@ -12,7 +12,7 @@ Next, when the user authorizes coding: review 5.2b, then complete Tasks 6a/6b (d
 
 ## Agent policy
 
-Sol 6.1 plans and orchestrates. Sol 6.1 Light reviews. Gemini Flash High is the usual primary coder, but the latest user instruction explicitly pauses Gemini: use scoped Luna Max only after authorization to resume. No Astra. Do not run two coders against the same scope.
+Preferred architecture when available: Sol 6.1 plans/orchestrates and Sol 6.1 Light reviews. The user is now on a Free plan where Sol is unavailable and resumed with Luna. Use models actually available; do not block waiting for Sol or pretend a delegation happened. Gemini Flash High is paused by the latest user instruction after quota/503/transport errors. Use scoped Luna Max for coding only after the user authorizes continuation; if no separate reviewer is available, report that and make the review limitation explicit. No Astra. Do not run two coders against the same scope.
 
 Gemini previously encountered 429 quota errors, 503 demand errors, and a disconnected MCP transport. The transport's exact cause was not diagnosed. One overly broad SQL proposal was rejected before application. Do not describe those errors as fixed without checking the bridge.
 
