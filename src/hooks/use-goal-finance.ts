@@ -15,6 +15,7 @@ export function useGoalFinance(userId: string | null) {
     selectedUser.current = { userId, revision: selectedUser.current.revision + 1 };
   }
   const sessionRevision = useRef(0);
+  const authSession = useRef<{ userId: string; accessToken: string } | null>(null);
   const key = userId ? ["goalFinance", userId] as const : null;
   const fetchForUser = useCallback(async () => {
     const selection = selectedUser.current;
@@ -31,8 +32,13 @@ export function useGoalFinance(userId: string | null) {
   useEffect(() => setSnapshotUserId(userId), [userId]);
 
   useEffect(() => {
-    const { data: { subscription } } = createClient().auth.onAuthStateChange(event => {
-      if (event !== "INITIAL_SESSION") sessionRevision.current += 1;
+    const { data: { subscription } } = createClient().auth.onAuthStateChange((event, session) => {
+      const nextSession = session ? { userId: session.user.id, accessToken: session.access_token } : null;
+      const previousSession = authSession.current;
+      const repeatedSignIn = event === "SIGNED_IN" && previousSession !== null && nextSession !== null &&
+        previousSession.userId === nextSession.userId && previousSession.accessToken === nextSession.accessToken;
+      if (event !== "INITIAL_SESSION" && !repeatedSignIn) sessionRevision.current += 1;
+      authSession.current = nextSession;
     });
     return () => subscription.unsubscribe();
   }, []);
