@@ -1,19 +1,10 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { applyMigration, cleanupFinanceFixture, createFinanceFixture, requireSuccess } from './helpers.mjs';
+import { cleanupFinanceFixture, createFinanceFixture, installLatestMigrations, requireSuccess } from './helpers.mjs';
 
-const finalMigrations = [
-  '202610060004_goal_transaction_operations.sql',
-  '202610060005_goal_lifecycle_operations.sql',
-  '202610060006_goal_write_guards.sql',
-  '202610070001_installment_purchase_dates.sql',
-];
-async function installFinalFunctions() {
-  for (const migration of finalMigrations) await applyMigration(migration);
-}
-before(installFinalFunctions);
-after(installFinalFunctions);
+before(installLatestMigrations);
+after(installLatestMigrations);
 
 async function setup(t) {
   const fixture = await createFinanceFixture();

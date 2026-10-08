@@ -280,6 +280,32 @@ export interface Database {
         };
         Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
+      debt_items: {
+        Row: {
+          id: string; user_id: string; account_id: string; operation_id: string;
+          client_id: string; name: string; source: "opening"; mode: "single" | "installments";
+          original_amount: string | number; first_due_date: string; remaining_months: number; created_at: string;
+        };
+        Insert: {
+          id?: string; user_id: string; account_id: string; operation_id: string;
+          client_id: string; name: string; source: "opening"; mode: "single" | "installments";
+          original_amount: string; first_due_date: string; remaining_months: number; created_at?: string;
+        };
+        Update: never;
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
+      };
+      debt_due_rows: {
+        Row: {
+          id: string; user_id: string; debt_item_id: string; ordinal: number;
+          due_date: string; original_amount: string | number; created_at: string;
+        };
+        Insert: {
+          id?: string; user_id: string; debt_item_id: string; ordinal: number;
+          due_date: string; original_amount: string; created_at?: string;
+        };
+        Update: never;
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
+      };
       financial_operations: {
         Row: {
           id: string;
@@ -373,6 +399,10 @@ export interface Database {
     };
     Views: {};
     Functions: {
+      debt_account_create: {
+        Args: { p_request_id: string; p_account: Json; p_opening_debts: Json };
+        Returns: Json;
+      };
       goal_finance_snapshot: {
         Args: Record<string, never>;
         Returns: Json;

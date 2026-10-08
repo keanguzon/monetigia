@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
@@ -63,6 +63,11 @@ export async function applyMigration(filename) {
   await queryAdmin("NOTIFY pgrst, 'reload schema'");
   // PostgREST reloads its schema asynchronously after the transaction commits.
   await new Promise((resolveWait) => setTimeout(resolveWait, 150));
+}
+
+export async function installLatestMigrations() {
+  const names = await readdir(new URL('../../supabase/migrations/', import.meta.url));
+  for (const name of names.filter(name => /^\d+_.*\.sql$/.test(name)).sort()) await applyMigration(name);
 }
 
 export function requireSuccess(result, context = 'Database request') {
