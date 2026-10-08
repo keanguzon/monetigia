@@ -4,7 +4,7 @@ const rpcState = vi.hoisted(() => ({ rpc: vi.fn() }));
 
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ rpc: rpcState.rpc }) }));
 
-import { applyFinancialCommand, fetchGoalFinance, quoteTransaction } from "@/lib/goals/client";
+import { applyFinancialCommand, fetchGoalFinance, quoteTransaction, readFinancialRpcError, unknownFinancialOutcome } from "@/lib/goals/client";
 import type { GoalFinanceSnapshot, TransactionDraft } from "@/lib/goals/contracts";
 
 const userId = "10000000-0000-4000-8000-000000000001";
@@ -31,6 +31,13 @@ const draft: TransactionDraft = {
 
 beforeEach(() => rpcState.rpc.mockReset());
 afterEach(() => vi.clearAllMocks());
+
+test("shared error classifiers retain named rejection and ambiguous write semantics", () => {
+  expect(readFinancialRpcError({ message: "REQUEST_CONFLICT", status: 503 }, true)).toMatchObject({ outcome: "rejected", code: "REQUEST_CONFLICT" });
+  expect(readFinancialRpcError({ message: "gateway", status: 503 }, true)).toMatchObject({ outcome: "unknown" });
+  expect(readFinancialRpcError({ message: "gateway", status: 503 })).toMatchObject({ outcome: "rejected" });
+  expect(unknownFinancialOutcome(new Error("network"))).toMatchObject({ outcome: "unknown", code: "TRANSPORT_ERROR" });
+});
 
 test("serializes canonical money strings at the quote RPC boundary", async () => {
   rpcState.rpc.mockResolvedValue({ data: { fingerprint: "fresh", actual: "12.30", reserved: "0.00", available: "8000.00", releases: [] }, error: null });

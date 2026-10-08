@@ -41,6 +41,24 @@ export class FinancialCommandError extends Error {
   }
 }
 
+export class FinancialSessionMismatchError extends FinancialCommandError {
+  constructor(cause?: unknown) {
+    super({ message: "Sign in to the account that started this save.", code: "NOT_ALLOWED", outcome: "rejected", cause });
+    this.name = "FinancialSessionMismatchError";
+  }
+}
+
+export async function financialOwnerToken(expectedUserId: string): Promise<string> {
+  try {
+    const { data: { session }, error } = await createClient().auth.getSession();
+    if (error || !session || session.user.id !== expectedUserId) throw new FinancialSessionMismatchError(error);
+    return session.access_token;
+  } catch (error) {
+    if (error instanceof FinancialSessionMismatchError) throw error;
+    throw new FinancialSessionMismatchError(error);
+  }
+}
+
 export function financialCommandMessage(error: unknown, fallback: string): string {
   if (!(error instanceof FinancialCommandError)) return error instanceof Error ? error.message : fallback;
   if (error.hint?.trim()) return error.hint.trim();
@@ -197,7 +215,7 @@ export async function fetchGoalHistory(userId: string, goalId: string): Promise<
 
 const requestIdSchema = z.string().uuid();
 
-function readServerError(error: unknown, ambiguousOutcome = false): FinancialCommandError {
+export function readFinancialRpcError(error: unknown, ambiguousOutcome = false): FinancialCommandError {
   if (typeof error === "object" && error !== null) {
     const response = error as { message?: unknown; hint?: unknown; status?: unknown };
     const message = typeof response.message === "string" ? response.message : "The server rejected the financial command.";
@@ -209,7 +227,7 @@ function readServerError(error: unknown, ambiguousOutcome = false): FinancialCom
       /failed to fetch|network(error| request)|load failed|invalid json|unexpected end of json/i.test(message)
     );
     if (uncertainResponse && code === undefined) {
-      return unknownOutcome(error);
+      return unknownFinancialOutcome(error);
     }
     return new FinancialCommandError({
       message,
@@ -226,7 +244,7 @@ function readServerError(error: unknown, ambiguousOutcome = false): FinancialCom
   });
 }
 
-function unknownOutcome(error: unknown): FinancialCommandError {
+export function unknownFinancialOutcome(error: unknown): FinancialCommandError {
   const message = error instanceof Error ? error.message : "The financial command response could not be confirmed.";
   return new FinancialCommandError({ message, code: "TRANSPORT_ERROR", outcome: "unknown", cause: error });
 }
@@ -250,7 +268,7 @@ export async function fetchGoalFinance(
   const { data, error } = await (requestToken === null
     ? request
     : request.setHeader("Authorization", `Bearer ${requestToken}`));
-  if (error) throw readServerError(error);
+  if (error) throw readFinancialRpcError(error);
   const snapshot = GoalFinanceSnapshotSchema.parse(data);
 
   if (expectedUserId !== undefined) {
@@ -271,7 +289,7 @@ export async function quoteTransaction(draft: TransactionDraft, releases?: Relea
     p_draft: safeDraft,
     p_releases: safeReleases,
   });
-  if (error) throw readServerError(error);
+  if (error) throw readFinancialRpcError(error);
   return TransactionQuoteSchema.parse(data);
 }
 
@@ -279,6 +297,7 @@ export async function applyFinancialCommand(
   requestId: string,
   command: FinancialCommand,
   quote?: TransactionQuote,
+  expectedUserId?: string,
 ): Promise<FinancialResult> {
   const safeRequestId = requestIdSchema.parse(requestId);
   const safeCommand = FinancialCommandSchema.parse(command);
@@ -286,18 +305,22 @@ export async function applyFinancialCommand(
   if (isTransaction && quote === undefined) throw new Error("A fresh quote is required for a transaction command.");
   if (!isTransaction && quote !== undefined) throw new Error("Quotes are only valid for transaction commands.");
   const safeQuote = quote === undefined ? null : TransactionQuoteSchema.parse(quote);
-
-  const response = await Promise.resolve().then(() => createClient().rpc("goal_finance_apply", {
+  const client = createClient();
+  const token = expectedUserId === undefined ? null : await financialOwnerToken(expectedUserId);
+  const response = await Promise.resolve().then(() => {
+    const request = client.rpc("goal_finance_apply", {
       p_request_id: safeRequestId,
       p_command: safeCommand,
       p_quote: safeQuote,
-    })).catch(error => { throw unknownOutcome(error); });
-  if (response.error) throw readServerError(response.error, true);
+    });
+    return token === null ? request : request.setHeader("Authorization", `Bearer ${token}`);
+  }).catch(error => { throw unknownFinancialOutcome(error); });
+  if (response.error) throw readFinancialRpcError(response.error, true);
   try {
     return FinancialResultSchema.parse(response.data);
   } catch (error) {
     // The database may have committed even when its response cannot be parsed.
-    throw unknownOutcome(error);
+    throw unknownFinancialOutcome(error);
   }
 }
 
@@ -307,11 +330,11 @@ export async function restoreArchivedGoal(requestId: string, goalId: string): Pr
   const response = await Promise.resolve().then(() => createClient().rpc("goal_restore_archived", {
     p_request_id: safeRequestId,
     p_goal_id: safeGoalId,
-  })).catch(error => { throw unknownOutcome(error); });
-  if (response.error) throw readServerError(response.error, true);
+  })).catch(error => { throw unknownFinancialOutcome(error); });
+  if (response.error) throw readFinancialRpcError(response.error, true);
   try {
     return FinancialResultSchema.parse(response.data);
   } catch (error) {
-    throw unknownOutcome(error);
+    throw unknownFinancialOutcome(error);
   }
 }
