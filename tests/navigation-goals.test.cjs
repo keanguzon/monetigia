@@ -6,7 +6,9 @@ const ts = require('typescript');
 function load(pathname) {
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(pathname, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-  const localRequire = name => name.startsWith('.') ? load(path.resolve(path.dirname(pathname), name) + '.ts') : require(name);
+  const localRequire = name => name.startsWith('@/')
+    ? load(path.resolve('src', name.slice(2)) + '.ts')
+    : name.startsWith('.') ? load(path.resolve(path.dirname(pathname), name) + '.ts') : require(name);
   new Function('module', 'exports', 'require', code)(module, module.exports, localRequire);
   return module.exports;
 }

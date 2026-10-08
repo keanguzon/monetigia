@@ -58,7 +58,7 @@ export async function databaseRuntime() {
 
 export async function applyMigration(filename) {
   const { queryAdmin } = await databaseRuntime();
-  const sql = await readFile(new URL(`../../supabase/migrations/${filename}`, import.meta.url), 'utf8');
+  const sql = (await readFile(new URL(`../../supabase/migrations/${filename}`, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   await queryAdmin(sql);
   await queryAdmin("NOTIFY pgrst, 'reload schema'");
   // PostgREST reloads its schema asynchronously after the transaction commits.
