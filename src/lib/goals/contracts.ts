@@ -1,13 +1,13 @@
 import { z } from "zod";
 import type { Goal, GoalAllocationEvent } from "@/types/database";
+import { MoneySchema, PositiveMoneySchema, SignedMoneySchema } from "@/lib/money/contracts";
+import type { Money } from "@/lib/money/contracts";
 
-export type Money = string;
+export { MoneySchema, PositiveMoneySchema, SignedMoneySchema } from "@/lib/money/contracts";
+export type { Money } from "@/lib/money/contracts";
+
 export const MAX_INSTALLMENTS = 12;
 const id = z.string().uuid();
-const safeCentavos = (amount: string) => Number.isSafeInteger(Number(amount.replace(".", "")));
-export const MoneySchema = z.string().regex(/^(0|[1-9]\d*)\.\d{2}$/).refine(safeCentavos, "Amount exceeds safe centavo range");
-export const SignedMoneySchema = z.string().regex(/^-?(0|[1-9]\d*)\.\d{2}$/).refine(amount => amount !== "-0.00" && safeCentavos(amount), "Invalid signed amount or unsafe centavo range");
-export const PositiveMoneySchema = MoneySchema.refine(amount => amount !== "0.00", "Amount must be positive");
 export const GoalStatusSchema = z.enum(["active", "completed", "cancelled"]);
 export const ReviewStateSchema = z.enum(["needs_review", "confirmed"]);
 export type GoalStatus = z.infer<typeof GoalStatusSchema>;

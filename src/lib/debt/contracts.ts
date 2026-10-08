@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Money } from "@/lib/goals/contracts";
+import type { Money } from "@/lib/money/contracts";
 
 export const MAX_REMAINING_MONTHS = 600;
 

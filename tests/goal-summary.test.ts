@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import {
   AllocationEventSchema, FinancialCommandSchema, GoalFinanceSnapshotSchema, MAX_INSTALLMENTS,
-  MoneySchema, TransactionDraftSchema,
+  MoneySchema, PositiveMoneySchema, SignedMoneySchema, TransactionDraftSchema,
   type AllocationEvent,
 } from "@/lib/goals/contracts";
 import { fromMinorUnits, parseMoney, projectGoal, splitInstallments, summarizeGoal, toMinorUnits } from "@/lib/goals/summary";
@@ -183,6 +183,24 @@ describe("domain JSON parsing", () => {
     for (const amount of [100, "100", "100.0", "-1.00", "01.00", "90071992547409.92"]) expect(MoneySchema.safeParse(amount).success).toBe(false);
     expect(AllocationEventSchema.parse(event("-1.00", "1.00", { kind: "spend" }))).toEqual(event("-1.00", "1.00", { kind: "spend" }));
     expect(AllocationEventSchema.safeParse(event(1 as unknown as string)).success).toBe(false);
+  });
+  test("shared money contracts retain canonical centavo boundaries", () => {
+    const boundary = "90071992547409.91";
+    expect(MoneySchema.parse("0.00")).toBe("0.00");
+    expect(PositiveMoneySchema.safeParse("0.00").success).toBe(false);
+    expect(PositiveMoneySchema.parse("0.01")).toBe("0.01");
+    expect(SignedMoneySchema.parse("-1.00")).toBe("-1.00");
+    expect(SignedMoneySchema.safeParse("-0.00").success).toBe(false);
+    expect(MoneySchema.parse(boundary)).toBe(boundary);
+    expect(PositiveMoneySchema.parse(boundary)).toBe(boundary);
+    expect(SignedMoneySchema.parse(`-${boundary}`)).toBe(`-${boundary}`);
+    for (const amount of ["1", "01.00", "1.0", "90071992547409.92"]) {
+      expect(MoneySchema.safeParse(amount).success).toBe(false);
+      expect(PositiveMoneySchema.safeParse(amount).success).toBe(false);
+    }
+    for (const amount of ["-1.0", "-0.00", "-90071992547409.92"]) {
+      expect(SignedMoneySchema.safeParse(amount).success).toBe(false);
+    }
   });
   test("parses the command union and rejects invalid entry amounts", () => {
     expect(FinancialCommandSchema.parse({ kind: "transaction", draft })).toEqual({ kind: "transaction", draft });
