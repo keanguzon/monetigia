@@ -49,6 +49,15 @@ describe("exact PHP money", () => {
     expect(splitInstallments("12.00", MAX_INSTALLMENTS)).toEqual(Array(MAX_INSTALLMENTS).fill("1.00"));
     expect(() => splitInstallments("13.00", MAX_INSTALLMENTS + 1)).toThrow(/12/);
   });
+  test("purchase defaults remain compatible with explicit schedule options", () => {
+    expect(splitInstallments("100.00", 3)).toEqual(["33.34", "33.33", "33.33"]);
+    expect(splitInstallments("1000.00", 24, { maxCount: 600, remainderPlacement: "last" })).toEqual([
+      ...Array(23).fill("41.66"), "41.82",
+    ]);
+    for (const maxCount of [0, 601, Infinity]) {
+      expect(() => splitInstallments("100.00", 3, { maxCount })).toThrow();
+    }
+  });
   test("rejects oversized installment counts before allocating rows", () => {
     const arrayFrom = vi.spyOn(Array, "from").mockImplementation(() => {
       throw new Error("Array.from was reached");

@@ -1,5 +1,6 @@
 import { AllocationEventSchema, MoneySchema, PositiveMoneySchema, SignedMoneySchema,
   MAX_INSTALLMENTS, type AllocationEvent, type GoalTotals, type Money } from "./contracts";
+import { MAX_REMAINING_MONTHS } from "@/lib/debt/contracts";
 
 export function parseMoney(input: string): Money {
   if (typeof input !== "string" || !/^\d+(\.\d{1,2})?$/.test(input)) throw new Error("Enter a nonnegative decimal amount with at most two decimal places");
@@ -23,16 +24,30 @@ function addCentavos(left: number, right: number): number {
   return sum;
 }
 
-export function splitInstallments(amount: Money, count: number): Money[] {
+export function splitInstallments(
+  amount: Money,
+  count: number,
+  options?: { maxCount?: number; remainderPlacement?: "first" | "last" },
+): Money[] {
+  const maxCount = options?.maxCount === undefined ? MAX_INSTALLMENTS : options.maxCount;
+  const remainderPlacement = options?.remainderPlacement === undefined ? "first" : options.remainderPlacement;
+  if (!Number.isSafeInteger(maxCount) || maxCount < 1 || maxCount > MAX_REMAINING_MONTHS) {
+    throw new Error(`Maximum installment count must be between 1 and ${MAX_REMAINING_MONTHS}`);
+  }
+  if (remainderPlacement !== "first" && remainderPlacement !== "last") {
+    throw new Error("Remainder placement must be first or last");
+  }
   const total = toMinorUnits(MoneySchema.parse(amount));
-  if (!Number.isSafeInteger(count) || count <= 0 || count > MAX_INSTALLMENTS) {
-    throw new Error(`Installment count must be between 1 and ${MAX_INSTALLMENTS}`);
+  if (!Number.isSafeInteger(count) || count <= 0 || count > maxCount) {
+    throw new Error(`Installment count must be between 1 and ${maxCount}`);
   }
   if (total < count) throw new Error("Each installment must contain at least one centavo");
   const divisor = BigInt(count);
   const base = Number(BigInt(total) / divisor);
   const remainder = Number(BigInt(total) % divisor);
-  return Array.from({ length: count }, (_, index) => fromMinorUnits(base + (index < remainder ? 1 : 0)));
+  return Array.from({ length: count }, (_, index) => fromMinorUnits(base + (
+    remainderPlacement === "last" ? (index === count - 1 ? remainder : 0) : (index < remainder ? 1 : 0)
+  )));
 }
 
 export function summarizeGoal(goalId: string, target: Money, events: AllocationEvent[]): GoalTotals {

@@ -1,4 +1,5 @@
 import { MAX_INSTALLMENTS } from "@/lib/goals/contracts";
+import { MAX_REMAINING_MONTHS } from "@/lib/debt/contracts";
 
 type CalendarDate = { year: number; month: number; day: number };
 
@@ -18,7 +19,7 @@ function parseCalendarDate(value: string): CalendarDate {
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
     throw new Error("Invalid calendar date");
   }
   return { year, month, day };
@@ -55,9 +56,16 @@ export function getFirstInstallmentDueDate(purchaseDate: string): string {
   return formatCalendarDate(addMonthsFromAnchor(parseCalendarDate(purchaseDate), 1));
 }
 
-export function getInstallmentScheduleDates(firstDueDate: string, count: number): string[] {
-  if (!Number.isSafeInteger(count) || count < 1 || count > MAX_INSTALLMENTS) {
-    throw new Error(`Installment count must be between 1 and ${MAX_INSTALLMENTS}`);
+export function getInstallmentScheduleDates(
+  firstDueDate: string,
+  count: number,
+  maxCount: number = MAX_INSTALLMENTS,
+): string[] {
+  if (!Number.isSafeInteger(maxCount) || maxCount < 1 || maxCount > MAX_REMAINING_MONTHS) {
+    throw new Error(`Maximum installment count must be between 1 and ${MAX_REMAINING_MONTHS}`);
+  }
+  if (!Number.isSafeInteger(count) || count < 1 || count > maxCount) {
+    throw new Error(`Installment count must be between 1 and ${maxCount}`);
   }
   const anchor = parseCalendarDate(firstDueDate);
   return Array.from({ length: count }, (_, index) => formatCalendarDate(addMonthsFromAnchor(anchor, index)));

@@ -34,4 +34,20 @@ describe("installment dates", () => {
     expect(() => getInstallmentScheduleDates("2026-01-31", 0)).toThrow();
     expect(() => getInstallmentScheduleDates("2026-01-31", 1.5)).toThrow();
   });
+
+  test("keeps the purchase limit unless an explicit safe maximum is provided", () => {
+    expect(() => getInstallmentScheduleDates("2026-01-31", 13)).toThrow(/12/);
+    expect(getInstallmentScheduleDates("2026-01-31", 24, 600)).toHaveLength(24);
+    expect(getInstallmentScheduleDates("2026-01-31", 24, 600)[2]).toBe("2026-03-31");
+    for (const maxCount of [0, 601, Infinity]) {
+      expect(() => getInstallmentScheduleDates("2026-01-31", 3, maxCount)).toThrow();
+    }
+  });
+
+  test("rejects year zero and respects the supported calendar boundaries", () => {
+    expect(() => getInstallmentScheduleDates("0000-01-01", 1)).toThrow();
+    expect(getInstallmentScheduleDates("0001-01-01", 1)).toEqual(["0001-01-01"]);
+    expect(getInstallmentScheduleDates("9999-12-31", 1)).toEqual(["9999-12-31"]);
+    expect(() => getInstallmentScheduleDates("9999-12-31", 2)).toThrow();
+  });
 });
