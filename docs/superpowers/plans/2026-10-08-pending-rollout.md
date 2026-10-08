@@ -28,7 +28,7 @@
 | Overspend separate Keep/Release popup | Complete: `cb402e4`; reviewed and browser checked | No reimplementation; integrated regression only |
 | Exact opening-debt schedules | Complete: `ef9282a` | Reuse helper; no duplicate purchase schedule |
 | Atomic opening-debt creation backend | Complete: `98bffb7`; reviewed, focused DB/contract/type checks passed | Production migration/runtime verification remains a release prerequisite |
-| Payment allocations/reversals and unpaid corrections | Pending; private adapter scope 5.1b in progress | Task 5; reuse current financial command lane |
+| Payment allocations/reversals and unpaid corrections | Money extraction `ace3917` and private adapter/storage `c34d6b4` complete; payment integration 5.1c in progress, correction 5.2 pending | Task 5; reuse current financial command lane |
 | Debt snapshot/adoption, Add Wallet fields and fixed footer | Pending | Task 6; creation backend already exists |
 | Installment selection/full-row correction | Pending | Tasks 5 and 7 |
 | Transaction and group description edits | Pending | Task 8 |
@@ -126,4 +126,4 @@ All pending items map to tasks; existing completed code is classified separately
 
 ## Execution checkpoint (latest, October 8)
 
-The inventory and task checkboxes above reflect the current verified state, not the original planning baseline. Tasks 1, 2, 4a and 4b are reviewed and committed; Task 3 implementation is integrated and locally checked. Task 5.1a money extraction has passed 98 focused tests/typecheck and Sol low review, awaiting its commit. Task 5.1b private adapter is in progress; 5.1c payment integration, 5.2 correction, Tasks 6-8 and final release checks remain pending. Production runtime/device acceptance is tracked separately from implementation. Landing revamp remains explicitly deferred.
+The inventory and task checkboxes above reflect the current verified state, not the original planning baseline. Tasks 1, 2, 4a and 4b are reviewed and committed; Task 3 implementation is integrated and locally checked. Task 5.1a money extraction is committed as `ace3917` (98 focused tests/typecheck, Sol low review). Task 5.1b private adapter/storage is committed as `c34d6b4` (9 focused DB checks/typecheck, Sol low review; combined chronological 12 checks passed before the final delta-only adjustment). Scope 5.1c payment integration is in progress; 5.2 correction, Tasks 6-8 and final release checks remain pending. Production runtime/device acceptance is tracked separately from implementation. Landing revamp remains explicitly deferred.
