@@ -45,21 +45,34 @@ export function useDebt(userId: string | null) {
   const sessionRevision = useRef(0);
   const identityRevision = useRef(0);
   const authSession = useRef<{ userId: string; accessToken: string } | null>(null);
-  const fetchForUser = useCallback(async () => {
+  const readRevision = useRef(0);
+  const latestRead = useRef<{ revision: number; selectionRevision: number; userId: string | null; promise: Promise<DebtSnapshot> } | null>(null);
+  const fetchForUser = useCallback(() => {
+    const requestReadRevision = ++readRevision.current;
     const selection = selectedUser.current;
-    let requestSessionRevision = sessionRevision.current;
-    const requestIdentityRevision = identityRevision.current;
-    const isCurrent = () => selectedUser.current.userId === userId && selectedUser.current.revision === selection.revision && sessionRevision.current === requestSessionRevision;
-    let snapshot: DebtSnapshot;
-    try { snapshot = await fetchDebtSnapshot(userId!, isCurrent); }
-    catch (error) {
-      if (!(error instanceof SupersededDebtRequestError) || selectedUser.current.revision !== selection.revision ||
-        identityRevision.current !== requestIdentityRevision || sessionRevision.current === requestSessionRevision || authSession.current?.userId !== userId) throw error;
-      requestSessionRevision = sessionRevision.current;
-      snapshot = await fetchDebtSnapshot(userId!, isCurrent);
-    }
-    if (isCurrent()) setSnapshotUserId(userId);
-    return snapshot;
+    const load = async () => {
+      let requestSessionRevision = sessionRevision.current;
+      const requestIdentityRevision = identityRevision.current;
+      const isCurrent = () => readRevision.current === requestReadRevision && selectedUser.current.userId === userId && selectedUser.current.revision === selection.revision && sessionRevision.current === requestSessionRevision;
+      let snapshot: DebtSnapshot;
+      try { snapshot = await fetchDebtSnapshot(userId!, isCurrent); }
+      catch (error) {
+        if (!(error instanceof SupersededDebtRequestError) || selectedUser.current.revision !== selection.revision ||
+          identityRevision.current !== requestIdentityRevision || sessionRevision.current === requestSessionRevision || authSession.current?.userId !== userId) throw error;
+        requestSessionRevision = sessionRevision.current;
+        snapshot = await fetchDebtSnapshot(userId!, isCurrent);
+      }
+      if (isCurrent()) setSnapshotUserId(userId);
+      return snapshot;
+    };
+    const promise = load().catch(error => {
+      const newer = latestRead.current;
+      // SWR suppresses superseded successes, but its error path can overwrite a newer read.
+      if (newer && newer.revision > requestReadRevision && newer.userId === userId && newer.selectionRevision === selection.revision && selectedUser.current.revision === selection.revision) return newer.promise;
+      throw error;
+    });
+    latestRead.current = { revision: requestReadRevision, selectionRevision: selection.revision, userId, promise };
+    return promise;
   }, [userId]);
   const { data, error, isLoading } = useSWR<DebtSnapshot>(userId ? ["debtSnapshot", userId] : null, fetchForUser);
   useEffect(() => setSnapshotUserId(userId), [userId]);

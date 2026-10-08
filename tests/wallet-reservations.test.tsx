@@ -33,6 +33,9 @@ const fixture = vi.hoisted(() => {
     transactionReads: 0,
     authResponses: [] as Promise<any>[],
     accountResponses: [] as Promise<any>[],
+    debtSnapshot: null as any,
+    debtResponses: [] as Promise<any>[],
+    debtReads: 0,
   };
 });
 
@@ -49,7 +52,14 @@ vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: {
       getUser: async () => fixture.authResponses.shift() ?? ({ data: { user: { id: fixture.userId } }, error: null }),
+      getSession: async () => ({ data: { session: { user: { id: fixture.userId }, access_token: "token" } }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    },
+    rpc: (name: string) => {
+      if (name !== "debt_snapshot") throw new Error(`Unexpected RPC ${name}`);
+      fixture.debtReads += 1;
+      const response = fixture.debtResponses.shift() ?? Promise.resolve({ data: fixture.debtSnapshot ?? makeDebtSnapshot(), error: null });
+      return { setHeader: () => response, then: response.then.bind(response) };
     },
     from: (table: string) => {
       let action: "select" | "update" = "select";
@@ -88,7 +98,8 @@ vi.mock("@/lib/supabase/client", () => ({
   }),
 }));
 
-vi.mock("@/lib/goals/client", () => ({
+vi.mock("@/lib/goals/client", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/goals/client")>(),
   fetchGoalFinance: vi.fn(async () => {
     if (fixture.financeReadError) throw fixture.financeReadError;
     return fixture.snapshot;
@@ -140,6 +151,15 @@ function makeTransactions() {
   ];
 }
 
+function makeDebtSnapshot(total = "8000.00", rows = true) {
+  const credit = fixture.accounts.find(account => account.id === fixture.creditId);
+  const authoritative = credit ? Number(credit.balance).toFixed(2) : total;
+  return { accounts: [{ accountId: fixture.creditId, totalOutstanding: authoritative, undatedOutstanding: rows ? "6400.00" : authoritative, fingerprint: "a".repeat(64), reconciliation: "balanced", reconciliationDelta: "0.00" }], rows: rows ? [
+    { id: "50000000-0000-4000-8000-000000000001", accountId: fixture.creditId, groupId: "60000000-0000-4000-8000-000000000001", source: "purchase", transactionId: "70000000-0000-4000-8000-000000000001", dueDate: "2026-09-05", originalAmount: "700.00", paidAmount: "0.00", correctedAmount: "0.00", remainingAmount: "700.00", ordinal: 1, name: "September purchase and advance" },
+    { id: "50000000-0000-4000-8000-000000000002", accountId: fixture.creditId, groupId: "60000000-0000-4000-8000-000000000002", source: "purchase", transactionId: "70000000-0000-4000-8000-000000000002", dueDate: "2026-10-01", originalAmount: "1000.00", paidAmount: "100.00", correctedAmount: "0.00", remainingAmount: "900.00", ordinal: 1, name: "October purchase" },
+  ] : [] };
+}
+
 function FinanceOperation({ command, label }: { command: any; label: string }) {
   const goals = useGoals();
   return (
@@ -165,6 +185,9 @@ beforeEach(() => {
   fixture.transactionResponses = [];
   fixture.authResponses = [];
   fixture.accountResponses = [];
+  fixture.debtSnapshot = null;
+  fixture.debtResponses = [];
+  fixture.debtReads = 0;
 });
 
 afterEach(() => {
@@ -175,16 +198,16 @@ afterEach(() => {
 
 test.each([false, true])("newer debt refresh survives an older response (old failure: %s)", async oldFailure => {
   let resolveOld!: (value: any) => void;
-  fixture.transactionResponses = [new Promise(resolve => { resolveOld = resolve; })];
+  fixture.debtResponses = [new Promise(resolve => { resolveOld = resolve; })];
   render(<><AccountsPage /><FinanceOperation command={{ kind: "reserve" }} label="Refresh finance" /></>, { wrapper });
-  await waitFor(() => expect(fixture.transactionReads).toBe(1));
+  await waitFor(() => expect(fixture.debtReads).toBe(1));
   fixture.accounts = makeAccounts().map(account => ({ ...account, name: account.id === fixture.cashId ? "Fresh wallet" : account.name }));
-  fixture.transactions = [{ ...makeTransactions()[4], amount: 300 }];
+  fixture.debtSnapshot = { ...makeDebtSnapshot(), rows: [{ ...makeDebtSnapshot().rows[1], originalAmount: "300.00", paidAmount: "0.00", remainingAmount: "300.00" }] };
   fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
-  await waitFor(() => expect(fixture.transactionReads).toBe(2));
-  await screen.findAllByText(`-${formatCurrency(300)}`);
-  await act(async () => resolveOld({ data: makeTransactions(), error: oldFailure ? new Error("stale debt failure") : null }));
-  expect(screen.queryAllByText(`-${formatCurrency(300)}`).length).toBeGreaterThan(0);
+  await waitFor(() => expect(fixture.debtReads).toBe(2));
+  await screen.findAllByText("PHP 300.00");
+  await act(async () => resolveOld({ data: makeDebtSnapshot(), error: oldFailure ? new Error("stale debt failure") : null }));
+  expect(screen.queryAllByText("PHP 300.00").length).toBeGreaterThan(0);
   expect(screen.queryByText("Unavailable")).toBeNull();
   expect(screen.getByText("Fresh wallet")).not.toBeNull();
   expect(fixture.accountWrites).toHaveLength(0);
@@ -201,19 +224,19 @@ test("wallet inclusion toggle keeps the summary caption and balance in the same 
 test("an older completed load cannot end a newer debt loading state", async () => {
   let resolveOld!: (value: any) => void;
   let resolveNew!: (value: any) => void;
-  fixture.transactionResponses = [
+  fixture.debtResponses = [
     new Promise(resolve => { resolveOld = resolve; }),
     new Promise(resolve => { resolveNew = resolve; }),
   ];
   render(<><AccountsPage /><FinanceOperation command={{ kind: "reserve" }} label="Refresh finance" /></>, { wrapper });
-  await waitFor(() => expect(fixture.transactionReads).toBe(1));
+  await waitFor(() => expect(fixture.debtReads).toBe(1));
   fixture.accounts = makeAccounts().map(account => ({ ...account, name: `${account.name} refreshed` }));
   fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
-  await waitFor(() => expect(fixture.transactionReads).toBe(2));
-  await act(async () => resolveOld({ data: makeTransactions(), error: null }));
+  await waitFor(() => expect(fixture.debtReads).toBe(2));
+  await act(async () => resolveOld({ data: makeDebtSnapshot(), error: null }));
   expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain("...");
-  expect(screen.queryByLabelText("Net worth balance")).toBeNull();
-  await act(async () => resolveNew({ data: [{ ...makeTransactions()[4], amount: 300 }], error: null }));
+  expect(screen.getByLabelText("Net worth balance").getAttribute("data-money")).toBe("30000.00");
+  await act(async () => resolveNew({ data: makeDebtSnapshot(), error: null }));
   expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain(`-${formatCurrency(8000)}`);
 });
 
@@ -236,13 +259,13 @@ test("late authentication cannot replace newer account metadata", async () => {
 
 test("an account query failure invalidates outstanding debt reads", async () => {
   let resolveOld!: (value: any) => void;
-  fixture.transactionResponses = [new Promise(resolve => { resolveOld = resolve; })];
+  fixture.debtResponses = [new Promise(resolve => { resolveOld = resolve; })];
   render(<><AccountsPage /><FinanceOperation command={{ kind: "reserve" }} label="Refresh finance" /></>, { wrapper });
-  await waitFor(() => expect(fixture.transactionReads).toBe(1));
+  await waitFor(() => expect(fixture.debtReads).toBe(1));
   fixture.accountReadError = new Error("accounts unavailable");
   fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
   await screen.findByText(/wallet balances could not be loaded/i);
-  await act(async () => resolveOld({ data: makeTransactions(), error: null }));
+  await act(async () => resolveOld({ data: makeDebtSnapshot(), error: null }));
   expect(screen.getByText("Outstanding Debt:").parentElement?.textContent).toContain("Unavailable");
   expect(screen.queryByLabelText("Net worth balance")).toBeNull();
 });
@@ -358,6 +381,7 @@ test("All months uses the current credit balance while a selected month uses its
 test("All months debt deduction remains available when there are no scheduled months", async () => {
   fixture.accounts = makeAccounts().map(account => account.id === fixture.creditId ? { ...account, balance: 6600 } : account);
   fixture.transactions = [];
+  fixture.debtSnapshot = makeDebtSnapshot("6600.00", false);
 
   render(<AccountsPage />, { wrapper });
 
@@ -374,9 +398,11 @@ test.each([
   ["null", null],
   ["blank", "  "],
   ["malformed", "not a balance"],
-])("All months debt is unavailable when the credit balance is %s", async (_state, balance) => {
+])("All months debt is unavailable when snapshot credit amount is %s", async (_state, balance) => {
   fixture.accounts = makeAccounts().map(account => account.id === fixture.creditId ? { ...account, balance } : account);
   fixture.transactions = [];
+  fixture.debtSnapshot = makeDebtSnapshot("6600.00", false);
+  fixture.debtSnapshot.accounts[0].totalOutstanding = balance;
 
   render(<AccountsPage />, { wrapper });
 

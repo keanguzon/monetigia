@@ -26,6 +26,10 @@ import { WalletLedgerView } from "@/components/accounts/WalletLedgerView";
 import { DebtScheduleSection } from "@/components/accounts/DebtScheduleSection";
 import { useAccounts } from "@/hooks/use-data";
 import { useGoals } from "@/hooks/use-goals";
+import { useDebt, useDebtCommand } from "@/hooks/use-debt";
+import { summarizeDebt } from "@/lib/debt/summary";
+import { fromMinorUnits, toMinorUnits } from "@/lib/goals/summary";
+import { LegacyDebtReviewDialog } from "@/components/accounts/LegacyDebtReviewDialog";
 
 const AddAccountModal = dynamic(() => import("@/components/accounts/AddAccountModal"), {
   ssr: false,
@@ -41,6 +45,10 @@ export default function AccountsPage() {
   const accountsQuery = useAccounts();
   const loadRevision = useRef(0);
   const goals = useGoals();
+  const debt = useDebt(goals.userId);
+  const debtCommand = useDebtCommand(goals.userId);
+  const pendingAdoption = debtCommand.pendingCommand?.kind === "adopt_opening_debt" ? debtCommand.pendingCommand : null;
+  const [reviewAccountId, setReviewAccountId] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
@@ -48,11 +56,11 @@ export default function AccountsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [interestRateDraft, setInterestRateDraft] = useState<Record<string, string>>({});
 
-  const [isDebtLoading, setIsDebtLoading] = useState(false);
-  const [debtLoadError, setDebtLoadError] = useState<unknown>(null);
+
+
   const [accountLoadError, setAccountLoadError] = useState<unknown>(null);
-  const [debtByMonth, setDebtByMonth] = useState<Record<string, number>>({});
-  const [expenseItemsByMonth, setExpenseItemsByMonth] = useState<Record<string, any[]>>({});
+
+
   const [selectedDebtMonths, setSelectedDebtMonths] = useState<string[]>([]);
   const [previewAfterPay, setPreviewAfterPay] = useState(false);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
@@ -72,10 +80,10 @@ export default function AccountsPage() {
     loadRevision.current += 1;
     if (accountsQuery.error) {
       setAccountLoadError(accountsQuery.error);
-      setDebtLoadError(accountsQuery.error);
+
       setAccounts([]);
       setIsLoading(false);
-      setIsDebtLoading(false);
+
     } else if (accountsQuery.data !== undefined) {
       void loadAccounts(accountsQuery.data);
     }
@@ -257,7 +265,7 @@ export default function AccountsPage() {
     const isCurrentLoad = () => revision === loadRevision.current;
     setIsLoading(true);
     setAccountLoadError(null);
-    setIsDebtLoading(true);
+
     try {
       const {
         data: { user },
@@ -300,100 +308,15 @@ export default function AccountsPage() {
         if (!isCurrentLoad()) return;
       }
 
-      const creditIds = accountsList
-        .filter((account: any) => account?.type === "credit_card")
-        .map((account: any) => account.id)
-        .filter(Boolean);
 
-      if (creditIds.length === 0) {
-        setDebtByMonth({});
-        setExpenseItemsByMonth({});
-        setSelectedDebtMonths([]);
-        setDebtLoadError(null);
-        return;
-      }
-
-      let txData: any[] | null;
-      let txError: unknown;
-      try {
-        const result = await sb
-          .from("transactions")
-          .select(
-            "id, account_id, type, amount, description, date, transfer_to_account_id, category:categories(id,name,color), account:accounts!account_id(id,name,type)"
-          )
-          .eq("user_id", user.id)
-          .or(`account_id.in.(${creditIds.join(",")}),transfer_to_account_id.in.(${creditIds.join(",")})`)
-          .order("date", { ascending: false })
-          .limit(5000);
-        txData = result.data;
-        txError = result.error;
-      } catch (error) {
-        txData = null;
-        txError = error;
-      }
-
-      if (!isCurrentLoad()) return;
-
-      if (txError) {
-        setDebtLoadError(txError);
-        setDebtByMonth({});
-        setExpenseItemsByMonth({});
-        setSelectedDebtMonths([]);
-        return;
-      }
-
-      const byMonth: Record<string, number> = {};
-      const itemsByMonth: Record<string, any[]> = {};
-
-      (txData || []).forEach((transaction: any) => {
-        const monthKey = typeof transaction?.date === "string" ? transaction.date.slice(0, 7) : "unknown";
-        if (!byMonth[monthKey]) byMonth[monthKey] = 0;
-        if (!itemsByMonth[monthKey]) itemsByMonth[monthKey] = [];
-
-        const amount = Number(transaction?.amount || 0);
-        const isCreditSource = creditIds.includes(transaction?.account_id);
-        const isCreditDestination = creditIds.includes(transaction?.transfer_to_account_id);
-
-        // Credit expenses and advances add debt; card income and payments reduce it.
-        if (transaction.type === "expense" && isCreditSource) {
-          byMonth[monthKey] += amount;
-          itemsByMonth[monthKey].push(transaction);
-        } else if (transaction.type === "income" && isCreditSource) {
-          byMonth[monthKey] -= amount;
-        } else if (transaction.type === "transfer") {
-          if (isCreditDestination) byMonth[monthKey] -= amount;
-          if (isCreditSource) byMonth[monthKey] += amount;
-        }
-      });
-
-      // Carry historical overpayments into later months, matching the existing preview calculation.
-      const normalizedByMonth: Record<string, number> = {};
-      const ascendingMonths = Object.keys(byMonth)
-        .filter(month => month && month !== "unknown")
-        .sort((left, right) => (left < right ? -1 : 1));
-      let carry = 0;
-      for (const month of ascendingMonths) {
-        const next = Number(byMonth[month] || 0) + carry;
-        if (next < 0) {
-          normalizedByMonth[month] = 0;
-          carry = next;
-        } else {
-          normalizedByMonth[month] = next;
-          carry = 0;
-        }
-      }
-
-      setDebtLoadError(null);
-      setDebtByMonth(normalizedByMonth);
-      setExpenseItemsByMonth(itemsByMonth);
     } catch (error) {
       if (!isCurrentLoad()) return;
       setAccountLoadError(error);
-      setDebtLoadError(error);
+
     } finally {
       if (isCurrentLoad()) {
         setIsLoading(false);
-        setIsDebtLoading(false);
+
       }
     }
   };
@@ -460,27 +383,18 @@ export default function AccountsPage() {
     );
   }, [accounts, accountsQuery.data]);
 
-  const accountDebtResult = useMemo(() => {
-    let totalCents = 0;
-    for (const account of summaryAccounts) {
-      if (account?.type !== "credit_card") continue;
-      const rawBalance = account.balance;
-      const isDecimalBalance = typeof rawBalance === "number"
-        ? Number.isFinite(rawBalance)
-        : typeof rawBalance === "string" && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawBalance.trim());
-      if (!isDecimalBalance) {
-        return { amount: null, error: new Error("Credit account balance is unavailable") };
-      }
-      const balance = Number(rawBalance);
-      const cents = Math.round(Math.max(0, balance) * 100);
-      if (!Number.isFinite(balance) || !Number.isSafeInteger(cents) || !Number.isSafeInteger(totalCents + cents)) {
-        return { amount: null, error: new Error("Credit account balance is not a valid amount") };
-      }
-      totalCents += cents;
-    }
-    return { amount: totalCents / 100, error: null as unknown };
-  }, [summaryAccounts]);
-
+  const debtSnapshotResult = useMemo(() => {
+    if (!debt.snapshot) return { snapshot: undefined, unsupported: [] as any[], error: null as unknown };
+    const metadata = new Map(summaryAccounts.map(account => [account.id, account]));
+    const missing = debt.snapshot.accounts.some(account => !metadata.get(account.accountId)?.currency);
+    const unsupported = debt.snapshot.accounts.flatMap(account => {
+      const wallet = metadata.get(account.accountId);
+      return wallet?.currency && wallet.currency !== "PHP" ? [{ ...account, name: wallet.name, currency: wallet.currency }] : [];
+    });
+    const supportedIds = new Set(debt.snapshot.accounts.filter(account => metadata.get(account.accountId)?.currency === "PHP").map(account => account.accountId));
+    return { snapshot: { accounts: debt.snapshot.accounts.filter(account => supportedIds.has(account.accountId)), rows: debt.snapshot.rows.filter(row => supportedIds.has(row.accountId)) }, unsupported,
+      error: missing ? new Error("Debt currency metadata is unavailable") : null };
+  }, [debt.snapshot, summaryAccounts]);
   const walletSummaryResult = useMemo(() => {
     if (!goals.financeSnapshot) return { summary: null, error: null as unknown };
     try {
@@ -495,21 +409,12 @@ export default function AccountsPage() {
   const walletSummaryError = accountsQuery.error || accountLoadError || goals.isError || walletSummaryResult.error ||
     (!goals.isLoading && !goals.financeSnapshot ? new Error("Finance snapshot is unavailable") : null);
   const walletSummaryLoading = isLoading || accountsQuery.isLoading || accountsQuery.isValidating || goals.isLoading;
-  const debtSummaryLoading = isDebtLoading || isLoading || accountsQuery.isLoading || accountsQuery.isValidating;
-  const debtSummaryError = debtLoadError || accountLoadError || accountsQuery.error || accountDebtResult.error;
+  const debtSummaryLoading = debt.isLoading || isLoading || accountsQuery.isLoading || accountsQuery.isValidating;
+  const debtSummaryError = debt.error || accountLoadError || accountsQuery.error || debtSnapshotResult.error;
 
   const currentMoney = walletSummaryResult.summary ? Number(walletSummaryResult.summary.netWorth) : 0;
 
-  const sortedMonths = useMemo(() => {
-    const keys = Object.keys(debtByMonth).filter((k) => {
-      if (!k || k === "unknown") return false;
-      const debt = Math.max(0, Number(debtByMonth[k] || 0));
-      return debt > 0.005; // Only show months with meaningful outstanding debt
-    });
-    keys.sort((a, b) => (a < b ? 1 : -1));
-    return keys;
-  }, [debtByMonth]);
-
+  const sortedMonths = useMemo(() => Array.from(new Set(debtSnapshotResult.snapshot?.rows.flatMap(row => row.dueDate && row.remainingAmount !== "0.00" ? [row.dueDate.slice(0, 7)] : []) ?? [])).sort().reverse(), [debtSnapshotResult.snapshot]);
   useEffect(() => {
     setSelectedDebtMonths((prev) => {
       if (sortedMonths.length === 0) return [];
@@ -542,17 +447,21 @@ export default function AccountsPage() {
     return selectedDebtMonths.join(", ");
   }, [isAllMonthsSelected, selectedDebtMonths, sortedMonths.length]);
 
-  const selectedDebt = useMemo(() => {
-    if (isAllMonthsSelected) return accountDebtResult.amount ?? 0;
-    const months = selectedDebtMonths;
-    return months.reduce((sum, m) => sum + Math.max(0, Number(debtByMonth[m] || 0)), 0);
-  }, [accountDebtResult.amount, debtByMonth, isAllMonthsSelected, selectedDebtMonths]);
-
-  const previewMoney = useMemo(() => {
-    if (!previewAfterPay || debtSummaryLoading || debtSummaryError) return currentMoney;
-    return currentMoney - selectedDebt;
-  }, [currentMoney, debtSummaryError, debtSummaryLoading, previewAfterPay, selectedDebt]);
-
+  const exactDebtResult = useMemo(() => {
+    if (!debtSnapshotResult.snapshot) return { summary: null, error: null as unknown };
+    try { return { summary: summarizeDebt(debtSnapshotResult.snapshot, isAllMonthsSelected ? null : selectedDebtMonths), error: null as unknown }; }
+    catch (error) { return { summary: null, error }; }
+  }, [debtSnapshotResult.snapshot, isAllMonthsSelected, selectedDebtMonths]);
+  const selectedDebtMoney = exactDebtResult.summary ? (isAllMonthsSelected ? exactDebtResult.summary.totalOutstanding : exactDebtResult.summary.scheduledDebt) : null;
+  const selectedDebt = Number(selectedDebtMoney ?? "0.00");
+  const debtUnavailable = Boolean(debtSummaryError || exactDebtResult.error || selectedDebtMoney === null);
+  const deductionUnavailable = debtUnavailable || Boolean(exactDebtResult.summary?.needsReviewAccountIds.length);
+  const previewMoneyText = useMemo(() => {
+    if (!previewAfterPay || debtSummaryLoading || deductionUnavailable || !walletSummaryResult.summary || selectedDebtMoney === null) return walletSummaryResult.summary?.netWorth ?? "0.00";
+    const cents = BigInt(toMinorUnits(walletSummaryResult.summary.netWorth)) - BigInt(toMinorUnits(selectedDebtMoney));
+    return fromMinorUnits(Number(cents));
+  }, [previewAfterPay, debtSummaryLoading, deductionUnavailable, walletSummaryResult.summary, selectedDebtMoney]);
+  const previewMoney = Number(previewMoneyText);
   const defaultCreditAccountId = useMemo(() => {
     return accounts.find((a) => a?.type === "credit_card")?.id;
   }, [accounts]);
@@ -602,12 +511,12 @@ export default function AccountsPage() {
                   {walletSummaryLoading ? <Skeleton className="h-9 w-48" /> : walletSummaryError || !walletSummaryResult.summary ? (
                     <span>Unavailable</span>
                   ) : (
-                    <output aria-label="Net worth balance" data-money={previewAfterPay && !debtSummaryLoading && !debtSummaryError ? previewMoney.toFixed(2) : walletSummaryResult.summary.netWorth}>
-                      {formatCurrency(previewAfterPay && !debtSummaryLoading && !debtSummaryError ? previewMoney : currentMoney)}
+                    <output aria-label="Net worth balance" data-money={previewAfterPay && !debtSummaryLoading && !deductionUnavailable ? previewMoneyText : walletSummaryResult.summary.netWorth}>
+                      {formatCurrency(previewAfterPay && !debtSummaryLoading && !deductionUnavailable ? previewMoney : currentMoney)}
                     </output>
                   )}
                 </div>
-                {previewAfterPay && !debtSummaryLoading && !walletSummaryLoading && !debtSummaryError && !walletSummaryError && (
+                {previewAfterPay && !debtSummaryLoading && !walletSummaryLoading && !deductionUnavailable && !walletSummaryError && (
                   <span className="text-xs tabular-nums text-muted-foreground font-medium">
                     (reflecting -{formatCurrency(Math.abs(selectedDebt))} debt deduction)
                   </span>
@@ -622,14 +531,14 @@ export default function AccountsPage() {
             <div className="flex flex-wrap items-center gap-2 pt-1 lg:pt-0">
               <div className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-2.5 py-1.5 text-xs">
                 <span className="text-muted-foreground">{isAllMonthsSelected ? "Outstanding Debt:" : "Scheduled Debt:"}</span>
-                <span className="font-heading tabular-nums font-bold text-rose-600 dark:text-rose-400">
-                  {debtSummaryLoading ? "..." : debtSummaryError ? "Unavailable" : `-${formatCurrency(Math.abs(selectedDebt))}`}
-                </span>
+                <output aria-label={isAllMonthsSelected ? "Outstanding debt" : "Scheduled debt"} data-money={!debtSummaryLoading && !debtUnavailable ? selectedDebtMoney ?? undefined : undefined} className="font-heading tabular-nums font-bold text-rose-600 dark:text-rose-400">
+                  {debtSummaryLoading ? "..." : debtUnavailable ? "Unavailable" : `-${formatCurrency(Math.abs(selectedDebt))}`}
+                </output>
               </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 text-xs font-medium bg-background" disabled={debtSummaryLoading || !!debtSummaryError || sortedMonths.length === 0}>
+                  <Button size="sm" variant="outline" className="h-8 text-xs font-medium bg-background" disabled={debtSummaryLoading || !!debtUnavailable || sortedMonths.length === 0}>
                     {isAllMonthsSelected ? "All months" : selectedMonthsLabel}
                     <ChevronDown className="ml-1.5 h-3.5 w-3.5 opacity-70" />
                   </Button>
@@ -684,7 +593,7 @@ export default function AccountsPage() {
                 size="sm"
                 variant={previewAfterPay ? "secondary" : "outline"}
                 onClick={() => setPreviewAfterPay((v) => !v)}
-                disabled={debtSummaryLoading || !!debtSummaryError}
+                disabled={debtSummaryLoading || !!deductionUnavailable}
                 className="h-8 text-xs font-medium"
               >
                 {previewAfterPay ? "Deduct Debt: Active" : "Deduct Debt: Off"}
@@ -887,21 +796,14 @@ export default function AccountsPage() {
         </div>
 
         {/* ─── PayLater & Credit Schedule (No outer card, hairline statement ledger) ─── */}
-        {debtSummaryError ? (
-          <p role="alert" className="text-sm text-muted-foreground">
-            Credit debt history could not be loaded. Refresh the page to try again.
-          </p>
-        ) : (
-          <DebtScheduleSection
-            isDebtLoading={debtSummaryLoading}
-            sortedMonths={sortedMonths}
-            debtByMonth={debtByMonth}
-            expenseItemsByMonth={expenseItemsByMonth}
-            onPayDebt={handlePayDebt}
-            defaultCreditAccountId={defaultCreditAccountId}
-          />
-        )}
-      </div >
+        {Boolean(debtSnapshotResult.error) && <p role="alert" className="text-sm text-red-700 dark:text-red-300">Debt currency metadata is unavailable. The PHP debt total cannot be confirmed.</p>}
+        {debtSnapshotResult.unsupported.map(account => <p key={account.accountId} role="alert" className="break-words text-sm text-red-700 dark:text-red-300">{account.name} ({account.currency}) is excluded from PHP debt totals. Its debt requires separate review; PHP payments and due-date adoption are unavailable.</p>)}
+        <DebtScheduleSection snapshot={debtSnapshotResult.snapshot} isLoading={debtSummaryLoading} error={debtSummaryError || exactDebtResult.error} onPayDebt={handlePayDebt} canReviewLegacy={accountId => summaryAccounts.some(account => account.id === accountId && account.currency === "PHP" && account.is_active === true)} onReviewLegacy={accountId => {
+          const wallet = summaryAccounts.find(account => account.id === accountId);
+          if (wallet?.currency === "PHP" && wallet.is_active === true) setReviewAccountId(accountId);
+        }} />
+        {pendingAdoption && <div role="status" className="space-y-2 border-t border-border pt-4"><p className="text-sm">A due-date save is unconfirmed. Recover its original request before starting another review.</p><Button variant="outline" className="min-h-11" onClick={() => setReviewAccountId(pendingAdoption.accountId)}>Recover due-date save</Button></div>}
+        <LegacyDebtReviewDialog isOpen={reviewAccountId !== null} onClose={() => setReviewAccountId(null)} account={debtSnapshotResult.snapshot?.accounts.find(account => account.accountId === reviewAccountId) ?? null} />      </div >
 
       {/* Add Wallet Modal */}
       <AddAccountModal
