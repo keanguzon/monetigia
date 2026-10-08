@@ -1,5 +1,11 @@
 # Remaining Rollout Execution Implementation Plan
 
+## October 9 execution override
+
+The user authorizes completion through Task 9, followed by QA. Sol high plans bounded scopes, Luna max implements, and Sol light performs one review for substantive correctness per unit. Code first, then one focused verification batch; rerun affected checks only after fixes. Earlier RED-first, Astra assignments, and stop-after-7.1 boundaries below are historical. Reuse existing APIs and keep simple tasks simple. Data integrity, owner isolation, unknown-outcome recovery, and migration-before-dependent-frontend release requirements remain binding. Do not resume Gemini or run competing coders for the same unit.
+
+Unit 8.1 source ruling: the installed conventions use SECURITY DEFINER, fixed search_path, owner locks and private helper execution revocation; there is no write-context GUC to reuse. Preserve existing dispatcher grants to authenticated and service_role rather than changing unrelated released permissions. Revoke the new metadata helper from PUBLIC, anon, authenticated and service_role. Narrow exactly the two live source-claim predicates in debt_account_state to transaction commands in additive migration006; keep migration005 unchanged.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Follow the user's selected method: root dispatches each bounded unit to Luna max, then Astra low reviews it. No nested agents. Steps use checkbox syntax. Latest user authorization: finish Task 6, execute only Unit 7.1, independently review/fix it, then root commits and pushes the reviewed work and stops with a PC-transfer handoff prompt. Units 7.2, 8 and 9 are planned but deferred.
 
 **Goal:** Finish stable debt selection/correction and description editing, then verify the installed financial runtime and record release acceptance without changing user data during planning.
