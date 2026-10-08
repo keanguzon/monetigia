@@ -300,3 +300,18 @@ export async function applyFinancialCommand(
     throw unknownOutcome(error);
   }
 }
+
+export async function restoreArchivedGoal(requestId: string, goalId: string): Promise<FinancialResult> {
+  const safeRequestId = requestIdSchema.parse(requestId);
+  const safeGoalId = requestIdSchema.parse(goalId);
+  const response = await Promise.resolve().then(() => createClient().rpc("goal_restore_archived", {
+    p_request_id: safeRequestId,
+    p_goal_id: safeGoalId,
+  })).catch(error => { throw unknownOutcome(error); });
+  if (response.error) throw readServerError(response.error, true);
+  try {
+    return FinancialResultSchema.parse(response.data);
+  } catch (error) {
+    throw unknownOutcome(error);
+  }
+}

@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   uploadResponse: null as any,
   displayMode: false,
   userAgent: "Mozilla/5.0 Chrome/131.0.0.0 Safari/537.36",
+  goalData: null as any,
+  restoreGoal: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => mocks.client }));
@@ -29,6 +31,10 @@ vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: vi.fn() 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }) }));
 vi.mock("next-themes", () => ({
   useTheme: () => ({ theme: mocks.theme, resolvedTheme: mocks.resolvedTheme, setTheme: mocks.setTheme }),
+}));
+vi.mock("@/hooks/use-goals", () => ({ useGoals: () => mocks.goalData }));
+vi.mock("@/lib/refresh-financial-data", () => ({
+  restoreArchivedGoalAndRefresh: (...args: unknown[]) => mocks.restoreGoal(...args),
 }));
 
 import SettingsPage from "@/app/(dashboard)/settings/page";
@@ -45,6 +51,41 @@ const profile = {
   email: "avery@example.com",
   avatar_url: "https://images.example.test/old-avatar.png",
 };
+const archivedGoalId = "20000000-0000-4000-8000-000000000002";
+const restoreRequestId = "40000000-0000-4000-8000-000000000004";
+
+function makeArchivedGoal(overrides: Record<string, unknown> = {}) {
+  return {
+    id: archivedGoalId,
+    goalId: archivedGoalId,
+    user_id: userId,
+    name: "Laptop",
+    target_amount: "1250.00",
+    current_amount: "500.00",
+    target_date: null,
+    color: null,
+    icon: null,
+    is_completed: true,
+    status: "completed",
+    review_state: "confirmed",
+    completed_at: "2026-10-06T12:00:00.000Z",
+    archived_at: "2026-10-08T12:00:00.000Z",
+    is_priority: false,
+    category: "Savings",
+    allocation_per_cycle: "0.00",
+    allocation_frequency: "monthly",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-10-08T12:00:00.000Z",
+    reserved: "0.00",
+    spent: "500.00",
+    progressAmount: "500.00",
+    remaining: "750.00",
+    progressPercent: 40,
+    walletReservations: [],
+    legacyTaggedAmount: "0.00",
+    ...overrides,
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -101,6 +142,17 @@ beforeEach(() => {
   mocks.updates = [];
   mocks.displayMode = false;
   mocks.userAgent = "Mozilla/5.0 Chrome/131.0.0.0 Safari/537.36";
+  mocks.goalData = {
+    userId,
+    financeSnapshot: { goals: [] },
+    isLoading: false,
+    isError: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
+  };
+  mocks.restoreGoal.mockReset().mockResolvedValue({
+    saved: { operationId: restoreRequestId, transactionIds: [], replayed: false },
+    refreshError: null,
+  });
   mocks.fetch.mockReset();
   installResponse();
 
@@ -479,5 +531,157 @@ describe("settings page", () => {
     expect(screen.getByText(/credit cards.*excluded/i)).toBeTruthy();
     expect(screen.getByText(/reserving money.*keeps it in the wallet/i)).toBeTruthy();
     expect(screen.getByText(/require an internet connection.*not queued offline/i)).toBeTruthy();
+  });
+
+  test("shows archived-goal loading, empty, and retryable error states", async () => {
+    mocks.goalData.isLoading = true;
+    const loadingView = renderSettings();
+    expect(await screen.findByRole("status", { name: /loading archived goals/i })).toBeTruthy();
+    loadingView.unmount();
+
+    mocks.goalData.isLoading = false;
+    mocks.goalData.financeSnapshot = { goals: [] };
+    const view = renderSettings();
+    expect(await screen.findByRole("heading", { name: "Archived goals" })).toBeTruthy();
+    expect(screen.getByText(/no archived goals/i)).toBeTruthy();
+
+    view.unmount();
+    mocks.goalData.isError = new Error("Snapshot unavailable");
+    const errorView = renderSettings();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/archived goals could not load/i);
+    await userEvent.setup().click(screen.getByRole("button", { name: /retry loading archived goals/i }));
+    expect(mocks.goalData.refresh).toHaveBeenCalledOnce();
+    errorView.unmount();
+  });
+
+  test("catches a failed archive-load retry and keeps the action available", async () => {
+    const user = userEvent.setup();
+    const pending = deferred<void>();
+    mocks.goalData.isError = new Error("Snapshot unavailable");
+    mocks.goalData.refresh.mockReturnValue(pending.promise);
+    renderSettings();
+
+    const retry = await screen.findByRole("button", { name: /retry loading archived goals/i });
+    await user.click(retry);
+    expect((retry as HTMLButtonElement).disabled).toBe(true);
+    pending.reject(new Error("Still unavailable"));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/still unavailable/i));
+    expect((retry as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  test("reports a session lookup error instead of showing empty archived goals", async () => {
+    mocks.goalData.userId = null;
+    mocks.goalData.financeSnapshot = undefined;
+    mocks.goalData.isError = new Error("Session lookup failed");
+    renderSettings();
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/session could not be checked/i);
+    expect(screen.queryByText(/no archived goals/i)).toBeNull();
+  });
+
+  test("renders archived goal details from the signed-in finance snapshot and restores without reopening", async () => {
+    const user = userEvent.setup();
+    mocks.goalData.financeSnapshot = { goals: [makeArchivedGoal()] };
+    vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(restoreRequestId);
+    renderSettings();
+
+    expect(await screen.findByRole("heading", { name: "Archived goals" })).toBeTruthy();
+    expect(screen.getByText("Laptop")).toBeTruthy();
+    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(screen.getByText("PHP 1,250.00")).toBeTruthy();
+    expect(screen.getByText("Archived")).toBeTruthy();
+    expect(screen.getByText(/2026/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /restore laptop/i }));
+
+    expect(mocks.restoreGoal).toHaveBeenCalledWith(restoreRequestId, archivedGoalId, expect.any(Function));
+    expect((await screen.findByRole("status")).textContent).toMatch(/laptop moved back to goals.*completed.*spending history/i);
+    expect(mocks.client.from.mock.calls.map(([table]: [string]) => table)).not.toContain("goals");
+  });
+
+  test("retries an uncertain restore with the same request identifier", async () => {
+    const user = userEvent.setup();
+    mocks.goalData.financeSnapshot = { goals: [makeArchivedGoal()] };
+    vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(restoreRequestId);
+    mocks.restoreGoal
+      .mockRejectedValueOnce(Object.assign(new Error("Connection dropped"), { outcome: "unknown" }))
+      .mockResolvedValueOnce({ saved: { operationId: restoreRequestId, transactionIds: [], replayed: true }, refreshError: null });
+    renderSettings();
+
+    await user.click(await screen.findByRole("button", { name: /restore laptop/i }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not confirm.*retry.*same request/i);
+    await user.click(screen.getByRole("button", { name: /retry restore laptop/i }));
+
+    expect(mocks.restoreGoal).toHaveBeenCalledTimes(2);
+    expect(mocks.restoreGoal.mock.calls[1][0]).toBe(mocks.restoreGoal.mock.calls[0][0]);
+    expect(mocks.restoreGoal.mock.calls[1][1]).toBe(archivedGoalId);
+    expect((await screen.findByRole("status")).textContent).toMatch(/laptop moved back to goals/i);
+  });
+
+  test("keeps unknown restores and feedback scoped to the signed-in user", async () => {
+    const user = userEvent.setup();
+    const originalData = mocks.goalData;
+    const goal = makeArchivedGoal();
+    const secondUserId = "10000000-0000-4000-8000-000000000009";
+    const secondGoalId = "20000000-0000-4000-8000-000000000009";
+    vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(restoreRequestId);
+    mocks.goalData.financeSnapshot = { goals: [goal] };
+    mocks.restoreGoal
+      .mockRejectedValueOnce(Object.assign(new Error("Connection dropped"), { outcome: "unknown" }))
+      .mockResolvedValueOnce({ saved: { operationId: restoreRequestId, transactionIds: [], replayed: true }, refreshError: null });
+    const view = renderSettings();
+
+    await user.click(await screen.findByRole("button", { name: /restore laptop/i }));
+    expect(await screen.findByText(/laptop: we could not confirm/i)).toBeTruthy();
+
+    mocks.goalData = {
+      ...originalData,
+      userId: secondUserId,
+      financeSnapshot: { goals: [makeArchivedGoal({ id: secondGoalId, goalId: secondGoalId, user_id: secondUserId, name: "Trip", status: "cancelled", is_completed: false, completed_at: null })] },
+    };
+    view.rerender(<SettingsPage />);
+    expect(await screen.findByText("Trip")).toBeTruthy();
+    expect(screen.queryByText(/laptop: we could not confirm/i)).toBeNull();
+    expect(screen.queryByText("Laptop")).toBeNull();
+
+    mocks.goalData = originalData;
+    view.rerender(<SettingsPage />);
+    await user.click(await screen.findByRole("button", { name: /retry restore laptop/i }));
+    expect(mocks.restoreGoal.mock.calls[1][0]).toBe(restoreRequestId);
+    expect((await screen.findByRole("status")).textContent).toMatch(/laptop moved back to goals/i);
+  });
+
+  test("prevents a second restore while the first request is pending", async () => {
+    const user = userEvent.setup();
+    const pending = deferred<{ saved: { operationId: string; transactionIds: []; replayed: false }; refreshError: null }>();
+    mocks.goalData.financeSnapshot = { goals: [makeArchivedGoal()] };
+    mocks.restoreGoal.mockReturnValue(pending.promise);
+    renderSettings();
+
+    const restore = await screen.findByRole("button", { name: /restore laptop/i });
+    await user.click(restore);
+    expect((restore as HTMLButtonElement).disabled).toBe(true);
+    await user.click(restore);
+    expect(mocks.restoreGoal).toHaveBeenCalledOnce();
+    pending.resolve({ saved: { operationId: restoreRequestId, transactionIds: [], replayed: false }, refreshError: null });
+    expect((await screen.findByRole("status")).textContent).toMatch(/laptop moved back to goals/i);
+  });
+
+  test("reports a saved restore separately when refreshing finance data fails", async () => {
+    const user = userEvent.setup();
+    mocks.goalData.financeSnapshot = { goals: [makeArchivedGoal()] };
+    mocks.restoreGoal.mockResolvedValue({
+      saved: { operationId: restoreRequestId, transactionIds: [], replayed: false },
+      refreshError: new Error("Snapshot unavailable"),
+    });
+    renderSettings();
+
+    await user.click(await screen.findByRole("button", { name: /restore laptop/i }));
+    expect((await screen.findByRole("status")).textContent).toMatch(/laptop moved back to goals/i);
+    expect(screen.getByRole("alert").textContent).toMatch(/restore was saved.*could not refresh/i);
+    expect(screen.queryByRole("button", { name: /restore laptop/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /restore laptop/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /retry refreshing archived goals/i }));
+    expect(mocks.goalData.refresh).toHaveBeenCalledOnce();
   });
 });

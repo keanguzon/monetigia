@@ -1,6 +1,6 @@
 import { mutate, unstable_serialize } from "swr";
 import type { Cache, Key, ScopedMutator } from "swr";
-import { applyFinancialCommand } from "@/lib/goals/client";
+import { applyFinancialCommand, restoreArchivedGoal } from "@/lib/goals/client";
 import type { FinancialCommand, FinancialResult, TransactionQuote } from "@/lib/goals/contracts";
 
 export class FinancialRefreshError extends Error {
@@ -61,7 +61,22 @@ export async function applyAndRefreshFinancialCommand(
   quote: TransactionQuote | undefined,
   refresh: () => Promise<unknown>,
 ): Promise<FinancialSaveOutcome> {
-  const saved = await applyFinancialCommand(requestId, command, quote);
+  return saveAndRefreshFinancialCommand(() => applyFinancialCommand(requestId, command, quote), refresh);
+}
+
+export async function restoreArchivedGoalAndRefresh(
+  requestId: string,
+  goalId: string,
+  refresh: () => Promise<unknown>,
+): Promise<FinancialSaveOutcome> {
+  return saveAndRefreshFinancialCommand(() => restoreArchivedGoal(requestId, goalId), refresh);
+}
+
+async function saveAndRefreshFinancialCommand(
+  save: () => Promise<FinancialResult>,
+  refresh: () => Promise<unknown>,
+): Promise<FinancialSaveOutcome> {
+  const saved = await save();
   try {
     await refresh();
     return { saved, refreshError: null };

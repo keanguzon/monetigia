@@ -72,6 +72,23 @@ test("retry recovers a committed operation using the caller's same UUID", async 
   expect(second.replayed).toBe(true);
 });
 
+test("restores an archived goal through the owner-authorized RPC with the caller's request UUID", async () => {
+  const saved = { operationId: requestId, transactionIds: [], replayed: false };
+  rpcState.rpc.mockResolvedValue({ data: saved, error: null });
+  const client = await import("@/lib/goals/client") as unknown as Record<string, (...args: string[]) => Promise<unknown>>;
+
+  await expect(client.restoreArchivedGoal(requestId, goalId)).resolves.toEqual(saved);
+  expect(rpcState.rpc).toHaveBeenCalledWith("goal_restore_archived", { p_request_id: requestId, p_goal_id: goalId });
+});
+
+test("keeps a restore request retryable after an unknown transport outcome", async () => {
+  rpcState.rpc.mockResolvedValue({ data: null, error: { message: "TypeError: Failed to fetch", status: 0 } });
+  const client = await import("@/lib/goals/client") as unknown as Record<string, (...args: string[]) => Promise<unknown>>;
+
+  await expect(client.restoreArchivedGoal(requestId, goalId)).rejects.toMatchObject({ outcome: "unknown" });
+  expect(rpcState.rpc).toHaveBeenCalledWith("goal_restore_archived", { p_request_id: requestId, p_goal_id: goalId });
+});
+
 test("marks an unclassified transport failure as an unknown outcome", async () => {
   rpcState.rpc.mockResolvedValue({ data: null, error: { message: "TypeError: Failed to fetch", status: 0 } });
 

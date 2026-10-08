@@ -385,6 +385,10 @@ export interface Database {
         Args: { p_request_id: string; p_command: Json; p_quote?: Json | null };
         Returns: Json;
       };
+      goal_restore_archived: {
+        Args: { p_request_id: string; p_goal_id: string };
+        Returns: Json;
+      };
     };
     Enums: {};
   };

@@ -6,6 +6,7 @@ import { useThemeTransition } from "@/hooks/use-theme-transition";
 import Image from "next/image";
 import appPackage from "../../../../package.json";
 import { Button } from "@/components/ui/button";
+import { ArchivedGoalsSection } from "@/components/settings/ArchivedGoalsSection";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -429,6 +430,8 @@ export default function SettingsPage() {
             )}
           </div>
         </section>
+
+        <ArchivedGoalsSection />
 
         <section aria-labelledby="install-heading" className={sectionClass}>
           <div className="space-y-1">
