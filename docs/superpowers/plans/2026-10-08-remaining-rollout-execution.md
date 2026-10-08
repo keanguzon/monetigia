@@ -12,6 +12,8 @@
 
 ## Global Constraints
 
+- Latest current-PC override: Astra low executes Unit 7.1 using the same exact scope, followed by an independent review, commit/push and handoff. The earlier stop-before-code checkpoint was superseded by the user asking to finish 7.1 here. Later units stay deferred to the next PC.
+
 - Latest user policy: Sol xhigh plans; Luna max implements; Astra low reviews every remaining unit. Root owns dispatch, review resolution, commits, migration application and release. The executor never commits or pushes.
 - Current execution authorization ends after Task 6 acceptance and reviewed Unit 7.1 commit/push. Root then stops and provides a PC-transfer handoff prompt. Do not dispatch 7.2, 8 or 9, schedule continuations or treat this complete roadmap as authorization for later units.
 - Antislop during (session override). Preserve Monetigia green, Manrope/Bricolage typography, ENERGY 1 / RHYTHM 2 / MOTION 1, existing Goals surfaces and the existing navigation. No fresh design or landing work.

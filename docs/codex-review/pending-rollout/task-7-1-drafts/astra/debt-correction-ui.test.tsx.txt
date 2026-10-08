@@ -1,0 +1,119 @@
+import React from "react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { DebtSnapshot } from "@/lib/debt/contracts";
+import { DebtCorrectionDialog } from "@/components/transactions/DebtCorrectionDialog";
+
+const state = vi.hoisted(() => ({
+  owner: "10000000-0000-4000-8000-000000000001",
+  snapshot: null as DebtSnapshot | null,
+  refresh: vi.fn<() => Promise<void>>(),
+  write: {} as any,
+}));
+
+vi.mock("@/hooks/use-goals", () => ({ useGoals: () => ({ userId: state.owner }) }));
+vi.mock("@/hooks/use-debt", () => ({
+  useDebt: () => ({ snapshot: state.snapshot, isLoading: false, error: null, refresh: state.refresh }),
+  useDebtCommand: () => state.write,
+}));
+
+afterEach(cleanup);
+
+const accountId = "20000000-0000-4000-8000-000000000001";
+const groupId = "30000000-0000-4000-8000-000000000001";
+const rowOneId = "40000000-0000-4000-8000-000000000001";
+const rowTwoId = "40000000-0000-4000-8000-000000000002";
+const result = { operationId: "50000000-0000-4000-8000-000000000001", transactionIds: [], replayed: false };
+
+function balancedSnapshot(fingerprint = "a".repeat(64)): DebtSnapshot {
+  return {
+    accounts: [{ accountId, totalOutstanding: "0.30", undatedOutstanding: "0.00", fingerprint, reconciliation: "balanced", reconciliationDelta: "0.00" }],
+    rows: [
+      { id: rowOneId, accountId, groupId, source: "opening", transactionId: null, dueDate: "2026-11-01", originalAmount: "100.00", paidAmount: "99.90", correctedAmount: "0.00", remainingAmount: "0.10", ordinal: 1, name: "Laptop" },
+      { id: rowTwoId, accountId, groupId, source: "opening", transactionId: null, dueDate: "2026-12-01", originalAmount: "200.00", paidAmount: "199.80", correctedAmount: "0.00", remainingAmount: "0.20", ordinal: 2, name: "Laptop" },
+    ],
+  };
+}
+
+function mount(props: Partial<React.ComponentProps<typeof DebtCorrectionDialog>> = {}) {
+  const onClose = vi.fn();
+  const onSaved = vi.fn<() => Promise<unknown>>().mockResolvedValue(undefined);
+  const allProps = { open: true, onClose, accountId, groupId, groupName: "Laptop", selectedIds: [rowOneId, rowTwoId], onSaved, ...props };
+  const view = render(<DebtCorrectionDialog {...allProps} />);
+  return { ...view, onClose, onSaved };
+}
+
+beforeEach(() => {
+  state.owner = "10000000-0000-4000-8000-000000000001";
+  state.snapshot = balancedSnapshot();
+  state.refresh.mockReset().mockResolvedValue(undefined);
+  state.write = { isSaving: false, unresolved: false, saved: null, error: null, refreshError: null, pendingCommand: null,
+    submit: vi.fn<(...args: any[]) => Promise<void>>().mockResolvedValue(undefined), retry: vi.fn<() => Promise<void>>().mockResolvedValue(undefined), reset: vi.fn() };
+});
+
+test("confirmation sums exact remaining centavos, not original or paid amounts", async () => {
+  mount();
+  expect(await screen.findByText(/2 installments · PHP 0\.30/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Confirm correction" }));
+  await waitFor(() => expect(state.write.submit).toHaveBeenCalledOnce());
+  expect(state.write.submit).toHaveBeenCalledWith({ kind: "correct_debt_rows", accountId, rowIds: [rowOneId, rowTwoId], fingerprint: "a".repeat(64) });
+});
+
+test("a changed fingerprint disables the frozen confirmation until renewed review", async () => {
+  const view = mount();
+  await screen.findByText(/2 installments · PHP 0\.30/);
+  state.snapshot = balancedSnapshot("b".repeat(64));
+  view.rerender(<DebtCorrectionDialog open onClose={vi.fn()} accountId={accountId} groupId={groupId} groupName="Laptop" selectedIds={[rowOneId, rowTwoId]} onSaved={vi.fn()} />);
+  const renew = await screen.findByRole("button", { name: "Review updated debt" });
+  expect((screen.getByRole("button", { name: "Confirm correction" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(renew);
+  fireEvent.click(screen.getByRole("button", { name: "Confirm correction" }));
+  await waitFor(() => expect(state.write.submit).toHaveBeenCalledWith(expect.objectContaining({ fingerprint: "b".repeat(64) })));
+});
+
+test("paid rows cannot be selected for correction", async () => {
+  state.snapshot = balancedSnapshot();
+  state.snapshot.rows[0].remainingAmount = "0.00"; state.snapshot.rows[0].paidAmount = "100.00";
+  state.snapshot.rows[1].remainingAmount = "0.30"; state.snapshot.rows[1].paidAmount = "199.70";
+  mount({ selectedIds: [rowOneId] });
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Confirm correction" })).toBeNull();
+  expect(state.write.submit).not.toHaveBeenCalled();
+});
+
+test("an unresolved correction remains retryable after remount when its rows now have zero remaining", async () => {
+  const pending = { kind: "correct_debt_rows", accountId, rowIds: [rowOneId, rowTwoId], fingerprint: "a".repeat(64) };
+  state.write.unresolved = true;
+  state.write.pendingCommand = pending;
+  state.snapshot = { accounts: [{ ...balancedSnapshot("b".repeat(64)).accounts[0], totalOutstanding: "0.00" }], rows: [] };
+  mount({ selectedIds: [] });
+  expect(await screen.findByText(/unconfirmed.*original correction/i)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Retry same correction" })).toBeTruthy();
+  expect(screen.queryByText(/PHP 0\.30/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Retry same correction" }));
+  expect(state.write.retry).toHaveBeenCalledOnce();
+  expect(state.write.pendingCommand).toBe(pending);
+});
+
+test("an adoption attempt blocks correction without retrying or replacing it", async () => {
+  const pending = { kind: "adopt_opening_debt", accountId, items: [], fingerprint: "a".repeat(64) };
+  state.write.pendingCommand = pending;
+  mount();
+  expect(await screen.findByRole("status")).toHaveTextContent(/resolve the existing debt save/i);
+  expect(screen.queryByRole("button", { name: "Confirm correction" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+  expect(state.write.pendingCommand).toBe(pending);
+});
+
+test("saved refresh recovery reads views only and never resubmits the correction", async () => {
+  state.write.saved = result;
+  state.write.refreshError = new Error("summary refresh failed");
+  const onSaved = vi.fn<() => Promise<unknown>>().mockRejectedValue(new Error("history refresh failed"));
+  mount({ onSaved });
+  fireEvent.click(await screen.findByRole("button", { name: "Refresh views" }));
+  await waitFor(() => expect(state.refresh).toHaveBeenCalledOnce());
+  expect(onSaved).toHaveBeenCalled();
+  expect(state.write.submit).not.toHaveBeenCalled();
+  expect(state.write.retry).not.toHaveBeenCalled();
+});
+

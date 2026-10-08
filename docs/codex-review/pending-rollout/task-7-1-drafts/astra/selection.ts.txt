@@ -1,0 +1,19 @@
+export type DebtSelectionState = { active: boolean; selectedIds: string[]; anchorId: string | null };
+export function reconcileDebtSelection(state: DebtSelectionState, eligibleIds: string[]): DebtSelectionState {
+  const eligible = [...new Set(eligibleIds)];
+  return { ...state, selectedIds: eligible.filter(id => state.selectedIds.includes(id)), anchorId: state.anchorId && eligible.includes(state.anchorId) ? state.anchorId : null };
+}
+export function toggleDebtSelection(state: DebtSelectionState, ids: string[], id: string, shift: boolean): DebtSelectionState {
+  const eligible = [...new Set(ids)];
+  const current = reconcileDebtSelection(state, eligible);
+  if (!eligible.includes(id)) return current;
+  const selected = new Set(current.selectedIds);
+  if (shift && current.anchorId) {
+    const ends = [eligible.indexOf(current.anchorId), eligible.indexOf(id)].sort((a, b) => a - b);
+    eligible.slice(ends[0], ends[1] + 1).forEach(value => selected.add(value));
+  } else {
+    if (selected.has(id)) selected.delete(id); else selected.add(id);
+    current.anchorId = id;
+  }
+  return { ...current, selectedIds: eligible.filter(value => selected.has(value)) };
+}

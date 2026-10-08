@@ -1,0 +1,49 @@
+import React from "react";
+import { afterEach, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { reconcileDebtSelection, toggleDebtSelection } from "@/lib/debt/selection";
+import { InstallmentSelection } from "@/components/transactions/InstallmentSelection";
+
+afterEach(cleanup);
+
+test("reconciliation follows canonical eligible order and drops missing anchors", () => {
+  expect(reconcileDebtSelection(
+    { active: true, selectedIds: ["row-c", "row-a", "row-gone", "row-a"], anchorId: "row-gone" },
+    ["row-a", "row-b", "row-c"],
+  )).toEqual({ active: true, selectedIds: ["row-a", "row-c"], anchorId: null });
+});
+
+test("Shift adds the inclusive eligible range and keeps stable IDs across ineligible gaps", () => {
+  const selected = toggleDebtSelection(
+    { active: true, selectedIds: ["row-a"], anchorId: "row-a" },
+    ["row-a", "row-c", "row-d"],
+    "row-d",
+    true,
+  );
+  expect(selected).toEqual({ active: true, selectedIds: ["row-a", "row-c", "row-d"], anchorId: "row-a" });
+});
+
+test("plain toggle changes one ID and establishes the new anchor", () => {
+  expect(toggleDebtSelection(
+    { active: true, selectedIds: ["row-a", "row-c"], anchorId: "row-a" },
+    ["row-a", "row-b", "row-c"],
+    "row-c",
+    false,
+  )).toEqual({ active: true, selectedIds: ["row-a"], anchorId: "row-c" });
+});
+
+test("selection toolbar exposes the bounded group actions and honors disabled state", () => {
+  const onActivate = vi.fn();
+  const onSelectAll = vi.fn();
+  const onDeselectAll = vi.fn();
+  const onRequestCorrection = vi.fn();
+  const { rerender } = render(<InstallmentSelection active={false} selectedCount={0} eligibleCount={2} disabled={false}
+    onActivate={onActivate} onExit={vi.fn()} onSelectAll={onSelectAll} onDeselectAll={onDeselectAll} onRequestCorrection={onRequestCorrection} />);
+  fireEvent.click(screen.getByRole("button", { name: "Select" }));
+  expect(onActivate).toHaveBeenCalledOnce();
+  rerender(<InstallmentSelection active onActivate={onActivate} onExit={vi.fn()} onSelectAll={onSelectAll} onDeselectAll={onDeselectAll} onRequestCorrection={onRequestCorrection}
+    selectedCount={0} eligibleCount={2} disabled />);
+  expect((screen.getByRole("button", { name: "Select all" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+});
+

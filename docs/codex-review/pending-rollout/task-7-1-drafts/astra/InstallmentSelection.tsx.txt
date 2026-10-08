@@ -1,0 +1,16 @@
+"use client";
+import { Button } from "@/components/ui/button";
+type Props = { active: boolean; selectedCount: number; eligibleCount: number; disabled: boolean;
+  onActivate: () => void; onExit: () => void; onSelectAll: () => void; onDeselectAll: () => void; onRequestCorrection: () => void };
+export function InstallmentSelection(p: Props) {
+  return <div role="group" aria-label="Installment selection" className="flex flex-wrap items-center gap-2">
+    {!p.active ? <Button variant="outline" className="min-h-11" disabled={p.disabled || !p.eligibleCount} onClick={p.onActivate}>Select</Button> : <>
+      <Button variant="outline" className="min-h-11" disabled={p.disabled} onClick={p.onExit}>Done selecting</Button>
+      <Button variant="outline" className="min-h-11" disabled={p.disabled || !p.eligibleCount || p.eligibleCount > 600} onClick={p.onSelectAll}>Select all</Button>
+      <Button variant="outline" className="min-h-11" disabled={p.disabled || !p.selectedCount} onClick={p.onDeselectAll}>Deselect all</Button>
+      <Button variant="outline" className="min-h-11" disabled={p.disabled || !p.selectedCount || p.selectedCount > 600} onClick={p.onRequestCorrection}>Delete selected</Button>
+      <span className="text-sm">{p.selectedCount} selected</span>
+      {(p.eligibleCount > 600 || p.selectedCount > 600) && <p className="w-full text-sm" role="status">Select up to 600 installments per correction.</p>}
+    </>}
+  </div>;
+}
