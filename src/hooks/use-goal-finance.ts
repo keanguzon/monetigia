@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
-import { fetchGoalFinance, fetchGoalHistory, fetchGoalWalletMetadata } from "@/lib/goals/client";
+import { fetchGoalFinance, fetchGoalHistory, fetchGoalWalletMetadata, SupersededGoalFinanceRequestError } from "@/lib/goals/client";
 import type { GoalFinanceSnapshot } from "@/lib/goals/contracts";
 import { refreshFinancialData } from "@/lib/refresh-financial-data";
 import { createClient } from "@/lib/supabase/client";
@@ -15,15 +15,27 @@ export function useGoalFinance(userId: string | null) {
     selectedUser.current = { userId, revision: selectedUser.current.revision + 1 };
   }
   const sessionRevision = useRef(0);
+  const identityRevision = useRef(0);
   const authSession = useRef<{ userId: string; accessToken: string } | null>(null);
   const key = userId ? ["goalFinance", userId] as const : null;
   const fetchForUser = useCallback(async () => {
     const selection = selectedUser.current;
-    const requestSessionRevision = sessionRevision.current;
+    let requestSessionRevision = sessionRevision.current;
+    const requestIdentityRevision = identityRevision.current;
     const isCurrentRequest = () => selectedUser.current.userId === userId &&
       selectedUser.current.revision === selection.revision &&
       sessionRevision.current === requestSessionRevision;
-    const snapshot = await fetchGoalFinance(userId ?? undefined, isCurrentRequest);
+    let snapshot: GoalFinanceSnapshot;
+    try {
+      snapshot = await fetchGoalFinance(userId ?? undefined, isCurrentRequest);
+    } catch (error) {
+      if (!(error instanceof SupersededGoalFinanceRequestError) ||
+        selectedUser.current.revision !== selection.revision ||
+        identityRevision.current !== requestIdentityRevision ||
+        sessionRevision.current === requestSessionRevision || authSession.current?.userId !== userId) throw error;
+      requestSessionRevision = sessionRevision.current;
+      snapshot = await fetchGoalFinance(userId ?? undefined, isCurrentRequest);
+    }
     if (isCurrentRequest()) setSnapshotUserId(userId);
     return snapshot;
   }, [userId]);
@@ -38,6 +50,11 @@ export function useGoalFinance(userId: string | null) {
       const repeatedSignIn = event === "SIGNED_IN" && previousSession !== null && nextSession !== null &&
         previousSession.userId === nextSession.userId && previousSession.accessToken === nextSession.accessToken;
       if (event !== "INITIAL_SESSION" && !repeatedSignIn) sessionRevision.current += 1;
+      if (event !== "INITIAL_SESSION" && !repeatedSignIn &&
+        !((event === "TOKEN_REFRESHED" || event === "SIGNED_IN") && nextSession !== null &&
+          (previousSession === null || previousSession.userId === nextSession.userId))) {
+        identityRevision.current += 1;
+      }
       authSession.current = nextSession;
     });
     return () => subscription.unsubscribe();

@@ -280,7 +280,45 @@ test("sign-out and same-user sign-in supersede a snapshot even when the access t
   expect(screen.getByLabelText("wallet").textContent).toBe("100.00");
 });
 
-test("a token refresh supersedes a snapshot requested with the previous token", async () => {
+test("a token refresh discards the old snapshot and recovers with the new token", async () => {
+  let activeToken = "token-one";
+  let snapshotReads = 0;
+  let resolveRefresh!: (value: { data: ReturnType<typeof makeSnapshot>; error: null }) => void;
+  state.getSession.mockImplementation(async () => ({ data: { session: { user: { id: userOne }, access_token: activeToken } }, error: null }));
+  state.rpc.mockImplementation(() => {
+    snapshotReads += 1;
+    return snapshotReads === 1
+      ? Promise.resolve({ data: makeSnapshot(userOne, "100.00"), error: null })
+      : snapshotReads === 2
+        ? new Promise(resolve => { resolveRefresh = resolve; })
+        : Promise.resolve({ data: makeSnapshot(userOne, "300.00"), error: null });
+  });
+
+  function Probe() {
+    const finance = useGoalFinance(userOne);
+    return <>
+      <output aria-label="wallet">{finance.data?.wallets[0]?.actual ?? "empty"}</output>
+      <output aria-label="finance error">{String(Boolean(finance.error))}</output>
+      <button onClick={() => void finance.mutate()}>revalidate</button>
+    </>;
+  }
+
+  render(<Probe />, { wrapper });
+  await waitFor(() => expect(screen.getByLabelText("wallet").textContent).toBe("100.00"));
+  const initialSession = { user: { id: userOne }, access_token: "token-one" };
+  state.authListeners.forEach(listener => listener("INITIAL_SESSION", initialSession));
+  fireEvent.click(screen.getByRole("button", { name: "revalidate" }));
+  await waitFor(() => expect(state.rpc).toHaveBeenCalledTimes(2));
+  activeToken = "token-two";
+  state.authListeners.forEach(listener => listener("TOKEN_REFRESHED", { user: { id: userOne }, access_token: activeToken }));
+  resolveRefresh({ data: makeSnapshot(userOne, "999.00"), error: null });
+
+  await waitFor(() => expect(screen.getByLabelText("wallet").textContent).toBe("300.00"));
+  expect(state.headers).toEqual(["Authorization:Bearer token-one", "Authorization:Bearer token-one", "Authorization:Bearer token-two"]);
+  expect(screen.getByLabelText("finance error").textContent).toBe("false");
+});
+
+test("a second token refresh rejects the retry without looping", async () => {
   let activeToken = "token-one";
   let snapshotReads = 0;
   let resolveRefresh!: (value: { data: ReturnType<typeof makeSnapshot>; error: null }) => void;
@@ -311,9 +349,52 @@ test("a token refresh supersedes a snapshot requested with the previous token", 
   state.authListeners.forEach(listener => listener("TOKEN_REFRESHED", { user: { id: userOne }, access_token: activeToken }));
   resolveRefresh({ data: makeSnapshot(userOne, "999.00"), error: null });
 
+  await waitFor(() => expect(state.rpc).toHaveBeenCalledTimes(3));
+  activeToken = "token-three";
+  state.authListeners.forEach(listener => listener("TOKEN_REFRESHED", { user: { id: userOne }, access_token: activeToken }));
+  resolveRefresh({ data: makeSnapshot(userOne, "888.00"), error: null });
   await waitFor(() => expect(screen.getByLabelText("finance error").textContent).toBe("true"));
-  expect(state.headers).toContain("Authorization:Bearer token-one");
   expect(screen.getByLabelText("wallet").textContent).toBe("100.00");
+  expect(state.rpc).toHaveBeenCalledTimes(3);
+  expect(state.headers).toEqual(["Authorization:Bearer token-one", "Authorization:Bearer token-one", "Authorization:Bearer token-two"]);
+
+});
+
+test("a first SIGNED_IN before initial auth hydration recovers an in-flight snapshot", async () => {
+  let activeToken = "token-one";
+  let snapshotReads = 0;
+  let resolveRefresh!: (value: { data: ReturnType<typeof makeSnapshot>; error: null }) => void;
+  state.getSession.mockImplementation(async () => ({ data: { session: { user: { id: userOne }, access_token: activeToken } }, error: null }));
+  state.rpc.mockImplementation(() => {
+    snapshotReads += 1;
+    return snapshotReads === 1
+      ? Promise.resolve({ data: makeSnapshot(userOne, "100.00"), error: null })
+      : snapshotReads === 2
+        ? new Promise(resolve => { resolveRefresh = resolve; })
+        : Promise.resolve({ data: makeSnapshot(userOne, "300.00"), error: null });
+  });
+
+  function Probe() {
+    const finance = useGoalFinance(userOne);
+    return <>
+      <output aria-label="wallet">{finance.data?.wallets[0]?.actual ?? "empty"}</output>
+      <output aria-label="finance error">{String(Boolean(finance.error))}</output>
+      <button onClick={() => void finance.mutate()}>revalidate</button>
+    </>;
+  }
+
+  render(<Probe />, { wrapper });
+  await waitFor(() => expect(screen.getByLabelText("wallet").textContent).toBe("100.00"));
+
+  fireEvent.click(screen.getByRole("button", { name: "revalidate" }));
+  await waitFor(() => expect(state.rpc).toHaveBeenCalledTimes(2));
+  activeToken = "token-one";
+  state.authListeners.forEach(listener => listener("SIGNED_IN", { user: { id: userOne }, access_token: activeToken }));
+  resolveRefresh({ data: makeSnapshot(userOne, "999.00"), error: null });
+
+  await waitFor(() => expect(screen.getByLabelText("wallet").textContent).toBe("300.00"));
+  expect(state.headers).toEqual(["Authorization:Bearer token-one", "Authorization:Bearer token-one", "Authorization:Bearer token-one"]);
+  expect(screen.getByLabelText("finance error").textContent).toBe("false");
 });
 
 test("a token-bound snapshot from a superseded request cannot populate its key after switching back", async () => {
