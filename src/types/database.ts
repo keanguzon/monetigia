@@ -306,6 +306,34 @@ export interface Database {
         Update: never;
         Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
+      debt_settlement_events: {
+        Row: {
+          id: string; user_id: string; account_id: string; operation_id: string;
+          amount: string | number; kind: "settlement" | "reversal"; payment_operation_id: string;
+          payment_transaction_id: string; opening_due_row_id: string | null; purchase_transaction_id: string | null;
+          residual_account_id: string | null; reversal_of: string | null; created_at: string;
+        };
+        Insert: {
+          id?: string; user_id: string; account_id: string; operation_id: string; amount: string;
+          kind: "settlement" | "reversal"; payment_operation_id: string; payment_transaction_id: string;
+          opening_due_row_id?: string | null; purchase_transaction_id?: string | null;
+          residual_account_id?: string | null; reversal_of?: string | null; created_at?: string;
+        };
+        Update: never;
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
+      };
+      debt_correction_events: {
+        Row: {
+          id: string; user_id: string; account_id: string; operation_id: string;
+          amount: string | number; opening_due_row_id: string | null; purchase_transaction_id: string | null; created_at: string;
+        };
+        Insert: {
+          id?: string; user_id: string; account_id: string; operation_id: string; amount: string;
+          opening_due_row_id?: string | null; purchase_transaction_id?: string | null; created_at?: string;
+        };
+        Update: never;
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
+      };
       financial_operations: {
         Row: {
           id: string;
@@ -401,6 +429,10 @@ export interface Database {
     Functions: {
       debt_account_create: {
         Args: { p_request_id: string; p_account: Json; p_opening_debts: Json };
+        Returns: Json;
+      };
+      debt_account_state: {
+        Args: { p_owner: string; p_account_id: string };
         Returns: Json;
       };
       goal_finance_snapshot: {

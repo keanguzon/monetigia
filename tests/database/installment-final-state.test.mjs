@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { cleanupFinanceFixture, createFinanceFixture, installLatestMigrations, requireSuccess } from './helpers.mjs';
+import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLatestMigrations, requireSuccess } from './helpers.mjs';
 
 before(installLatestMigrations);
 after(installLatestMigrations);
@@ -104,4 +104,29 @@ test('final migration completion releases leftovers; completed expense deletion 
   assert.deepEqual(reopened.goal.walletReservations, []);
   assert.equal(requireSuccess(await apply(f, command, request)).replayed, true);
   assert.deepEqual(await state(f), reopened);
+});
+
+test('final chronological state keeps debt event storage owner-readable and the account adapter private', async () => {
+  await installLatestMigrations();
+  const { queryAdmin } = await databaseRuntime();
+  const [helper] = await queryAdmin(`SELECT p.prosecdef,p.proconfig,
+    has_function_privilege('authenticated',p.oid,'EXECUTE') AS authenticated,
+    has_function_privilege('anon',p.oid,'EXECUTE') AS anon,
+    has_function_privilege('service_role',p.oid,'EXECUTE') AS service,
+    EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') AS public_execute
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='debt_account_state'`);
+  assert.equal(helper.prosecdef, true);
+  assert.ok(helper.proconfig.includes('search_path=pg_catalog, public'));
+  assert.deepEqual([helper.authenticated, helper.anon, helper.service, helper.public_execute], [false, false, false, false]);
+  for (const table of ['debt_settlement_events', 'debt_correction_events']) {
+    const [permissions] = await queryAdmin(`SELECT relrowsecurity AS rls,
+      has_table_privilege('authenticated',oid,'SELECT') AS select_allowed,
+      has_table_privilege('authenticated',oid,'INSERT,UPDATE,DELETE') AS write_allowed,
+      has_table_privilege('anon',oid,'SELECT,INSERT,UPDATE,DELETE') AS anon_allowed,
+      has_table_privilege('service_role',oid,'SELECT,INSERT,UPDATE,DELETE') AS service_allowed
+      FROM pg_class WHERE oid='public.${table}'::regclass`);
+    assert.deepEqual(permissions, { rls: true, select_allowed: true, write_allowed: false, anon_allowed: false, service_allowed: false });
+    assert.deepEqual(await queryAdmin(`SELECT cmd,roles::text AS roles FROM pg_policies WHERE schemaname='public' AND tablename='${table}'`),
+      [{ cmd: 'SELECT', roles: '{authenticated}' }]);
+  }
 });
