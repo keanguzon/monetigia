@@ -79,3 +79,20 @@ export const DebtAccountCreateInputSchema: z.ZodType<DebtAccountCreateInput> = z
 export const DebtAccountCreateResultSchema: z.ZodType<DebtAccountCreateResult> = z.object({
   accountId: z.string().uuid(), debtItemIds: z.array(z.string().uuid()), replayed: z.boolean(),
 }).strict();
+
+export type CorrectDebtRowsCommand = {
+  kind: "correct_debt_rows";
+  accountId: string;
+  rowIds: string[];
+  fingerprint: string;
+};
+
+export const CorrectDebtRowsCommandSchema = z.object({
+  kind: z.literal("correct_debt_rows"),
+  accountId: z.string().uuid(),
+  rowIds: z.array(z.string().uuid()).min(1).max(600).refine(
+    (ids) => new Set(ids.map(id => id.toLowerCase())).size === ids.length,
+    "Row IDs must be unique"
+  ),
+  fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();

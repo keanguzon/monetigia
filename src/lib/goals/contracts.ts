@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Goal, GoalAllocationEvent } from "@/types/database";
 import { MoneySchema, PositiveMoneySchema, SignedMoneySchema } from "@/lib/money/contracts";
 import type { Money } from "@/lib/money/contracts";
+import { CorrectDebtRowsCommandSchema } from "@/lib/debt/contracts";
 
 export { MoneySchema, PositiveMoneySchema, SignedMoneySchema } from "@/lib/money/contracts";
 export type { Money } from "@/lib/money/contracts";
@@ -35,6 +36,7 @@ export const TransactionDraftSchema = z.object({
 });
 export type TransactionDraft = z.infer<typeof TransactionDraftSchema>;
 export const FinancialCommandSchema = z.discriminatedUnion("kind", [
+  CorrectDebtRowsCommandSchema,
   z.object({ kind: z.enum(["reserve", "release"]), goalId: id, accountId: id, amount: PositiveMoneySchema }),
   z.object({ kind: z.literal("reallocate"), goalId: id, destinationGoalId: id, accountId: id, amount: PositiveMoneySchema }),
   z.object({ kind: z.literal("close"), goalId: id, status: z.enum(["completed", "cancelled"]), leftovers: LeftoverChoiceSchema.nullable() }),
