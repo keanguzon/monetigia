@@ -15,7 +15,7 @@
 - User has authorized the plan and implementation of all pending items. Start on `codex/mobile-pwa-follow-ups` from main `56ce652`; preserve later work and all user data. No reset, fabricated expenses or invented past payments.
 - Antislop during is already resolved as a session override. Preserve Monetigia green, Manrope/Bricolage typography and ENERGY 1 / RHYTHM 2 / MOTION 1. The Apple reference authorizes a floating glass navigation treatment with Monetigia identity.
 - Minimum 44px targets, safe-area spacing, readable light/dark themes, keyboard focus, reduced motion and browser zoom. Verify 375px, 768px and 1280px, plus a 320px narrow case.
-- Latest user model policy: Sol medium drafts, Luna max implements bounded scopes, Sol low reviews. Earlier completed tasks retain their actual historical executor records. No Astra.
+- Latest user model policy: Sol 6.1 orchestrates/plans, Gemini via `gemini_subagent` implements strictly scoped changes, Sol 6.1 low reviews. Earlier Luna assignments below are historical/superseded for future dispatches. The available Gemini tool exposes `gemini-3-flash-preview` High Thinking, not the requested 3.8 name; report the actual model. No Astra.
 - Physical iOS acceptance requires the user's device. Finish the implementation and available checks, record that acceptance separately, and do not dismiss a feature because physical QA cannot be automated.
 - No new offline financial writes, caching of private financial responses, silent request replay, dependency installs or unrelated redesign.
 - Apply additive financial migrations before dependent frontend pushes; confirm SQL success and the final installed RPC behavior. Database tests run only against an explicitly disposable database.
