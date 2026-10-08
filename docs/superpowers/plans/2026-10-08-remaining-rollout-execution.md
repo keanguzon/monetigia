@@ -25,10 +25,10 @@
 
 ## Current Prerequisite Gate
 
-Task 6 is **not complete until final review closes**. Root reports the 6a.3 inaccessible-recovery P1 repaired with 54 focused tests and typecheck passing, and latest integrated tests 379/379 passing. The earlier implementation report's 53-test count predates this repair. Root reports the 320px/600-row creation browser check has no overflow, the footer stays fixed and Escape returns focus correctly; final Astra fix review is running. Record the light CTA contrast repair measurement and final review outcome before closing the prerequisite gate.
+Task 6 prerequisite gate is closed at commits 50bf060 and 26a1e80. Final Astra review approved the repairs; integrated verification passed 7 Node tests and 379 Vitest tests. The final review report records browser evidence and remaining release/device limits.
 
-- [ ] Root finishes 6a.3 re-review, 6b.2 contrast/focus repairs and integrated checks; record exact reviewed SHAs and current evidence before dispatching 7.1.
-- [ ] Root freezes the actual 6a.3/6b.2 source and verifies its exports against the contracts below. Do not assume the current uncommitted snapshot is final.
+- [x] Task 6 gate closed: creation 50bf060, snapshot/adoption 26a1e80; Astra approved final fixes, 7 Node and 379 Vitest tests passed. Contrast 4.52:1 light / 6.54:1 dark; Escape focus return and 320px 600-row overflow/footer checks passed. See task-6-final-review.md.
+- [x] Task 6 source is committed and frozen; Unit 7.1 uses the verified exports below.
 
 ## Review Focus
 
