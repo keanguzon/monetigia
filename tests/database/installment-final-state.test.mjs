@@ -109,6 +109,14 @@ test('final migration completion releases leftovers; completed expense deletion 
 test('final chronological state keeps debt event storage owner-readable and the account adapter private', async () => {
   await installLatestMigrations();
   const { queryAdmin } = await databaseRuntime();
+  const [paymentIntegration] = await queryAdmin(`SELECT
+    pg_get_functiondef('public.goal_transaction_quote(jsonb,jsonb)'::regprocedure) AS quote_definition,
+    pg_get_functiondef('public.goal_transaction_apply(uuid,jsonb,jsonb)'::regprocedure) AS apply_definition,
+    (SELECT count(*)::integer FROM pg_trigger WHERE tgname='debt_settlement_payment_delete_reverse' AND NOT tgisinternal) AS delete_trigger_count`);
+  assert.ok(paymentIntegration.quote_definition.includes('debt_account_state'));
+  assert.ok(paymentIntegration.quote_definition.includes('totalOutstanding'));
+  assert.ok(paymentIntegration.apply_definition.includes('debt_settlement_events'));
+  assert.equal(paymentIntegration.delete_trigger_count, 1);
   const [helper] = await queryAdmin(`SELECT p.prosecdef,p.proconfig,
     has_function_privilege('authenticated',p.oid,'EXECUTE') AS authenticated,
     has_function_privilege('anon',p.oid,'EXECUTE') AS anon,

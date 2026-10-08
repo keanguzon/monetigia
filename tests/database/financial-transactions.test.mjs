@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, requireSuccess } from './helpers.mjs';
+import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLatestMigrations, requireSuccess } from './helpers.mjs';
 before(async () => {
     try {
         await applyMigration('202610060004_goal_transaction_operations.sql');
@@ -369,4 +369,49 @@ test('ordered transaction and lifecycle reapplication refreshes the private help
     const { queryAdmin } = await databaseRuntime();
     const grants = await queryAdmin("SELECT has_function_privilege('authenticated','public.goal_transaction_apply(uuid,jsonb,jsonb)','EXECUTE') AS authenticated, has_function_privilege('anon','public.goal_transaction_apply(uuid,jsonb,jsonb)','EXECUTE') AS anon, has_function_privilege('service_role','public.goal_transaction_apply(uuid,jsonb,jsonb)','EXECUTE') AS service");
     assert.deepEqual(grants, [{ authenticated: false, anon: false, service: false }]);
+});
+
+test('opening-only card payments use outstanding debt while cash and debt-goal reservations still gate them', async t => {
+    const f = await setup(t);
+    await installLatestMigrations();
+    const accountDetails = {
+        name: 'Opening only', type: 'credit_card', currency: 'PHP', color: '#00aa99', icon: null,
+        is_savings: false, interest_rate: 0, include_in_networth: true, display_order: 0,
+    };
+    const openingDebt = amount => [{ clientId: 'opening', name: 'Opening balance', mode: 'single', amount,
+        firstDueDate: '2026-11-15', count: 1 }];
+    const opening = requireSuccess(await f.owner.client.rpc('debt_account_create', {
+        p_request_id: randomUUID(), p_account: accountDetails, p_opening_debts: openingDebt('7000.00'),
+    }));
+    const d = draft(f, {
+        type: 'transfer', transferToAccountId: opening.accountId, amount: '400.00',
+        description: 'Opening balance payment', date: '2026-12-20',
+    });
+    const q = requireSuccess(await quote(f, d));
+    const result = requireSuccess(await apply(f, { kind: 'transaction', draft: d }, q));
+    assert.equal(result.transactionIds.length, 1);
+    assert.deepEqual([
+        requireSuccess(await f.owner.client.from('accounts').select('balance').eq('id', f.owner.account.id).single()).balance,
+        requireSuccess(await f.owner.client.from('accounts').select('balance').eq('id', opening.accountId).single()).balance,
+    ], [29600, 6600]);
+
+    const tooMuchForCash = requireSuccess(await f.owner.client.rpc('debt_account_create', {
+        p_request_id: randomUUID(), p_account: { ...accountDetails, name: 'Large opening balance' },
+        p_opening_debts: openingDebt('40000.00'),
+    }));
+    assert.equal((await quote(f, draft(f, {
+        type: 'transfer', transferToAccountId: tooMuchForCash.accountId, amount: '29601.00',
+    }))).error?.message, 'INSUFFICIENT_ACTUAL');
+
+    requireSuccess(await f.owner.client.from('goals').update({ category: 'debt' }).eq('id', f.owner.goal.id));
+    await reserve(f, '100.00');
+    assert.equal((await quote(f, draft(f, {
+        type: 'transfer', transferToAccountId: opening.accountId, goalId: f.owner.goal.id, amount: '200.00',
+    }))).error?.message, 'INSUFFICIENT_RESERVATION');
+    const events = requireSuccess(await f.owner.client.from('debt_settlement_events').select('*')
+        .eq('payment_transaction_id', result.transactionIds[0]));
+    const dueRows = requireSuccess(await f.owner.client.from('debt_due_rows').select('id')
+        .eq('debt_item_id', opening.debtItemIds[0]));
+    assert.equal(events.length, 1);
+    assert.equal(events[0].opening_due_row_id, dueRows[0].id);
 });

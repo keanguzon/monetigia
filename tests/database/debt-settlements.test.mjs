@@ -41,10 +41,157 @@ function purchaseDraft(accountId, overrides = {}) {
     amount: '200.00', description: 'Laptop purchase', date: '2026-09-01', installments: null, reservationMoves: [], ...overrides };
 }
 
-async function payment(fixture, cardId, amount, date = '2026-09-01') {
-  return transact(fixture, { type: 'transfer', accountId: fixture.owner.account.id, transferToAccountId: cardId,
-    categoryId: null, goalId: null, amount, description: 'Card payment', date, installments: null, reservationMoves: [] });
+function paymentDraft(fixture, cardId, amount, date = '2026-09-01', overrides = {}) {
+  return { type: 'transfer', accountId: fixture.owner.account.id, transferToAccountId: cardId,
+    categoryId: null, goalId: null, amount, description: 'Card payment', date, installments: null, reservationMoves: [], ...overrides };
 }
+
+async function payment(fixture, cardId, amount, date = '2026-09-01', overrides = {}) {
+  return transact(fixture, paymentDraft(fixture, cardId, amount, date, overrides));
+}
+
+test('live payments use total outstanding for opening-only debt and retain legacy residual beside purchases', async t => {
+  const fixture = await setup(t);
+  const openingOnly = requireSuccess(await createDebt(fixture, [opening({ mode: 'single', amount: '7000.00', count: 1 })]));
+  const openingPayment = await payment(fixture, openingOnly.accountId, '400.00', '2026-12-20');
+
+  const legacy = requireSuccess(await fixture.admin.from('accounts').insert({ user_id: fixture.owner.id,
+    ...account({ name: 'Legacy opening balance', balance: '5000.00' }) }).select().single());
+  const purchase = await transact(fixture, purchaseDraft(legacy.id, { amount: '2000.00', date: '2026-11-15' }));
+  const mixedPayment = await payment(fixture, legacy.id, '400.00', '2026-12-20');
+
+  const openingState = await privateState(fixture, openingOnly.accountId);
+  const mixedState = await privateState(fixture, legacy.id);
+  const openingEvents = requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*')
+    .eq('payment_transaction_id', openingPayment.transactionIds[0]));
+  const mixedEvents = requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*')
+    .eq('payment_transaction_id', mixedPayment.transactionIds[0]));
+  const paymentRows = requireSuccess(await fixture.owner.client.from('transactions').select('*')
+    .eq('transfer_to_account_id', legacy.id));
+  const cash = requireSuccess(await fixture.owner.client.from('accounts').select('balance').eq('id', fixture.owner.account.id).single());
+  const legacyAfter = requireSuccess(await fixture.owner.client.from('accounts').select('balance').eq('id', legacy.id).single());
+
+  assert.equal(openingState.account.totalOutstanding, '6600.00');
+  assert.equal(openingState.rows[0].remainingAmount, '6600.00');
+  assert.equal(openingEvents.length, 1);
+  assert.equal(openingEvents[0].opening_due_row_id, openingState.rows[0].id);
+  assert.deepEqual([mixedState.account.totalOutstanding, mixedState.rows[0].remainingAmount,
+    mixedState.account.undatedOutstanding, mixedState.account.reconciliation],
+  ['6600.00', '1600.00', '5000.00', 'balanced']);
+  assert.equal(mixedEvents.length, 1);
+  assert.equal(mixedEvents[0].purchase_transaction_id, purchase.transactionIds[0]);
+  assert.deepEqual([paymentRows.length, paymentRows[0].id, paymentRows[0].date],
+    [1, mixedPayment.transactionIds[0], '2026-12-20']);
+  assert.deepEqual([cash.balance, legacyAfter.balance], [29200, 6600]);
+});
+
+test('live settlement follows dated FIFO, spans partial rows, and rejects overpayment without writes', async t => {
+  const fixture = await setup(t);
+  const card = requireSuccess(await createDebt(fixture, [
+    opening({ clientId: 'january', name: 'January', amount: '500.00', firstDueDate: '2027-01-15', count: 1 }),
+    opening({ clientId: 'november-a', name: 'November A', amount: '500.00', firstDueDate: '2026-11-15', count: 1 }),
+    opening({ clientId: 'november-b', name: 'November B', amount: '300.00', firstDueDate: '2026-11-15', count: 1 }),
+  ]));
+  const before = await privateState(fixture, card.accountId);
+  const datedRows = before.rows.filter(row => row.dueDate === '2026-11-15')
+    .sort((left, right) => left.groupId.localeCompare(right.groupId) || left.ordinal - right.ordinal || left.id.localeCompare(right.id));
+  const paid = await payment(fixture, card.accountId, '600.00', '2026-12-20');
+  const state = await privateState(fixture, card.accountId);
+  const events = requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*')
+    .eq('payment_transaction_id', paid.transactionIds[0]));
+  const first = events.find(event => event.opening_due_row_id === datedRows[0].id);
+  const second = events.find(event => event.opening_due_row_id === datedRows[1].id);
+  const january = state.rows.find(row => row.dueDate === '2027-01-15');
+  const transaction = requireSuccess(await fixture.owner.client.from('transactions').select('date')
+    .eq('id', paid.transactionIds[0]).single());
+  const snapshot = [state, events, requireSuccess(await fixture.owner.client.from('accounts').select('balance').eq('id', card.accountId).single())];
+  const firstAmount = Math.min(600, Number(datedRows[0].remainingAmount));
+
+  assert.equal(events.length, 2);
+  assert.deepEqual([first?.amount, second?.amount], [firstAmount, 600 - firstAmount]);
+  assert.deepEqual([january.paidAmount, january.remainingAmount], ['0.00', '500.00']);
+  assert.deepEqual([state.account.totalOutstanding, state.account.undatedOutstanding, transaction.date],
+    ['700.00', '0.00', '2026-12-20']);
+  assert.equal((await fixture.owner.client.rpc('goal_transaction_quote', {
+    p_draft: paymentDraft(fixture, card.accountId, '701.00', '2026-12-20'),
+  })).error?.message, 'INVALID_STATE');
+  assert.deepEqual([await privateState(fixture, card.accountId),
+    requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*').eq('payment_transaction_id', paid.transactionIds[0])),
+    requireSuccess(await fixture.owner.client.from('accounts').select('balance').eq('id', card.accountId).single())], snapshot);
+});
+
+test('concurrent payment replay writes once and deletion reverses the exact original targets once', async t => {
+  const fixture = await setup(t);
+  const legacy = requireSuccess(await fixture.admin.from('accounts').insert({ user_id: fixture.owner.id,
+    ...account({ name: 'Legacy with dated purchase', balance: '5000.00' }) }).select().single());
+  const purchase = await transact(fixture, purchaseDraft(legacy.id, { amount: '2000.00' }));
+  const draft = paymentDraft(fixture, legacy.id, '2500.00', '2026-12-20');
+  const quote = requireSuccess(await fixture.owner.client.rpc('goal_transaction_quote', { p_draft: draft }));
+  const command = { kind: 'transaction', draft };
+  const requestId = randomUUID();
+  const [left, right] = await Promise.all([
+    apply(fixture, command, requestId, quote),
+    apply(fixture, command, requestId, quote),
+  ]);
+  const results = [requireSuccess(left), requireSuccess(right)];
+  const live = results.find(result => !result.replayed);
+  assert.ok(live);
+  assert.equal(results.filter(result => result.replayed).length, 1);
+  const original = requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*')
+    .eq('payment_transaction_id', live.transactionIds[0]).eq('kind', 'settlement'));
+  assert.deepEqual(original.map(event => [event.purchase_transaction_id, event.residual_account_id, event.amount]).sort(),
+    [[purchase.transactionIds[0], null, 2000], [null, legacy.id, 500]].sort());
+  assert.equal((await apply(fixture, { kind: 'transaction', draft: { ...draft, amount: '2501.00' } }, requestId, quote)).error?.message,
+    'REQUEST_CONFLICT');
+
+  const deletedCommand = { kind: 'delete_transaction', transactionId: live.transactionIds[0] };
+  const deleteRequest = randomUUID();
+  const deleted = requireSuccess(await apply(fixture, deletedCommand, deleteRequest));
+  const allEvents = requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*')
+    .eq('payment_transaction_id', live.transactionIds[0]));
+  const reversals = allEvents.filter(event => event.kind === 'reversal');
+  assert.equal(reversals.length, original.length);
+  for (const source of original) {
+    const reversal = reversals.find(event => event.reversal_of === source.id);
+    assert.ok(reversal);
+    assert.deepEqual([reversal.operation_id, reversal.payment_operation_id, reversal.payment_transaction_id,
+      reversal.amount, reversal.opening_due_row_id, reversal.purchase_transaction_id, reversal.residual_account_id],
+    [deleted.operationId, source.payment_operation_id, source.payment_transaction_id, source.amount,
+      source.opening_due_row_id, source.purchase_transaction_id, source.residual_account_id]);
+  }
+  const restored = await privateState(fixture, legacy.id);
+  assert.deepEqual([restored.account.totalOutstanding, restored.rows[0].paidAmount, restored.rows[0].remainingAmount,
+    restored.account.undatedOutstanding], ['7000.00', '0.00', '2000.00', '5000.00']);
+  assert.deepEqual([
+    requireSuccess(await fixture.owner.client.from('accounts').select('balance').eq('id', fixture.owner.account.id).single()).balance,
+    requireSuccess(await fixture.owner.client.from('accounts').select('balance').eq('id', legacy.id).single()).balance,
+  ], [30000, 7000]);
+  assert.equal(requireSuccess(await apply(fixture, deletedCommand, deleteRequest)).replayed, true);
+  assert.equal((await fixture.owner.client.from('debt_settlement_events').select('*')
+    .eq('payment_transaction_id', live.transactionIds[0])).data.length, allEvents.length);
+});
+
+test('credit advances stay undated while refund-like income remains reviewed, never a cash payment', async t => {
+  const fixture = await setup(t);
+  const card = requireSuccess(await createDebt(fixture));
+  const advance = await transact(fixture, { type: 'transfer', accountId: card.accountId,
+    transferToAccountId: fixture.owner.account.id, categoryId: null, goalId: null, amount: '100.00',
+    description: 'Cash advance', date: '2026-12-01', installments: null, reservationMoves: [] });
+  let state = await privateState(fixture, card.accountId);
+  assert.deepEqual([state.account.totalOutstanding, state.account.undatedOutstanding, state.account.reconciliation],
+    ['100.00', '100.00', 'balanced']);
+  assert.equal(requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*')).length, 0);
+
+  const refund = await transact(fixture, { type: 'income', accountId: card.accountId, transferToAccountId: null,
+    categoryId: null, goalId: null, amount: '25.00', description: 'Refund', date: '2026-12-02',
+    installments: null, reservationMoves: [] });
+  state = await privateState(fixture, card.accountId);
+  const history = requireSuccess(await fixture.owner.client.from('transactions').select('id,type')
+    .in('id', [...advance.transactionIds, ...refund.transactionIds]));
+  assert.deepEqual([state.account.totalOutstanding, state.account.reconciliation], ['75.00', 'needs_review']);
+  assert.equal(history.length, 2);
+  assert.equal(requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*')).length, 0);
+});
 
 test('private debt state returns complete opening rows with the exact 6a account and row shapes', async t => {
   const fixture = await setup(t);
@@ -164,7 +311,7 @@ test('unproven earlier expense blocks guessed historical allocation to a later p
   assert.deepEqual([knownPurchase.paidAmount, state.account.reconciliation], ['0.00', 'needs_review']);
 });
 
-test('multiple operation claims leave historical payment unallocated and account reviewed', async t => {
+test('a later duplicate operation claim flags a recorded live payment for review', async t => {
   const fixture = await setup(t);
   const card = requireSuccess(await createDebt(fixture, [opening({ mode: 'single', count: 1 })]));
   await transact(fixture, purchaseDraft(card.accountId, { amount: '100.00' }));
@@ -180,8 +327,9 @@ test('multiple operation claims leave historical payment unallocated and account
   await applyMigration(migration);
   const state = await privateState(fixture, card.accountId);
   const events = requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*'));
-  assert.deepEqual(events, []);
-  assert.deepEqual([state.rows[0].paidAmount, state.account.reconciliation], ['0.00', 'needs_review']);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].payment_transaction_id, paid.transactionIds[0]);
+  assert.deepEqual([state.rows[0].paidAmount, state.account.reconciliation], ['100.00', 'needs_review']);
 });
 
 test('unproven purchase group metadata falls back to its own ID and ordinal one', async t => {
@@ -227,14 +375,16 @@ test('event tables are owner-readable and append-only; helpers stay private and 
   const ownerRows = requireSuccess(await fixture.owner.client.from('debt_due_rows').select('*').eq('debt_item_id', ownerCard.debtItemIds[0]).order('ordinal'));
   const otherDue = requireSuccess(await fixture.admin.from('debt_due_rows').select('*').eq('user_id', fixture.other.id).eq('debt_item_id', otherCard.debtItemIds[0]).limit(1).single());
   await transact(fixture, purchaseDraft(ownerCard.accountId, { amount: '100.00' }));
-  await payment(fixture, ownerCard.accountId, '1.00');
+  const firstPayment = await payment(fixture, ownerCard.accountId, '1.00');
   await applyMigration(migration);
   const secondPayment = await payment(fixture, ownerCard.accountId, '2.00');
   const { queryAdmin } = await databaseRuntime();
 
   const ownerRead = requireSuccess(await fixture.owner.client.from('debt_settlement_events').select('*'));
   const otherRead = requireSuccess(await fixture.other.client.from('debt_settlement_events').select('*').eq('user_id', fixture.owner.id));
-  assert.equal(ownerRead.length, 1);
+  assert.equal(ownerRead.length, 2);
+  assert.deepEqual(ownerRead.map(event => event.payment_transaction_id).sort(),
+    [firstPayment.transactionIds[0], secondPayment.transactionIds[0]].sort());
   assert.deepEqual(otherRead, []);
   for (const table of ['debt_settlement_events', 'debt_correction_events']) {
     const grants = (await queryAdmin(`SELECT relrowsecurity AS rls,

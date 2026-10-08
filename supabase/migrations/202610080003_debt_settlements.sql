@@ -653,5 +653,184 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.guard_financial_identity() FROM PUBLIC,anon,authenticated,service_role;
 
+-- Patch the newest transaction functions in place so later migration changes are not replaced by an older copy.
+DO $debt_payment_integration$
+DECLARE
+  v_quote text := pg_get_functiondef('public.goal_transaction_quote(jsonb,jsonb)'::regprocedure);
+  v_apply text := pg_get_functiondef('public.goal_transaction_apply(uuid,jsonb,jsonb)'::regprocedure);
+  v_before text;
+BEGIN
+  v_quote := replace(v_quote,chr(13),'');
+  v_apply := replace(v_apply,chr(13),'');
+  IF strpos(v_quote,'public.debt_account_state')=0 THEN
+  v_before := $quote_declaration$
+  v_funds numeric; v_metadata jsonb; v_fingerprint text; v_month record; v_carry numeric := 0; v_month_debt numeric := 0;
+$quote_declaration$;
+  IF strpos(v_quote,v_before)=0 THEN RAISE EXCEPTION 'Latest transaction quote declaration did not match'; END IF;
+  v_quote := replace(v_quote,v_before,$quote_declaration_new$
+  v_funds numeric; v_metadata jsonb; v_fingerprint text; v_month record; v_debt_state jsonb; v_outstanding numeric;
+$quote_declaration_new$);
+
+  v_before := $quote_month_ceiling$
+  IF v_draft->>'type'='transfer' AND v_dst.type='credit_card' THEN
+    IF coalesce(v_dst.balance,0)<v_amount THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    FOR v_month IN
+      SELECT to_char(date,'YYYY-MM') AS month,sum(CASE
+        WHEN account_id=v_dst.id AND type='expense' THEN amount
+        WHEN account_id=v_dst.id AND type='income' THEN -amount
+        WHEN type='transfer' THEN CASE WHEN account_id=v_dst.id THEN amount ELSE 0 END-CASE WHEN transfer_to_account_id=v_dst.id THEN amount ELSE 0 END
+        ELSE 0 END) AS debt FROM public.transactions WHERE user_id=v_owner AND (account_id=v_dst.id OR transfer_to_account_id=v_dst.id)
+      GROUP BY to_char(date,'YYYY-MM') ORDER BY month
+    LOOP
+      v_funds := v_month.debt+v_carry;
+      v_carry := least(v_funds,0);
+      IF v_month.month=left(v_draft->>'date',7) THEN v_month_debt := greatest(v_funds,0); END IF;
+    END LOOP;
+    IF v_amount>v_month_debt THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+  END IF;
+$quote_month_ceiling$;
+  IF strpos(v_quote,v_before)=0 THEN RAISE EXCEPTION 'Latest transaction quote ceiling did not match'; END IF;
+  v_quote := replace(v_quote,v_before,$quote_month_ceiling_new$
+  IF v_draft->>'type'='transfer' AND v_dst.type='credit_card' THEN
+    IF coalesce(v_dst.balance,0)<v_amount THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+    v_debt_state := public.debt_account_state(v_owner,v_dst.id);
+    v_outstanding := (v_debt_state->'account'->>'totalOutstanding')::numeric;
+    IF v_amount>v_outstanding THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+  END IF;
+$quote_month_ceiling_new$);
+
+  v_before := $quote_metadata$
+    'debtTransactions',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.transactions t WHERE t.user_id=v_owner AND v_dst.type='credit_card' AND (t.account_id=v_dst.id OR t.transfer_to_account_id=v_dst.id))) INTO v_metadata;
+$quote_metadata$;
+  IF strpos(v_quote,v_before)=0 THEN RAISE EXCEPTION 'Latest transaction quote fingerprint did not match'; END IF;
+  v_quote := replace(v_quote,v_before,$quote_metadata_new$
+    'debtAccountState',CASE WHEN v_dst.type='credit_card' THEN v_debt_state ELSE 'null'::jsonb END,
+    'debtTransactions',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.transactions t WHERE t.user_id=v_owner AND v_dst.type='credit_card' AND (t.account_id=v_dst.id OR t.transfer_to_account_id=v_dst.id))) INTO v_metadata;
+$quote_metadata_new$);
+  END IF;
+  EXECUTE v_quote;
+
+  IF strpos(v_apply,'public.debt_settlement_events')=0 THEN
+  v_before := $apply_declaration$
+  v_amount numeric; v_piece numeric; v_count integer; v_i integer; v_date date; v_description text;
+$apply_declaration$;
+  IF strpos(v_apply,v_before)=0 THEN RAISE EXCEPTION 'Latest transaction apply declaration did not match'; END IF;
+  v_apply := replace(v_apply,v_before,$apply_declaration_new$
+  v_amount numeric; v_piece numeric; v_count integer; v_i integer; v_date date; v_description text;
+  v_debt_state jsonb; v_target jsonb; v_allocate numeric; v_remaining numeric; v_payment_transaction_id uuid;
+$apply_declaration_new$);
+
+  v_before := $apply_account_lock$
+  v_amount := (v_draft->>'amount')::numeric;
+  INSERT INTO public.financial_operations(user_id,request_id,command_hash,command) VALUES(v_owner,p_request_id,v_hash,v_command) RETURNING id INTO v_operation;
+$apply_account_lock$;
+  IF strpos(v_apply,v_before)=0 THEN RAISE EXCEPTION 'Latest transaction apply lock point did not match'; END IF;
+  v_apply := replace(v_apply,v_before,$apply_account_lock_new$
+  v_amount := (v_draft->>'amount')::numeric;
+  IF v_draft->>'type'='transfer' AND v_dst.type='credit_card' THEN
+    v_debt_state := public.debt_account_state(v_owner,v_dst.id);
+    FOR v_target IN SELECT value FROM jsonb_array_elements(v_debt_state->'rows') LOOP
+      IF v_target->>'source'='opening' THEN
+        PERFORM id FROM public.debt_due_rows WHERE user_id=v_owner AND id=(v_target->>'id')::uuid FOR UPDATE;
+      ELSIF v_target->>'source'='purchase' AND v_target->>'transactionId' IS NOT NULL THEN
+        PERFORM id FROM public.transactions WHERE user_id=v_owner AND id=(v_target->>'transactionId')::uuid FOR UPDATE;
+      END IF;
+    END LOOP;
+  END IF;
+  INSERT INTO public.financial_operations(user_id,request_id,command_hash,command) VALUES(v_owner,p_request_id,v_hash,v_command) RETURNING id INTO v_operation;
+$apply_account_lock_new$);
+
+  v_before := $apply_finish$
+  v_result := jsonb_build_object('operationId',v_operation,'transactionIds',v_ids,'replayed',false);
+  UPDATE public.financial_operations SET completed_at=now(),result=v_result WHERE id=v_operation AND user_id=v_owner;
+  RETURN v_result;
+$apply_finish$;
+  IF strpos(v_apply,v_before)=0 THEN RAISE EXCEPTION 'Latest transaction apply finish did not match'; END IF;
+  v_apply := replace(v_apply,v_before,$apply_finish_new$
+  v_result := jsonb_build_object('operationId',v_operation,'transactionIds',v_ids,'replayed',false);
+  IF v_draft->>'type'='transfer' AND v_dst.type='credit_card'
+    AND v_debt_state->'account'->>'reconciliation'='balanced' THEN
+    v_payment_transaction_id := (v_ids->>0)::uuid;
+    UPDATE public.financial_operations SET completed_at=now(),result=v_result WHERE id=v_operation AND user_id=v_owner;
+    v_remaining := v_amount;
+    FOR v_target IN
+      SELECT row_value.value FROM jsonb_array_elements(v_debt_state->'rows') WITH ORDINALITY AS row_value(value,position)
+      WHERE row_value.value->>'dueDate' IS NOT NULL ORDER BY row_value.position
+    LOOP
+      EXIT WHEN v_remaining<=0;
+      v_allocate := least(v_remaining,greatest((v_target->>'remainingAmount')::numeric,0));
+      IF v_allocate>0 THEN
+        INSERT INTO public.debt_settlement_events(user_id,account_id,operation_id,amount,kind,payment_operation_id,
+          payment_transaction_id,opening_due_row_id,purchase_transaction_id)
+        VALUES(v_owner,v_dst.id,v_operation,v_allocate,'settlement',v_operation,v_payment_transaction_id,
+          CASE WHEN v_target->>'source'='opening' THEN (v_target->>'id')::uuid END,
+          CASE WHEN v_target->>'source'='purchase' THEN (v_target->>'transactionId')::uuid END);
+        v_remaining := v_remaining-v_allocate;
+      END IF;
+    END LOOP;
+    IF v_remaining>0 THEN
+      INSERT INTO public.debt_settlement_events(user_id,account_id,operation_id,amount,kind,payment_operation_id,
+        payment_transaction_id,residual_account_id)
+      VALUES(v_owner,v_dst.id,v_operation,v_remaining,'settlement',v_operation,v_payment_transaction_id,v_dst.id);
+    END IF;
+  ELSE
+    UPDATE public.financial_operations SET completed_at=now(),result=v_result WHERE id=v_operation AND user_id=v_owner;
+  END IF;
+  RETURN v_result;
+$apply_finish_new$);
+  END IF;
+  EXECUTE v_apply;
+END
+$debt_payment_integration$;
+
+CREATE OR REPLACE FUNCTION public.reverse_debt_settlements_before_transaction_delete()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+DECLARE
+  v_event public.debt_settlement_events%ROWTYPE;
+  v_operation_id uuid;
+  v_operation_count integer;
+  v_payment_count integer;
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM public.users WHERE id=OLD.user_id) THEN RETURN OLD; END IF;
+  IF OLD.type<>'transfer' OR OLD.transfer_to_account_id IS NULL OR NOT EXISTS(
+    SELECT 1 FROM public.accounts account WHERE account.user_id=OLD.user_id
+      AND account.id=OLD.transfer_to_account_id AND account.type='credit_card') THEN
+    RETURN OLD;
+  END IF;
+
+  SELECT count(*) INTO v_payment_count FROM public.debt_settlement_events event
+    WHERE event.user_id=OLD.user_id AND event.payment_transaction_id=OLD.id AND event.kind='settlement';
+  IF v_payment_count=0 THEN RETURN OLD; END IF;
+  IF EXISTS(SELECT 1 FROM public.debt_settlement_events event
+      JOIN public.debt_settlement_events reversal ON reversal.user_id=event.user_id AND reversal.reversal_of=event.id
+      WHERE event.user_id=OLD.user_id AND event.payment_transaction_id=OLD.id AND event.kind='settlement') THEN
+    RAISE EXCEPTION 'INVALID_STATE';
+  END IF;
+
+  SELECT count(*)::integer,(array_agg(operation.id ORDER BY operation.id))[1]
+    INTO v_operation_count,v_operation_id
+    FROM public.financial_operations operation
+    WHERE operation.user_id=OLD.user_id AND operation.completed_at IS NULL
+      AND operation.command->>'kind'='delete_transaction'
+      AND operation.command->>'transactionId'=OLD.id::text;
+  IF v_operation_count<>1 THEN RAISE EXCEPTION 'INVALID_STATE'; END IF;
+
+  FOR v_event IN SELECT * FROM public.debt_settlement_events event
+    WHERE event.user_id=OLD.user_id AND event.payment_transaction_id=OLD.id AND event.kind='settlement'
+    ORDER BY event.id FOR UPDATE
+  LOOP
+    INSERT INTO public.debt_settlement_events(user_id,account_id,operation_id,amount,kind,payment_operation_id,
+      payment_transaction_id,opening_due_row_id,purchase_transaction_id,residual_account_id,reversal_of)
+    VALUES(v_event.user_id,v_event.account_id,v_operation_id,v_event.amount,'reversal',v_event.payment_operation_id,
+      v_event.payment_transaction_id,v_event.opening_due_row_id,v_event.purchase_transaction_id,
+      v_event.residual_account_id,v_event.id);
+  END LOOP;
+  RETURN OLD;
+END $$;
+REVOKE ALL ON FUNCTION public.reverse_debt_settlements_before_transaction_delete() FROM PUBLIC,anon,authenticated,service_role;
+DROP TRIGGER IF EXISTS debt_settlement_payment_delete_reverse ON public.transactions;
+CREATE TRIGGER debt_settlement_payment_delete_reverse BEFORE DELETE ON public.transactions
+  FOR EACH ROW EXECUTE FUNCTION public.reverse_debt_settlements_before_transaction_delete();
+
 NOTIFY pgrst, 'reload schema';
 COMMIT;
