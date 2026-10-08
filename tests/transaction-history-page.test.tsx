@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -51,13 +51,14 @@ function row(id: number) {
 function configureHistoryPages() {
   let laterAttempts = 0;
   const ranges: Array<[number, number]> = [];
+  const orders: Array<[string, boolean]> = [];
   mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-1" } } });
   mocks.from.mockImplementation(() => {
     let range: [number, number] = [0, 49];
     const query: any = {
       select: () => query,
       eq: () => query,
-      order: () => query,
+      order: (column: string, options?: { ascending?: boolean }) => { orders.push([column, options?.ascending ?? false]); return query; },
       range: (start: number, end: number) => { range = [start, end]; ranges.push(range); return query; },
       then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
         if (range[0] === 0) return Promise.resolve({ data: Array.from({ length: 50 }, (_, index) => row(index + 1)), error: null }).then(resolve, reject);
@@ -68,7 +69,7 @@ function configureHistoryPages() {
     };
     return query;
   });
-  return ranges;
+  return { ranges, orders };
 }
 
 afterEach(() => {
@@ -80,13 +81,13 @@ beforeEach(() => vi.clearAllMocks());
 describe("transactions history pagination", () => {
   test("loads older rows, shows a retry after a read error, and retries the same page", async () => {
     const user = userEvent.setup();
-    const ranges = configureHistoryPages();
+    const { ranges, orders } = configureHistoryPages();
     vi.spyOn(console, "error").mockImplementation(() => {});
     render(<TransactionsPage />);
 
     expect(screen.queryByText(/Showing 0 all entries/)).toBeNull();
     expect(await screen.findByRole("button", { name: "Load more" })).toBeTruthy();
-    expect((screen.getByRole("combobox", { name: "Sort transactions" }) as HTMLSelectElement).value).toBe("date_added");
+    expect((screen.getByRole("combobox", { name: "Sort transactions", hidden: true }) as HTMLSelectElement).value).toBe("date_added");
 
     await user.click(screen.getByRole("button", { name: "Load more" }));
     const alert = await screen.findByRole("alert");
@@ -96,14 +97,84 @@ describe("transactions history pagination", () => {
     await user.click(screen.getByRole("button", { name: "Retry loading more" }));
     expect(await screen.findByText("Transaction 51")).toBeTruthy();
     expect(ranges).toEqual([[0, 49], [50, 99], [50, 99]]);
-    expect((screen.getByRole("combobox", { name: "Sort transactions" }) as HTMLSelectElement).value).toBe("date_added");
+    expect((screen.getByRole("combobox", { name: "Sort transactions", hidden: true }) as HTMLSelectElement).value).toBe("date_added");
 
-    await user.selectOptions(screen.getByRole("combobox", { name: "Sort transactions" }), "transaction_date");
+    await user.click(screen.getByRole("button", { name: "Sort transactions" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Transaction date (newest first)" }));
     expect(await screen.findByText("Transaction 50")).toBeTruthy();
     expect(screen.queryByText("Transaction 51")).toBeNull();
     expect(screen.getByRole("button", { name: "Load more" })).toBeTruthy();
     expect(ranges).toEqual([[0, 49], [50, 99], [50, 99], [0, 49]]);
-    expect((screen.getByRole("combobox", { name: "Sort transactions" }) as HTMLSelectElement).value).toBe("transaction_date");
+    expect((screen.getByRole("combobox", { name: "Sort transactions", hidden: true }) as HTMLSelectElement).value).toBe("transaction_date");
+    expect(orders).toEqual([
+      ["created_at", false], ["id", false],
+      ["created_at", false], ["id", false],
+      ["created_at", false], ["id", false],
+      ["history_date", false], ["created_at", false], ["id", false],
+    ]);
+  });
+
+  test("offers both sort orders, keeps the default selection, and preserves filters when sorting", async () => {
+    const user = userEvent.setup();
+    const { ranges, orders } = configureHistoryPages();
+    render(<TransactionsPage />);
+
+    await screen.findByText("Transaction 50");
+    await user.click(screen.getByRole("button", { name: "income" }));
+    const search = screen.getByRole("searchbox", { name: "Search transactions" }) as HTMLInputElement;
+    await user.type(search, "search survives");
+
+    const trigger = screen.getByRole("button", { name: "Sort transactions" });
+    await user.click(trigger);
+    expect(screen.getByRole("menu")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getAllByRole("menuitemradio").map(item => item.textContent?.trim())).toEqual([
+      "Date added (newest first)",
+      "Transaction date (newest first)",
+    ]);
+    expect(screen.getByRole("menuitemradio", { name: "Date added (newest first)" }).getAttribute("aria-checked")).toBe("true");
+    expect((screen.getByRole("combobox", { name: "Sort transactions", hidden: true }) as HTMLSelectElement).value).toBe("date_added");
+
+    await user.click(screen.getByRole("menuitemradio", { name: "Date added (newest first)" }));
+    expect(ranges).toHaveLength(1);
+
+    await user.click(trigger);
+    await user.click(screen.getByRole("menuitemradio", { name: "Transaction date (newest first)" }));
+    await waitFor(() => expect(ranges).toHaveLength(2));
+    expect(ranges).toEqual([[0, 49], [0, 49]]);
+    expect(orders).toEqual([
+      ["created_at", false], ["id", false],
+      ["history_date", false], ["created_at", false], ["id", false],
+    ]);
+    expect((screen.getByRole("combobox", { name: "Sort transactions", hidden: true }) as HTMLSelectElement).value).toBe("transaction_date");
+    expect(search.value).toBe("search survives");
+    expect(screen.getByRole("button", { name: "income" }).className).toContain("bg-primary");
+
+    await user.click(trigger);
+    expect(screen.getByRole("menuitemradio", { name: "Transaction date (newest first)" }).getAttribute("aria-checked")).toBe("true");
+  });
+
+  test("supports keyboard selection and Escape returns focus without reloading", async () => {
+    const user = userEvent.setup();
+    const { ranges } = configureHistoryPages();
+    render(<TransactionsPage />);
+
+    await screen.findByText("Transaction 50");
+    const trigger = screen.getByRole("button", { name: "Sort transactions" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("menuitemradio", { name: "Date added (newest first)" })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+    expect(ranges).toHaveLength(1);
+    expect((screen.getByRole("combobox", { name: "Sort transactions" }) as HTMLSelectElement).value).toBe("date_added");
+
+    await user.keyboard("{Enter}");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard(" ");
+    await waitFor(() => expect(ranges).toHaveLength(2));
+    expect((screen.getByRole("combobox", { name: "Sort transactions", hidden: true }) as HTMLSelectElement).value).toBe("transaction_date");
   });
 
   test("confirms that deleting one installment leaves the remaining schedule", async () => {

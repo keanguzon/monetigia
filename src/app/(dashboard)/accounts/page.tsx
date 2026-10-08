@@ -926,7 +926,7 @@ export default function AccountsPage() {
       {/* Delete Account Confirmation Modal */}
       {
         accountToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAccountToDelete(null)}>
+          <div data-mobile-nav-blocking="" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAccountToDelete(null)}>
             <div className="bg-card border rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-xl font-semibold mb-4 text-destructive">Delete Wallet</h3>
               <p className="text-muted-foreground mb-6">

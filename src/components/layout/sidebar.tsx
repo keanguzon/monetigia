@@ -7,7 +7,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
+  Home,
   ArrowLeftRight,
   Wallet,
   Tags,
@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/accounts", label: "Wallets", icon: Wallet },
   { href: "/categories", label: "Categories", icon: Tags },

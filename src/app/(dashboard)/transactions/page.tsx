@@ -7,10 +7,17 @@ import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, isValidUuid } from "@/lib/utils";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search, ListFilter } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import InstallmentHistoryGroup from "@/components/transactions/InstallmentHistoryGroup";
 import {
   filterHistoryEntries,
@@ -138,6 +145,19 @@ export default function TransactionsPage() {
     }
   }
 
+  function handleSortChange(nextSort: TransactionHistorySort): void {
+    if (nextSort === sortMode) return;
+    requestGeneration.current += 1;
+    loadMoreLock.current = false;
+    setTransactions([]);
+    setNextOffset(null);
+    setIsLoadingMore(false);
+    setLoadError(null);
+    setLoadMoreError(null);
+    setIsLoading(true);
+    setSortMode(nextSort);
+  }
+
   const historyEntries = sortHistoryEntries(groupTransactions(transactions), sortMode);
 
   const filterLabel =
@@ -176,24 +196,65 @@ export default function TransactionsPage() {
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              {(["all", "expense", "income", "transfer"] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setFilter(type)}
-                  className={`min-h-11 px-3 rounded-lg text-sm font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    filter === type
-                      ? "bg-primary text-slate-950"
-                      : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
+            <div className="flex w-full min-w-0 items-center gap-2 lg:w-auto">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 lg:flex-none lg:gap-2">
+                {(["all", "expense", "income", "transfer"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFilter(type)}
+                    className={`min-h-11 min-w-11 px-1 rounded-lg text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:px-3 lg:text-sm ${
+                      filter === type
+                        ? "bg-primary text-slate-950"
+                        : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+
+              <div className="ml-auto shrink-0 lg:hidden">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Sort transactions"
+                      className="h-11 w-11 min-h-11 min-w-11 shrink-0 bg-card/60 p-0 hover:!transform-none hover:!shadow-none motion-reduce:transition-none"
+                    >
+                      <ListFilter className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="bottom"
+                    align="end"
+                    sideOffset={4}
+                    collisionPadding={8}
+                    className="w-[min(18rem,calc(100vw-2rem))] min-w-0 max-w-[calc(100vw-2rem)] bg-popover motion-reduce:animate-none motion-reduce:transition-none"
+                  >
+                    <DropdownMenuRadioGroup
+                      value={sortMode}
+                      onValueChange={value => {
+                        if (value === "date_added" || value === "transaction_date") {
+                          handleSortChange(value);
+                        }
+                      }}
+                    >
+                      <DropdownMenuRadioItem value="date_added" className="min-h-11 items-start py-2">
+                        <span className="min-w-0 flex-1 whitespace-normal break-words">Date added (newest first)</span>
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="transaction_date" className="min-h-11 items-start py-2">
+                        <span className="min-w-0 flex-1 whitespace-normal break-words">Transaction date (newest first)</span>
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-[minmax(12rem,1fr)_auto] lg:w-[min(100%,34rem)]">
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(12rem,1fr)_auto] lg:w-[min(100%,34rem)]">
               <div className="relative min-w-0">
                 <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <Input
@@ -205,24 +266,17 @@ export default function TransactionsPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <div>
+              <div className="hidden lg:block">
                 <label htmlFor="transaction-sort" className="sr-only">Sort transactions</label>
                 <select
                   id="transaction-sort"
                   aria-label="Sort transactions"
                   value={sortMode}
                   onChange={event => {
-                    const nextSort = event.target.value as TransactionHistorySort;
-                    if (nextSort === sortMode) return;
-                    requestGeneration.current += 1;
-                    loadMoreLock.current = false;
-                    setTransactions([]);
-                    setNextOffset(null);
-                    setIsLoadingMore(false);
-                    setLoadError(null);
-                    setLoadMoreError(null);
-                    setIsLoading(true);
-                    setSortMode(nextSort);
+                    const nextSort = event.target.value;
+                    if (nextSort === "date_added" || nextSort === "transaction_date") {
+                      handleSortChange(nextSort);
+                    }
                   }}
                   className="min-h-11 w-full rounded-md border border-input bg-card/60 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:w-auto"
                 >

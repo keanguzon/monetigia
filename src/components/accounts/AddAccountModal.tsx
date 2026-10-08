@@ -186,7 +186,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in duration-200" onClick={onClose}>
+    <div data-mobile-nav-blocking="" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in duration-200" onClick={onClose}>
       <div
         className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl animate-in slide-in-from-bottom-4 duration-300"
         onClick={(e) => e.stopPropagation()}

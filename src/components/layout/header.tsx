@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, Menu, Settings, User as UserIcon } from "lucide-react";
+import { LogOut, Settings, User as UserIcon } from "lucide-react";
 import { getInitials } from "@/lib/utils";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { clearTabSessionMarker } from "@/lib/session-preferences";
@@ -25,10 +25,9 @@ interface HeaderProps {
     name?: string;
     avatar_url?: string;
   } | null;
-  onMenuClick?: () => void;
 }
 
-export function Header({ user, onMenuClick }: HeaderProps) {
+export function Header({ user }: HeaderProps) {
   const router = useRouter();
   const { navigate } = useNavigation();
   const supabase = createClient();
@@ -52,16 +51,6 @@ export function Header({ user, onMenuClick }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6">
       <div className="flex items-center gap-2 md:gap-4">
-        {/* Hamburger menu - mobile only */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          onClick={onMenuClick}
-          aria-label="Open navigation"
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
         <h1 className="text-sm font-semibold md:text-lg lg:text-xl">
           Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}!
         </h1>

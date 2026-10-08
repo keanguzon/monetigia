@@ -5,7 +5,9 @@ import { forwardRef, type ComponentProps } from "react";
 import { navigationDestination } from "@/lib/navigation";
 import { useNavigation } from "./navigation-provider";
 
-export const NavigationLink = forwardRef<HTMLAnchorElement, ComponentProps<typeof Link>>(function NavigationLink({ onClick, ...props }, ref) {
+type NavigationLinkProps = ComponentProps<typeof Link> & { navigationSource?: "mobile" };
+
+export const NavigationLink = forwardRef<HTMLAnchorElement, NavigationLinkProps>(function NavigationLink({ onClick, navigationSource, ...props }, ref) {
   const { navigate } = useNavigation();
   return <Link {...props} ref={ref} onClick={(event) => {
     onClick?.(event);
@@ -17,6 +19,7 @@ export const NavigationLink = forwardRef<HTMLAnchorElement, ComponentProps<typeo
     });
     if (!destination) return;
     event.preventDefault();
-    navigate(destination);
+    if (navigationSource) navigate(destination, { source: navigationSource });
+    else navigate(destination);
   }} />;
 });

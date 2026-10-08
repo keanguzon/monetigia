@@ -73,6 +73,7 @@ export default function AddCategoryModal({ isOpen, onClose, onCreated }: AddCate
 
   return (
     <div
+      data-mobile-nav-blocking=""
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in duration-200"
       onClick={onClose}
     >
