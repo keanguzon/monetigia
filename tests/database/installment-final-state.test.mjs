@@ -6,6 +6,30 @@ import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLa
 before(installLatestMigrations);
 after(installLatestMigrations);
 
+test('final installed runtime authenticates creation snapshot adoption correction and archived restore', async t => {
+  const f = await setup(t);
+  const details = { name:'Credit',type:'credit_card',currency:'PHP',color:null,icon:null,is_savings:false,interest_rate:0,include_in_networth:true,display_order:0 };
+  const created = requireSuccess(await f.owner.client.rpc('debt_account_create',{p_request_id:randomUUID(),p_account:details,p_opening_debts:[
+    {clientId:'opening',name:'Existing',mode:'single',amount:'100.00',firstDueDate:'2026-11-30',count:1},
+  ]}));
+  const legacy = requireSuccess(await f.admin.from('accounts').insert({user_id:f.owner.id,name:'Legacy',type:'credit_card',balance:'50.00',currency:'PHP'}).select().single());
+  let snapshot = requireSuccess(await f.owner.client.rpc('debt_snapshot'));
+  const command = {kind:'adopt_opening_debt',accountId:legacy.id,fingerprint:snapshot.accounts.find(a=>a.accountId===legacy.id).fingerprint,
+    items:[{clientId:'adopted',name:'Adopted',mode:'single',amount:'50.00',firstDueDate:'2026-11-30',count:1}]};
+  const adopted = requireSuccess(await apply(f,command)); assert.deepEqual(adopted.transactionIds,[]);
+  snapshot = requireSuccess(await f.owner.client.rpc('debt_snapshot'));
+  const row = snapshot.rows.find(r=>r.accountId===legacy.id);
+  const corrected = requireSuccess(await apply(f,{kind:'correct_debt_rows',accountId:legacy.id,rowIds:[row.id],fingerprint:snapshot.accounts.find(a=>a.accountId===legacy.id).fingerprint}));
+  assert.deepEqual(corrected.transactionIds,[]);
+  snapshot = requireSuccess(await f.owner.client.rpc('debt_snapshot'));
+  assert.equal(snapshot.accounts.find(a=>a.accountId===legacy.id).totalOutstanding,'0.00');
+  assert.equal(snapshot.accounts.find(a=>a.accountId===created.accountId).totalOutstanding,'100.00');
+  requireSuccess(await apply(f,{kind:'close',goalId:f.owner.goal.id,status:'cancelled',leftovers:null}));
+  requireSuccess(await apply(f,{kind:'archive',goalId:f.owner.goal.id}));
+  const restored = requireSuccess(await f.owner.client.rpc('goal_restore_archived',{p_request_id:randomUUID(),p_goal_id:f.owner.goal.id}));
+  assert.equal(restored.replayed,false);
+});
+
 async function setup(t) {
   const fixture = await createFinanceFixture();
   t.after(() => cleanupFinanceFixture(fixture));

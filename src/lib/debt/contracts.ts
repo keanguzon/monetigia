@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Money } from "@/lib/money/contracts";
+import { MoneySchema, SignedMoneySchema } from "@/lib/money/contracts";
 
 export const MAX_REMAINING_MONTHS = 600;
 
@@ -95,4 +96,42 @@ export const CorrectDebtRowsCommandSchema = z.object({
     "Row IDs must be unique"
   ),
   fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+
+export type DebtDueRow = {
+  id: string; accountId: string; groupId: string; source: "opening" | "purchase";
+  transactionId: string | null; dueDate: string | null; originalAmount: Money;
+  paidAmount: Money; remainingAmount: Money; correctedAmount: Money; ordinal: number; name: string;
+};
+export type DebtAccountSnapshot = {
+  accountId: string; totalOutstanding: Money; undatedOutstanding: Money; fingerprint: string;
+  reconciliation: "balanced" | "needs_review"; reconciliationDelta: Money;
+};
+export type DebtSnapshot = { accounts: DebtAccountSnapshot[]; rows: DebtDueRow[] };
+export const DebtDueRowSchema: z.ZodType<DebtDueRow> = z.object({
+  id: z.string().uuid(), accountId: z.string().uuid(), groupId: z.string().uuid(),
+  source: z.enum(["opening", "purchase"]), transactionId: z.string().uuid().nullable(),
+  dueDate: date.nullable(), originalAmount: MoneySchema, paidAmount: MoneySchema,
+  remainingAmount: MoneySchema, correctedAmount: MoneySchema, ordinal: z.number().int().positive().safe(), name: z.string(),
+}).strict().superRefine((row, context) => {
+  if ((row.source === "opening") !== (row.transactionId === null)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["transactionId"], message: "Transaction source mismatch" });
+  const amounts = [row.originalAmount, row.paidAmount, row.correctedAmount, row.remainingAmount];
+  if (amounts.every(value => /^(0|[1-9]\d*)\.\d{2}$/.test(value))) {
+    const [original, paid, corrected, remaining] = amounts.map(value => BigInt(value.replace(".", "")));
+    if (original - paid - corrected !== remaining) context.addIssue({ code: z.ZodIssueCode.custom, path: ["remainingAmount"], message: "Row amounts do not reconcile" });
+  }
+});
+export const DebtSnapshotSchema: z.ZodType<DebtSnapshot> = z.object({
+  accounts: z.array(z.object({ accountId: z.string().uuid(), totalOutstanding: MoneySchema, undatedOutstanding: MoneySchema,
+    fingerprint: z.string().regex(/^[0-9a-f]{64}$/), reconciliation: z.enum(["balanced", "needs_review"]), reconciliationDelta: SignedMoneySchema }).strict()),
+  rows: z.array(DebtDueRowSchema),
+}).strict();
+export type AdoptOpeningDebtCommand = { kind: "adopt_opening_debt"; accountId: string; items: OpeningDebtDraft[]; fingerprint: string };
+export const AdoptOpeningDebtCommandSchema = z.object({
+  kind: z.literal("adopt_opening_debt"), accountId: z.string().uuid(), fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  items: z.array(OpeningDebtDraftSchema).min(1).max(MAX_OPENING_DEBT_ITEMS).superRefine((items, context) => {
+    const validation = DebtAccountCreateInputSchema.safeParse({ requestId: "00000000-0000-4000-8000-000000000000",
+      account: { name: "Validation", type: "credit_card", currency: "PHP", color: null, icon: null, is_savings: false, interest_rate: 0, include_in_networth: true, display_order: 0 }, openingDebts: items });
+    if (!validation.success) for (const issue of validation.error.issues) context.addIssue({ ...issue, path: issue.path.slice(1) });
+  }),
 }).strict();

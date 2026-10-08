@@ -427,6 +427,10 @@ export interface Database {
     };
     Views: {};
     Functions: {
+      debt_snapshot: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
       debt_account_create: {
         Args: { p_request_id: string; p_account: Json; p_opening_debts: Json };
         Returns: Json;
