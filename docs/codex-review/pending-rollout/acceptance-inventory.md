@@ -22,3 +22,7 @@ Checkpoint: 2026-10-08. This records implementation separately from review, depl
 | Remaining financial rollout and final main deployment | Pending | Complete backend/UI tasks and migration prerequisites before claiming the entire plan or deployment complete |
 
 QA will be presented one case at a time after a current status report. Existing user data must remain intact. Device-only checks and inaccessible browser checks must be stated explicitly rather than inferred from unit tests.
+
+## Accepted mobile iteration (latest)
+
+User accepted slow-network centered prompt, equal icon-only mobile slots, light theme, modal hide/restore and sort behavior. Latest request removes visible nav labels; accessible route names remain. Mobile changes are committed as 7c5b18a, not deployed. Fresh root full check:250Vitest+7Node passed; standaloneTypeScript/build exit0 (existingwarnings retained). These entries supersede earlier pending QA2 and visible-label inventory rows above. Physical Safari/device acceptance remains distinct. Task2 implementation now running; landing explicitly deferred.
