@@ -41,7 +41,7 @@ export function ModeToggle() {
       {/* Mobile animated icons: Monitor -> Moon -> Sun */}
       <span className="relative flex h-6 w-6 items-center justify-center md:hidden" aria-hidden="true">
         <Monitor
-          className={`absolute h-6 w-6 transition-all duration-150 ${iconColorClass} ${
+          className={`absolute h-6 w-6 transition-all duration-300 ${iconColorClass} ${
             activeIcon === "system"
               ? "scale-100 rotate-0 opacity-100"
               : "scale-50 -rotate-90 opacity-0 pointer-events-none"
@@ -49,7 +49,7 @@ export function ModeToggle() {
           strokeWidth={2.5}
         />
         <Moon
-          className={`absolute h-6 w-6 transition-all duration-150 ${iconColorClass} ${
+          className={`absolute h-6 w-6 transition-all duration-300 ${iconColorClass} ${
             activeIcon === "dark"
               ? "scale-100 rotate-0 opacity-100"
               : "scale-50 rotate-90 opacity-0 pointer-events-none"
@@ -57,7 +57,7 @@ export function ModeToggle() {
           strokeWidth={2.5}
         />
         <Sun
-          className={`absolute h-6 w-6 transition-all duration-150 ${iconColorClass} ${
+          className={`absolute h-6 w-6 transition-all duration-300 ${iconColorClass} ${
             activeIcon === "light"
               ? "scale-100 rotate-0 opacity-100"
               : "scale-50 rotate-90 opacity-0 pointer-events-none"

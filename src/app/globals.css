@@ -88,11 +88,10 @@
     transition: background-color 150ms ease,
       border-color 150ms ease,
       fill 150ms ease,
-      stroke 150ms ease,
-      color 150ms ease !important;
+      stroke 150ms ease !important;
   }
 
-  /* Text and surface colors use the same theme transition. */
+  /* Text elements: keep color instant (no flicker), but sync bg/borders */
   html.theme-transitioning h1:not([data-theme-toggle]):not([data-theme-toggle] *),
   html.theme-transitioning h2:not([data-theme-toggle]):not([data-theme-toggle] *),
   html.theme-transitioning h3:not([data-theme-toggle]):not([data-theme-toggle] *),
@@ -107,10 +106,7 @@
   html.theme-transitioning label:not([data-theme-toggle]):not([data-theme-toggle] *),
   html.theme-transitioning div:not([data-theme-toggle]):not([data-theme-toggle] *) {
     transition: background-color 150ms ease,
-      border-color 150ms ease,
-      color 150ms ease,
-      fill 150ms ease,
-      stroke 150ms ease !important;
+      border-color 150ms ease !important;
   }
 }
 
