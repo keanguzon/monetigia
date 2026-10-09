@@ -5,6 +5,7 @@ import "./landing.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { AuthSessionManager } from "@/components/providers/auth-session-manager";
 import { Toaster } from "@/components/ui/toaster";
+import { ButtonTooltips } from "@/components/ui/button-tooltips";
 import { LoadingBar } from "@/components/ui/loading-bar";
 import { NavigationProvider } from "@/components/layout/navigation-provider";
 import ThemeTransitionOverlay from "@/components/theme/ThemeTransitionOverlay";
@@ -56,6 +57,7 @@ export default function RootLayout({
             <div className="min-h-screen animate-fade-in">{children}</div>
           </NavigationProvider>
           <Toaster />
+          <ButtonTooltips />
         </ThemeProvider>
       </body>
     </html>

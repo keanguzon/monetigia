@@ -272,7 +272,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
                   <button
                     type="button"
                     onClick={() => handleFrequencyChange("monthly")}
-                    title="Monthly"
+                    data-tooltip="Monthly"
                     className={`rounded px-2 py-0.5 transition-all ${
                       frequency === "monthly"
                         ? "bg-background text-foreground shadow-xs font-bold"
@@ -284,7 +284,7 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
                   <button
                     type="button"
                     onClick={() => handleFrequencyChange("kinsenas")}
-                    title="Semi-Monthly (Kinsenas / Cutoff)"
+                    data-tooltip="Semi-Monthly (Kinsenas / Cutoff)"
                     className={`rounded px-2 py-0.5 transition-all ${
                       frequency === "kinsenas"
                         ? "bg-background text-foreground shadow-xs font-bold"

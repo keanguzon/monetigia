@@ -545,7 +545,7 @@ describe("transactions history pagination", () => {
     await screen.findByText("Unmatched card purchase");
     const deleteButton = screen.getByRole("button", { name: "Delete transaction" }) as HTMLButtonElement;
     expect(deleteButton.disabled).toBe(true);
-    expect(deleteButton.title).toMatch(/Debt details are unavailable/i);
+    expect(deleteButton.dataset.tooltip).toMatch(/Debt details are unavailable/i);
     expect(screen.getByText(/refresh the debt views before correcting this credit purchase/i)).toBeTruthy();
     await user.click(deleteButton);
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -566,7 +566,7 @@ describe("transactions history pagination", () => {
     await screen.findByText("Expense without wallet metadata");
     const deleteButton = screen.getByRole("button", { name: "Delete transaction" }) as HTMLButtonElement;
     expect(deleteButton.disabled).toBe(true);
-    expect(deleteButton.title).toMatch(/wallet type.*unavailable/i);
+    expect(deleteButton.dataset.tooltip).toMatch(/wallet type.*unavailable/i);
     await user.click(deleteButton);
     expect(screen.queryByText("Delete transaction?")).toBeNull();
   });

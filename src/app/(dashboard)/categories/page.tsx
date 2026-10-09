@@ -225,7 +225,7 @@ export default function CategoriesPage() {
                           startEditingCategory(category.id, category.name);
                         }}
                         className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                        title="Rename category"
+                        data-tooltip="Rename category"
                       >
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
@@ -236,7 +236,7 @@ export default function CategoriesPage() {
                           deleteCategory(category.id);
                         }}
                         className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        title="Delete category"
+                        data-tooltip="Delete category"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -309,7 +309,7 @@ export default function CategoriesPage() {
                           startEditingCategory(category.id, category.name);
                         }}
                         className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                        title="Rename category"
+                        data-tooltip="Rename category"
                       >
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
@@ -320,7 +320,7 @@ export default function CategoriesPage() {
                           deleteCategory(category.id);
                         }}
                         className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        title="Delete category"
+                        data-tooltip="Delete category"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>

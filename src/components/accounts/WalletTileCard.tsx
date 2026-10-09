@@ -167,7 +167,7 @@ export function WalletTileCard({
                       startEditingAccount(account.id, account.name);
                     }}
                     className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-0.5 text-muted-foreground hover:text-foreground"
-                    title="Rename wallet"
+                    data-tooltip="Rename wallet" aria-label="Rename wallet"
                   >
                     <Edit2 className="h-3 w-3" />
                   </button>
@@ -194,7 +194,7 @@ export function WalletTileCard({
                 setAccountToDelete(account.id);
               }}
               className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              title="Delete wallet"
+              data-tooltip="Delete wallet" aria-label="Delete wallet"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -280,7 +280,7 @@ export function WalletTileCard({
                   type="button"
                   onClick={() => setIsEditingRateInline(true)}
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[11px] font-medium hover:bg-emerald-500/20 transition-colors"
-                  title="Click to edit interest rate"
+                  data-tooltip="Click to edit interest rate" aria-label="Click to edit interest rate"
                 >
                   <Percent className="h-3 w-3" />
                   <span>{currentRateStr}% APY</span>

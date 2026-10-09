@@ -270,7 +270,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
                       <button
                         type="button"
                         aria-label={creditRow ? `Delete installment ${debtRow?.ordinal ?? "unavailable"}` : `Delete installment ${position?.number}`}
-                        title={reason ?? undefined}
+                        data-tooltip={reason ?? undefined}
                         disabled={creditRow && !eligible}
                         onClick={() => onRequestDelete(child)}
                         className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"

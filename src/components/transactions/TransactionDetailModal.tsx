@@ -310,7 +310,6 @@ export default function TransactionDetailModal({
                   }}
                   disabled={!transaction?.id || Boolean(deleteDisabledReason)}
                   className={`min-h-11 min-w-[100px] rounded-lg px-4 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 ${transaction?.id && !deleteDisabledReason ? "bg-red-700 text-white hover:bg-red-800 dark:bg-red-400 dark:text-slate-950 dark:hover:bg-red-300" : "bg-red-500/30 text-white/60"}`}
-                  title={deleteDisabledReason ?? (transaction?.id ? "Delete transaction" : "")}
                 >
                   {deleteDisabledReason ? "Delete unavailable" : "Delete"}
                 </button>

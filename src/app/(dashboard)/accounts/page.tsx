@@ -710,7 +710,7 @@ export default function AccountsPage() {
                   onClick={() => setIsEditingOrder(true)}
                   disabled={!(accounts && accounts.length > 1)}
                   className="h-8 text-xs font-medium"
-                  title={accounts && accounts.length > 1 ? "Reorder your accounts" : "Add at least two accounts to reorder"}
+                  data-tooltip={accounts && accounts.length > 1 ? "Reorder your accounts" : "Add at least two accounts to reorder"}
                 >
                   <Edit2 className="h-3.5 w-3.5 mr-1.5" />
                   Edit Order

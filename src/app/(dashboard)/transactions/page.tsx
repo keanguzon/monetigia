@@ -722,7 +722,7 @@ export default function TransactionsPage() {
                           aria-label="Delete transaction"
                           disabled={Boolean(blockedReason)}
                           className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          title={blockedReason ?? "Delete transaction"}
+                          data-tooltip={blockedReason ?? "Delete transaction"}
                         >
                           <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </button>
