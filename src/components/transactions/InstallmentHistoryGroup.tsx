@@ -18,6 +18,7 @@ type Props = {
   selectionResetKey: string;
   onSelectTransaction: (transaction: TransactionHistoryRow) => void;
   onRequestDelete: (transaction: TransactionHistoryRow) => void;
+  onRequestEditDescription?: (group: InstallmentHistoryEntry) => void;
   onSaved?: () => Promise<unknown>;
 };
 
@@ -51,7 +52,7 @@ function exactRemaining(rows: DebtDueRow[]): string {
   return `PHP ${(total / BigInt(100)).toString()}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
 }
 
-export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, onSelectTransaction, onRequestDelete, onSaved }: Props) {
+export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, onSelectTransaction, onRequestDelete, onRequestEditDescription, onSaved }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [selection, setSelection] = useState<DebtSelectionState>(emptySelection);
   const [correctionOpen, setCorrectionOpen] = useState(false);
@@ -131,14 +132,15 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
 
   return (
     <div className="group">
-      <button
-        type="button"
-        aria-label={`${expanded ? "Hide" : "Show"} payment schedule for ${groupLabel}`}
-        aria-expanded={expanded}
-        aria-controls={scheduleId}
-        onClick={toggleExpanded}
-        className="flex min-h-11 w-full flex-col gap-3 px-3 py-3.5 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-4"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-stretch">
+        <button
+          type="button"
+          aria-label={`${expanded ? "Hide" : "Show"} payment schedule for ${groupLabel}`}
+          aria-expanded={expanded}
+          aria-controls={scheduleId}
+          onClick={toggleExpanded}
+          className="flex min-h-11 min-w-0 w-full flex-1 flex-col gap-3 px-3 py-3.5 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-4"
+        >
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500" aria-hidden="true">
             <ArrowUpRight className="h-5 w-5" />
@@ -180,7 +182,20 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
             <ChevronDown className={`h-4 w-4 text-primary ${expanded ? "rotate-180" : ""}`} />
           </span>
         </div>
-      </button>
+        </button>
+        {onRequestEditDescription && <div className="flex items-center justify-end px-3 pb-3 sm:px-4 sm:py-2">
+          <button
+            type="button"
+            aria-label={`Edit description for ${groupLabel}`}
+            disabled={group.descriptionState === "needs_review"}
+            onClick={() => onRequestEditDescription(group)}
+            className="min-h-11 rounded-md border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            Edit description
+          </button>
+        </div>}
+      </div>
+      {group.descriptionState === "needs_review" && <p role="status" className="px-3 pb-2 text-sm text-amber-800 dark:text-amber-200 sm:px-5">This installment description needs review before the group can be edited.</p>}
 
       <div
         id={scheduleId}

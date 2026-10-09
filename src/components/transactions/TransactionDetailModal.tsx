@@ -1,13 +1,17 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useGoals } from "@/hooks/use-goals";
 import { useGoalHistory } from "@/hooks/use-goal-finance";
 import type { GoalFinanceGoal } from "@/lib/goals/contracts";
 
 import { Button } from "@/components/ui/button";
+import TransactionDescriptionEditor from "@/components/transactions/TransactionDescriptionEditor";
 import Tooltip from "@/components/ui/tooltip";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { groupTransactions, loadHistoryGroup, type TransactionHistoryRow } from "@/lib/transactions/history";
 import { 
   X, 
   ArrowDownLeft, 
@@ -26,7 +30,14 @@ interface TransactionDetailModalProps {
   transaction: any;
   onRequestDelete?: (tx: any) => void;
   deleteDisabledReason?: string | null;
+  onDescriptionSaved?: () => Promise<unknown>;
 }
+
+type DescriptionEditorSession = {
+  key: number;
+  target: { transactionId: string | null; groupId: string | null };
+  currentDescription: string | null;
+};
 
 function GoalTransactionHistory({ goal, userId, transactionId }: { goal: GoalFinanceGoal; userId: string | null; transactionId: string }) {
   const history = useGoalHistory(userId, goal.id);
@@ -46,9 +57,83 @@ export default function TransactionDetailModal({
   transaction,
   onRequestDelete,
   deleteDisabledReason,
+  onDescriptionSaved,
 }: TransactionDetailModalProps) {
   const { financeSnapshot, userId } = useGoals();
+  const [descriptionEditor, setDescriptionEditor] = useState<DescriptionEditorSession | null>(null);
+  const [descriptionIssue, setDescriptionIssue] = useState<string | null>(null);
+  const [loadingGroupDescription, setLoadingGroupDescription] = useState(false);
+  const descriptionReadGeneration = useRef(0);
+  const editDescriptionButton = useRef<HTMLButtonElement>(null);
+  const refreshDescriptionHistory = useCallback(async () => {
+    await onDescriptionSaved?.();
+  }, [onDescriptionSaved]);
+
+  useEffect(() => {
+    descriptionReadGeneration.current += 1;
+    setDescriptionEditor(null);
+    setDescriptionIssue(null);
+    setLoadingGroupDescription(false);
+  }, [isOpen, transaction?.id]);
+
   if (!isOpen || !transaction) return null;
+
+  function focusEditDescription() {
+    const focus = () => editDescriptionButton.current?.focus();
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(focus);
+    else setTimeout(focus, 0);
+  }
+
+  function closeDescriptionEditor() {
+    setDescriptionEditor(null);
+    focusEditDescription();
+  }
+
+  function requestDescriptionEdit() {
+    if (!transaction?.id) return;
+    setDescriptionIssue(null);
+    if (!transaction.installment_group_id) {
+      descriptionReadGeneration.current += 1;
+      setDescriptionEditor({
+        key: descriptionReadGeneration.current,
+        target: { transactionId: transaction.id, groupId: null },
+        currentDescription: transaction.description ?? null,
+      });
+      return;
+    }
+
+    if (!userId) {
+      setDescriptionIssue("Sign in again before editing this installment description.");
+      return;
+    }
+    const generation = ++descriptionReadGeneration.current;
+    const groupId = transaction.installment_group_id as string;
+    setLoadingGroupDescription(true);
+    void loadHistoryGroup(createClient() as any, userId, groupId)
+      .then(rows => {
+        if (generation !== descriptionReadGeneration.current || !isOpen) return;
+        const group = groupTransactions(rows).find(entry => entry.kind === "installment_group" && entry.groupId === groupId);
+        if (!group || group.kind !== "installment_group") {
+          setDescriptionIssue("This installment group is no longer available in your history.");
+          return;
+        }
+        if (group.descriptionState !== "consistent") {
+          setDescriptionIssue("The installment descriptions need review before this group can be edited.");
+          return;
+        }
+        setDescriptionEditor({
+          key: generation,
+          target: { transactionId: null, groupId },
+          currentDescription: group.baseDescription,
+        });
+      })
+      .catch(() => {
+        if (generation === descriptionReadGeneration.current) setDescriptionIssue("The installment descriptions could not be loaded. Try again.");
+      })
+      .finally(() => {
+        if (generation === descriptionReadGeneration.current) setLoadingGroupDescription(false);
+      });
+  }
 
   const getTypeColor = () => {
     switch (transaction.type) {
@@ -71,7 +156,7 @@ export default function TransactionDetailModal({
   return (
     <Dialog.Root open={isOpen} onOpenChange={open => { if (!open) onClose(); }}><Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-      <Dialog.Content data-no-press-motion="" aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto shadow-xl">
+      <Dialog.Content data-no-press-motion="" aria-describedby={undefined} onEscapeKeyDown={event => { if (descriptionEditor || loadingGroupDescription) event.preventDefault(); }} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground rounded-2xl w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto shadow-xl">
         {/* Header/Banner */}
         <div className={`p-8 flex flex-col items-center justify-center text-center ${getTypeColor()}`}>
           <div className="p-4 rounded-full bg-white dark:bg-slate-800 shadow-sm mb-4">
@@ -100,11 +185,25 @@ export default function TransactionDetailModal({
               <div className="mt-1 p-2 rounded-lg bg-slate-100 dark:bg-slate-800">
                 <FileText className="h-4 w-4 text-slate-500" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Description</p>
-                <p className="font-medium text-slate-900 dark:text-slate-100">
-                  {transaction.description || "No description provided"}
-                </p>
+                {!descriptionEditor ? <>
+                  <p className="break-words whitespace-pre-wrap font-medium text-slate-900 dark:text-slate-100">
+                    {transaction.description || "No description provided"}
+                  </p>
+                  <Button ref={editDescriptionButton} type="button" variant="outline" className="min-h-11" onClick={requestDescriptionEdit} disabled={loadingGroupDescription}>
+                    {loadingGroupDescription ? "Loading installment descriptions…" : "Edit description"}
+                  </Button>
+                </> : <TransactionDescriptionEditor
+                  key={descriptionEditor.key}
+                  target={descriptionEditor.target}
+                  currentDescription={descriptionEditor.currentDescription}
+                  userId={userId}
+                  refreshHistory={refreshDescriptionHistory}
+                  onCancel={closeDescriptionEditor}
+                  onSaved={closeDescriptionEditor}
+                />}
+                {descriptionIssue && <p role="status" className="break-words text-sm text-amber-800 dark:text-amber-200">{descriptionIssue}</p>}
               </div>
             </div>
 

@@ -7,7 +7,9 @@ import type { DebtAccountSnapshot, DebtDueRow } from "@/lib/debt/contracts";
 import {
   filterHistoryEntries,
   groupTransactions,
+  loadHistoryGroup,
   loadHistoryPage,
+  loadHistoryTransaction,
   mergeHistoryRows,
   sortHistoryEntries,
   type InstallmentHistoryEntry,
@@ -77,6 +79,47 @@ describe("transaction history grouping", () => {
     expect(afterOneDeletion.kind).toBe("installment_group");
     if (afterOneDeletion.kind !== "installment_group") throw new Error("Expected the remaining installment group");
     expect(afterOneDeletion.remainingAmount).toBe(0.2);
+  });
+
+  test("projects a consistent normalized base separately from the display fallback", () => {
+    const [allBlank] = groupTransactions([
+      transaction({ id: "blank-1", installment_group_id: "blank-group", description: null, category: { name: "Home" } }),
+      transaction({ id: "blank-2", installment_group_id: "blank-group", description: null, category: { name: "Home" } }),
+    ]);
+    expect(allBlank.kind).toBe("installment_group");
+    if (allBlank.kind !== "installment_group") throw new Error("Expected an installment group");
+    expect(allBlank.descriptionState).toBe("consistent");
+    expect(allBlank.baseDescription).toBeNull();
+    expect(allBlank.description).toBe("Home");
+
+    const [mixed] = groupTransactions([
+      transaction({ id: "mixed-1", installment_group_id: "mixed-group", description: "Coffee maker (Installment 1/2)" }),
+      transaction({ id: "mixed-2", installment_group_id: "mixed-group", description: "Desk (Installment 2/2)" }),
+    ]);
+    expect(mixed.kind).toBe("installment_group");
+    if (mixed.kind !== "installment_group") throw new Error("Expected an installment group");
+    expect(mixed.descriptionState).toBe("needs_review");
+    expect(mixed.baseDescription).toBeNull();
+  });
+
+  test("strips only the exact terminal generated installment suffix for the edit base", () => {
+    const [exact] = groupTransactions([
+      transaction({ id: "exact-1", installment_group_id: "exact-group", description: "  Coffee maker (Installment 1/2)\n" }),
+      transaction({ id: "exact-2", installment_group_id: "exact-group", description: "Coffee maker (Installment 2/2)" }),
+    ]);
+    expect(exact.kind === "installment_group" && exact.baseDescription).toBe("Coffee maker");
+
+    const [notGenerated] = groupTransactions([
+      transaction({ id: "literal", installment_group_id: "literal-group", description: "Coffee maker (installment 1/2)" }),
+    ]);
+    expect(notGenerated.kind === "installment_group" && notGenerated.baseDescription).toBe("Coffee maker (installment 1/2)");
+
+    const [blankBase] = groupTransactions([
+      transaction({ id: "blank-base-1", installment_group_id: "blank-base-group", description: " (Installment 1/2)" }),
+      transaction({ id: "blank-base-2", installment_group_id: "blank-base-group", description: " (Installment 2/2)" }),
+    ]);
+    expect(blankBase.kind === "installment_group" && blankBase.descriptionState).toBe("consistent");
+    expect(blankBase.kind === "installment_group" && blankBase.baseDescription).toBeNull();
   });
 
   test("sorts purchase groups by purchase date and ordinary rows by transaction date", () => {
@@ -193,6 +236,34 @@ describe("transaction history grouping", () => {
 });
 
 describe("history query window", () => {
+  test("loads one owned detail and every owned explicit group sibling", async () => {
+    const selected = transaction({ id: "selected", installment_group_id: "purchase-1" });
+    const sibling = transaction({ id: "sibling", installment_group_id: "purchase-1", date: "2026-03-10" });
+    const calls: Array<{ filters: Array<[string, unknown]>; orders: string[]; select: string }> = [];
+    const client = {
+      from() {
+        const call = { filters: [] as Array<[string, unknown]>, orders: [] as string[], select: "" };
+        calls.push(call);
+        const query: any = {
+          select: (value: string) => { call.select = value; return query; },
+          eq: (column: string, value: unknown) => { call.filters.push([column, value]); return query; },
+          order: (column: string) => { call.orders.push(column); return query; },
+          maybeSingle: async () => ({ data: selected, error: null }),
+          then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve({ data: [selected, sibling], error: null }).then(resolve, reject),
+        };
+        return query;
+      },
+    };
+
+    await expect(loadHistoryTransaction(client, "owner-1", "selected")).resolves.toEqual(selected);
+    await expect(loadHistoryGroup(client, "owner-1", "purchase-1")).resolves.toEqual([selected, sibling]);
+    expect(calls[0].filters).toEqual([["user_id", "owner-1"], ["id", "selected"]]);
+    expect(calls[1].filters).toEqual([["user_id", "owner-1"], ["installment_group_id", "purchase-1"]]);
+    expect(calls[1].orders).toEqual(["date", "id"]);
+    expect(calls[0].select).toContain("description");
+    expect(calls[1].select).toBe(calls[0].select);
+  });
+
   test("hydrates every selected group's siblings with an owner-scoped query", async () => {
     const selected = transaction({ id: "selected", installment_group_id: "purchase-1" });
     const siblings = [selected, transaction({ id: "outside-window-1", date: "2026-03-10" }), transaction({ id: "outside-window-2", date: "2026-04-10" })];

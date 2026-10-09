@@ -64,6 +64,9 @@ function row(id: number) {
   };
 }
 
+type HistoryTestRow = Omit<ReturnType<typeof row>, "installment_group_id" | "purchase_date" | "history_date">
+  & { installment_group_id: string | null; purchase_date: string | null; history_date: string | null };
+
 function configureHistoryPages() {
   let laterAttempts = 0;
   const ranges: Array<[number, number]> = [];
@@ -88,28 +91,33 @@ function configureHistoryPages() {
   return { ranges, orders };
 }
 
-function configureHistoryRows(rows: ReturnType<typeof row>[]) {
+function configureHistoryRows(rows: HistoryTestRow[]) {
   const ranges: Array<[number, number]> = [];
+  const groupReads: string[] = [];
   mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-1" } } });
   mocks.from.mockImplementation(() => {
     let range: [number, number] = [0, 49];
     let siblingIds: string[] = [];
+    const filters: Array<[string, unknown]> = [];
     const query: any = {
       select: () => query,
-      eq: () => query,
+      eq: (column: string, value: unknown) => { filters.push([column, value]); if (column === "installment_group_id") groupReads.push(String(value)); return query; },
       in: (_column: string, ids: string[]) => { siblingIds = ids; return query; },
       order: () => query,
       range: (start: number, end: number) => { range = [start, end]; ranges.push(range); return query; },
       then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
+        const requestedGroup = filters.find(([column]) => column === "installment_group_id")?.[1];
         const page = siblingIds.length
           ? rows.filter(item => item.installment_group_id && siblingIds.includes(item.installment_group_id))
-          : rows.slice(range[0], range[1] + 1);
+          : requestedGroup
+            ? rows.filter(item => item.installment_group_id === requestedGroup)
+            : rows.slice(range[0], range[1] + 1);
         return Promise.resolve({ data: page, error: null }).then(resolve, reject);
       },
     };
     return query;
   });
-  return { ranges };
+  return { ranges, groupReads };
 }
 
 afterEach(() => {
@@ -250,6 +258,29 @@ describe("transactions history pagination", () => {
     expect(dialog.textContent).toMatch(/deletes only this installment/i);
     expect(dialog.textContent).toMatch(/other installments in this schedule will remain/i);
     expect(screen.getByRole("button", { name: "Delete installment" })).toBeTruthy();
+  });
+
+  test("opens the complete installment description editor without opening the schedule", async () => {
+    const user = userEvent.setup();
+    const purchaseId = "40000000-0000-4000-8000-000000000004";
+    const groupRows = [1, 2, 3].map(index => ({
+      ...row(index),
+      id: `50000000-0000-4000-8000-00000000000${index}`,
+      description: `QA purchase (Installment ${index}/3)`,
+      installment_group_id: purchaseId,
+      purchase_date: "2026-01-10",
+      history_date: "2026-01-10",
+    }));
+    const { groupReads } = configureHistoryRows(groupRows);
+    render(<TransactionsPage />);
+
+    const edit = await screen.findByRole("button", { name: "Edit description for QA purchase" });
+    await user.click(edit);
+
+    expect(await screen.findByRole("textbox", { name: "Description" })).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Description" }) as HTMLTextAreaElement).value).toBe("QA purchase");
+    expect(screen.getByRole("button", { name: /show payment schedule/i }).getAttribute("aria-expanded")).toBe("false");
+    expect(groupReads).toContain(purchaseId);
   });
 
   test("routes a standalone credit purchase to its exact debt row and refreshes without hiding the purchase", async () => {

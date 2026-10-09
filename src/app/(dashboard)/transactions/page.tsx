@@ -24,10 +24,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import InstallmentHistoryGroup from "@/components/transactions/InstallmentHistoryGroup";
+import TransactionDescriptionEditor from "@/components/transactions/TransactionDescriptionEditor";
+import { useTransactionDescription } from "@/hooks/use-transaction-description";
 import {
+  HISTORY_PAGE_SIZE,
   filterHistoryEntries,
   groupTransactions,
+  loadHistoryGroup,
   loadHistoryPage,
+  loadHistoryTransaction,
   mergeHistoryRows,
   sortHistoryEntries,
   type InstallmentHistoryEntry,
@@ -46,6 +51,7 @@ const TransactionDetailModal = dynamic(() => import("@/components/transactions/T
 type DebtState = { account: DebtAccountSnapshot; rows: DebtDueRow[] };
 type CorrectionTarget = { accountId: string; groupId: string; groupName: string; selectedIds: string[] };
 type CorrectionRoute = { kind: "ordinary" } | { kind: "blocked"; reason: string } | { kind: "correction"; target: CorrectionTarget };
+type DescriptionEditorSession = { key: number; target: { transactionId: string | null; groupId: string | null }; currentDescription: string | null };
 const knownNonCreditAccountTypes = new Set(["cash", "bank", "e_wallet", "investment"]);
 
 function historyAccountType(row: TransactionHistoryRow): string | null {
@@ -87,6 +93,7 @@ export default function TransactionsPage() {
   const goals = useGoals();
   const debt = useDebt(goals.userId);
   const debtCommand = useDebtCommand(goals.userId);
+  const descriptionCommand = useTransactionDescription(goals.userId, refreshDescriptionHistory);
   const pendingCorrection = debtCommand.pendingCommand?.kind === "correct_debt_rows" ? debtCommand.pendingCommand : null;
   const pendingAdoption = debtCommand.pendingCommand?.kind === "adopt_opening_debt" ? debtCommand.pendingCommand : null;
   const [transactions, setTransactions] = useState<TransactionHistoryRow[]>([]);
@@ -103,14 +110,93 @@ export default function TransactionsPage() {
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [savedDeleteKind, setSavedDeleteKind] = useState<"transaction" | "installment">("transaction");
   const [correctionTarget, setCorrectionTarget] = useState<CorrectionTarget | null>(null);
+  const [descriptionEditor, setDescriptionEditor] = useState<DescriptionEditorSession | null>(null);
+  const [descriptionReviewError, setDescriptionReviewError] = useState<string | null>(null);
   const [historyRefreshPending, setHistoryRefreshPending] = useState(() => Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId)));
   const [refreshingDebtViews, setRefreshingDebtViews] = useState(false);
   const requestGeneration = useRef(0);
+  const loadedHistoryPageCount = useRef(0);
+  const currentOwner = useRef(goals.userId);
+  const currentSort = useRef(sortMode);
+  currentOwner.current = goals.userId;
+  currentSort.current = sortMode;
   const loadMoreLock = useRef(false);
   const retryingCorrection = useRef(false);
+  const descriptionReadGeneration = useRef(0);
+  const descriptionEditorSequence = useRef(0);
+  const descriptionEditorFocus = useRef<HTMLElement | null>(null);
+  const lastSelectedTransaction = useRef<TransactionHistoryRow | null>(null);
+  const previousOwner = useRef(goals.userId);
   const deletion = useTransactionDelete(loadTransactions);
   const isDeleting = deletion.isDeleting;
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (previousOwner.current === goals.userId) return;
+    previousOwner.current = goals.userId;
+    descriptionReadGeneration.current += 1;
+    descriptionEditorFocus.current = null;
+    lastSelectedTransaction.current = null;
+    setDescriptionEditor(null);
+    setDescriptionReviewError(null);
+  }, [goals.userId]);
+
+  function isCurrentHistoryRequest(generation: number, ownerId: string | null, requestedSort: TransactionHistorySort): boolean {
+    return generation === requestGeneration.current && currentOwner.current === ownerId && currentSort.current === requestedSort;
+  }
+
+  function closeDescriptionEditor() {
+    setDescriptionEditor(null);
+    if (descriptionCommand.errorCode === "STALE_QUOTE" && !descriptionCommand.pendingCommand && !descriptionCommand.saved) descriptionCommand.reset();
+    const focus = () => {
+      if (descriptionEditorFocus.current?.isConnected) descriptionEditorFocus.current.focus();
+      descriptionEditorFocus.current = null;
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(focus);
+    else setTimeout(focus, 0);
+  }
+
+  function selectTransaction(transaction: TransactionHistoryRow) {
+    lastSelectedTransaction.current = transaction;
+    setSelectedTransaction(transaction);
+  }
+
+  function requestEditDescription(group: InstallmentHistoryEntry) {
+    const ownerId = goals.userId;
+    if (!ownerId) {
+      setDescriptionReviewError("Sign in again before editing this installment description.");
+      return;
+    }
+    if (descriptionCommand.pendingCommand || descriptionCommand.isSaving || descriptionCommand.refreshError) return;
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      descriptionEditorFocus.current = document.activeElement;
+    }
+    const generation = ++descriptionReadGeneration.current;
+    const listGeneration = requestGeneration.current;
+    const requestedSort = sortMode;
+    setDescriptionReviewError(null);
+    void loadHistoryGroup(sb, ownerId, group.groupId)
+      .then(rows => {
+        if (generation !== descriptionReadGeneration.current || !isCurrentHistoryRequest(listGeneration, ownerId, requestedSort)) return;
+        const latestGroup = groupTransactions(rows).find(entry => entry.kind === "installment_group" && entry.groupId === group.groupId);
+        if (!latestGroup || latestGroup.kind !== "installment_group") {
+          setDescriptionReviewError("This installment group is no longer available in your history.");
+          return;
+        }
+        if (latestGroup.descriptionState !== "consistent") {
+          setDescriptionReviewError("The installment descriptions need review before this group can be edited.");
+          return;
+        }
+        setDescriptionEditor({
+          key: ++descriptionEditorSequence.current,
+          target: { transactionId: null, groupId: latestGroup.groupId },
+          currentDescription: latestGroup.baseDescription,
+        });
+      })
+      .catch(() => {
+        if (generation === descriptionReadGeneration.current) setDescriptionReviewError("The installment descriptions could not be loaded. Try again.");
+      });
+  }
 
   useEffect(() => {
     if (goals.userId && pendingCorrection) debtCorrectionRecovery.pendingOwners.add(goals.userId);
@@ -119,7 +205,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     void loadTransactions().catch(() => {});
-  }, [refreshKey, sortMode]);
+  }, [refreshKey, sortMode, goals.userId]);
 
   useEffect(() => {
     if (!deletion.savedTransactionId) return;
@@ -138,7 +224,10 @@ export default function TransactionsPage() {
 
   async function loadTransactions() {
     const generation = ++requestGeneration.current;
+    const ownerId = goals.userId;
+    const requestedSort = sortMode;
     loadMoreLock.current = false;
+    loadedHistoryPageCount.current = 0;
     setIsLoading(true);
     setIsLoadingMore(false);
     setLoadError(null);
@@ -148,13 +237,14 @@ export default function TransactionsPage() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id) return;
-      const page = await loadHistoryPage(sb, user.id, sortMode);
-      if (generation !== requestGeneration.current) return;
+      if (!user?.id || user.id !== ownerId) return;
+      const page = await loadHistoryPage(sb, ownerId, requestedSort);
+      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return;
       setTransactions(page.rows);
       setNextOffset(page.nextOffset);
+      loadedHistoryPageCount.current = 1;
     } catch (error) {
-      if (generation === requestGeneration.current) {
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) {
         console.error("Failed to load transactions", error);
         setLoadError("The transaction list could not refresh. Try again.");
         toast({
@@ -165,12 +255,15 @@ export default function TransactionsPage() {
       }
       throw new Error("The transaction list could not refresh.");
     } finally {
-      if (generation === requestGeneration.current) setIsLoading(false);
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) setIsLoading(false);
     }
   }
 
   async function loadMoreTransactions() {
     if (nextOffset === null || isLoading || isLoadingMore || loadMoreLock.current) return;
+    const ownerId = goals.userId;
+    const requestedSort = sortMode;
+    if (!ownerId) return;
     const offset = nextOffset;
     const generation = requestGeneration.current;
     loadMoreLock.current = true;
@@ -178,13 +271,14 @@ export default function TransactionsPage() {
     setLoadMoreError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id) throw new Error("Sign in to load older transactions.");
-      const page = await loadHistoryPage(sb, user.id, sortMode, offset);
-      if (generation !== requestGeneration.current) return;
+      if (!user?.id || user.id !== ownerId) throw new Error("The signed-in account changed while history was loading.");
+      const page = await loadHistoryPage(sb, ownerId, requestedSort, offset);
+      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return;
       setTransactions(current => mergeHistoryRows(current, page.rows));
       setNextOffset(page.nextOffset);
+      loadedHistoryPageCount.current = Math.max(loadedHistoryPageCount.current, Math.floor(offset / HISTORY_PAGE_SIZE) + 1);
     } catch (error) {
-      if (generation === requestGeneration.current) {
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) {
         console.error("Failed to load more transactions", error);
         setLoadMoreError("Older history could not be loaded. Your current entries are still here.");
         toast({
@@ -194,7 +288,7 @@ export default function TransactionsPage() {
         });
       }
     } finally {
-      if (generation === requestGeneration.current) {
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) {
         loadMoreLock.current = false;
         setIsLoadingMore(false);
       }
@@ -204,7 +298,17 @@ export default function TransactionsPage() {
   async function refreshLoadedHistory(): Promise<boolean> {
     const ownerId = goals.userId;
     if (!ownerId) throw new Error("Sign in to refresh transaction history.");
-    const targetNextOffset = nextOffset;
+    const requestedSort = sortMode;
+    const targetPageCount = Math.max(1, loadedHistoryPageCount.current);
+    const selectedTransactionId = selectedTransaction?.id ?? null;
+    const savedTarget = lastSelectedTransaction.current && descriptionCommand.saved?.transactionIds.includes(lastSelectedTransaction.current.id)
+      ? lastSelectedTransaction.current
+      : null;
+    const selectedGroupId = descriptionEditor?.target.groupId
+      ?? selectedTransaction?.installment_group_id
+      ?? descriptionCommand.pendingCommand?.groupId
+      ?? savedTarget?.installment_group_id
+      ?? null;
     const generation = ++requestGeneration.current;
     loadMoreLock.current = false;
     setIsLoading(true);
@@ -216,32 +320,59 @@ export default function TransactionsPage() {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || user?.id !== ownerId) throw new Error("The signed-in account changed while history was refreshing.");
       const refreshedRows: TransactionHistoryRow[] = [];
-      let offset = 0;
-      let next: number | null;
-      do {
-        const page = await loadHistoryPage(sb, ownerId, sortMode, offset);
-        if (generation !== requestGeneration.current) return false;
+      let next: number | null = null;
+      let pagesRead = 0;
+      for (let pageIndex = 0; pageIndex < targetPageCount; pageIndex += 1) {
+        const offset = pageIndex * HISTORY_PAGE_SIZE;
+        const page = await loadHistoryPage(sb, ownerId, requestedSort, offset);
+        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return false;
         refreshedRows.splice(0, refreshedRows.length, ...mergeHistoryRows(refreshedRows, page.rows));
+        pagesRead += 1;
         next = page.nextOffset;
-        if (next === null || targetNextOffset !== null && next >= targetNextOffset) break;
-        offset = next;
-      } while (true);
+        if (next === null) break;
+      }
 
-      if (generation !== requestGeneration.current) return false;
+      let refreshedDetail: TransactionHistoryRow | null | undefined;
+      if (selectedTransactionId) {
+        refreshedDetail = await loadHistoryTransaction(sb, ownerId, selectedTransactionId);
+        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return false;
+      }
+      let refreshedGroup: TransactionHistoryRow[] | undefined;
+      if (selectedGroupId) {
+        refreshedGroup = await loadHistoryGroup(sb, ownerId, selectedGroupId);
+        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return false;
+      }
+
+      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return false;
+      loadedHistoryPageCount.current = pagesRead;
       setTransactions(refreshedRows);
       setNextOffset(next);
-      setSelectedTransaction(current => current ? refreshedRows.find(row => row.id === current.id) ?? null : null);
+      if (selectedTransactionId) {
+        lastSelectedTransaction.current = refreshedDetail ?? null;
+        setSelectedTransaction(current => current?.id === selectedTransactionId ? refreshedDetail ?? null : current);
+      }
+      if (selectedGroupId && refreshedGroup) {
+        const latestGroup = groupTransactions(refreshedGroup).find(entry => entry.kind === "installment_group" && entry.groupId === selectedGroupId);
+        setDescriptionEditor(current => current?.target.groupId === selectedGroupId
+          ? { ...current, currentDescription: latestGroup?.kind === "installment_group" && latestGroup.descriptionState === "consistent" ? latestGroup.baseDescription : null }
+          : current);
+      }
       setDeleteConfirm(null);
       return true;
     } catch (error) {
-      if (generation === requestGeneration.current) {
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) {
         setLoadError("The transaction list could not refresh. Try again.");
         console.error("Failed to refresh debt transaction history", error);
       }
       throw error;
     } finally {
-      if (generation === requestGeneration.current) setIsLoading(false);
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) setIsLoading(false);
     }
+  }
+
+  async function refreshDescriptionHistory(): Promise<void> {
+    const refreshed = await refreshLoadedHistory();
+    if (!refreshed) throw new Error("History refresh was superseded by a newer request.");
   }
 
   async function refreshCorrectionViews() {
@@ -277,6 +408,7 @@ export default function TransactionsPage() {
     if (nextSort === sortMode) return;
     requestGeneration.current += 1;
     loadMoreLock.current = false;
+    loadedHistoryPageCount.current = 0;
     setTransactions([]);
     setNextOffset(null);
     setIsLoadingMore(false);
@@ -300,6 +432,14 @@ export default function TransactionsPage() {
   const searchFilteredTransactions = filterHistoryEntries(historyEntries, searchQuery, filter);
   const selectionResetKey = JSON.stringify([goals.userId, sortMode, filter, searchQuery]);
   const correctionRefreshNeedsRecovery = historyRefreshPending || Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId));
+  const pendingDescription = descriptionCommand.pendingCommand;
+  const descriptionRecovery = Boolean(pendingDescription || descriptionCommand.errorCode === "STALE_QUOTE" || descriptionCommand.saved && descriptionCommand.refreshError);
+  const detailOwnsDescriptionRecovery = Boolean(selectedTransaction && (
+    pendingDescription?.groupId && selectedTransaction.installment_group_id === pendingDescription.groupId
+    || pendingDescription?.transactionId && selectedTransaction.id === pendingDescription.transactionId
+    || descriptionCommand.saved?.transactionIds.includes(selectedTransaction.id)
+  ));
+  const showPageDescriptionEditor = Boolean(descriptionEditor || descriptionRecovery && !detailOwnsDescriptionRecovery);
 
   function correctionRoute(transaction: TransactionHistoryRow): CorrectionRoute {
     if (transaction.type !== "expense") return { kind: "ordinary" };
@@ -383,6 +523,18 @@ export default function TransactionsPage() {
       {correctionRefreshNeedsRecovery && <div data-no-press-motion="" role="alert" className="mb-4 space-y-2 text-sm text-red-700 dark:text-red-300">
         <p>A debt correction saved, but some views could not refresh. Refresh the debt schedule and transaction history before continuing.</p>
         <Button variant="outline" className="min-h-11" disabled={refreshingDebtViews} onClick={() => { void refreshCorrectionViews().catch(() => undefined); }}>{refreshingDebtViews ? "Refreshing views…" : "Refresh views"}</Button>
+      </div>}
+      {descriptionReviewError && <p data-no-press-motion="" role="alert" className="mb-4 text-sm text-amber-800 dark:text-amber-200">{descriptionReviewError}</p>}
+      {showPageDescriptionEditor && <div className="mb-4">
+        <TransactionDescriptionEditor
+          key={descriptionEditor?.key ?? `description-recovery-${goals.userId ?? "signed-out"}`}
+          target={descriptionEditor?.target ?? { transactionId: null, groupId: null }}
+          currentDescription={descriptionEditor?.currentDescription ?? null}
+          userId={goals.userId}
+          refreshHistory={refreshDescriptionHistory}
+          onCancel={closeDescriptionEditor}
+          onSaved={closeDescriptionEditor}
+        />
       </div>}
       {deletion.error && <div data-no-press-motion="" role="alert" className="mb-4 text-sm text-red-700 dark:text-red-300 space-y-2"><p>{deletion.error}</p>{deletion.pendingTransactionId && <button type="button" disabled={isDeleting} onClick={() => { void deletion.remove(deletion.pendingTransactionId!); }} className="min-h-11 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same deletion</button>}</div>}
       {deletion.savedTransactionId && <p role="status" className="mb-4 text-sm">{savedDeleteKind === "installment" ? deletion.refreshError ? "Installment deleted, but some views could not refresh. Refresh the page to check the remaining schedule." : "Installment deleted. Its siblings remain and the remaining scheduled amount has been updated." : deletion.refreshError ? "Transaction deleted. Some views could not refresh. Refresh the page; do not delete it again." : "Transaction deleted and wallet balances updated."}</p>}
@@ -510,7 +662,7 @@ export default function TransactionsPage() {
                 {searchFilteredTransactions.map((entry) => {
                   if (entry.kind === "installment_group") {
                     const debtState = debt.isLoading || debt.error ? null : completeCreditGroup(entry, debt.snapshot);
-                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} onSelectTransaction={setSelectedTransaction} onRequestDelete={requestDelete} onSaved={refreshCorrectionViews} />;
+                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} onSelectTransaction={selectTransaction} onRequestDelete={requestDelete} onRequestEditDescription={requestEditDescription} onSaved={refreshCorrectionViews} />;
                   }
 
                   const transaction = entry.transaction;
@@ -522,7 +674,7 @@ export default function TransactionsPage() {
                       <button
                         type="button"
                         aria-label={`View details for ${description}`}
-                        onClick={() => setSelectedTransaction(transaction)}
+                        onClick={() => selectTransaction(transaction)}
                         className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       >
                         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
@@ -637,6 +789,7 @@ export default function TransactionsPage() {
         onClose={() => setSelectedTransaction(null)}
         onRequestDelete={requestDelete}
         deleteDisabledReason={deleteDisabledReason}
+        onDescriptionSaved={refreshDescriptionHistory}
       />
       <DebtCorrectionDialog
         open={correctionTarget !== null}

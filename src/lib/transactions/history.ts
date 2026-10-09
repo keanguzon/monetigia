@@ -1,3 +1,5 @@
+import { normalizeTransactionDescription } from "@/lib/transactions/description";
+
 export type TransactionHistorySort = "date_added" | "transaction_date";
 
 export type TransactionHistoryRow = {
@@ -23,6 +25,8 @@ export type InstallmentHistoryEntry = {
   groupId: string;
   children: TransactionHistoryRow[];
   description: string;
+  baseDescription: string | null;
+  descriptionState: "consistent" | "needs_review";
   purchaseDate: string | null;
   firstDueDate: string | null;
   remainingAmount: number | null;
@@ -73,6 +77,12 @@ export function formatInstallmentDescription(description: string | null | undefi
   return description?.replace(/\s*\(Installment\s+\d+\s*\/\s*\d+\)\s*$/i, "").trim() ?? "";
 }
 
+function installmentBaseDescription(description: string | null): string | null {
+  if (description === null) return null;
+  const suffix = description.match(/ \(Installment [1-9]\d*\/[1-9]\d*\)[\u0009-\u000D\u0020]*$/);
+  return normalizeTransactionDescription(suffix?.index === undefined ? description : description.slice(0, suffix.index));
+}
+
 export function installmentPosition(row: TransactionHistoryRow, fallbackIndex: number, fallbackCount: number) {
   const match = row.description?.match(/\(Installment\s+(\d+)\s*\/\s*(\d+)\)/i);
   if (match) return { number: Number(match[1]), count: Number(match[2]) };
@@ -98,6 +108,8 @@ export function groupTransactions(rows: TransactionHistoryRow[]): TransactionHis
         groupId,
         children: [],
         description: "",
+        baseDescription: null,
+        descriptionState: "consistent",
         purchaseDate: row.purchase_date ?? null,
         firstDueDate: null,
         remainingAmount: null,
@@ -122,6 +134,11 @@ export function groupTransactions(rows: TransactionHistoryRow[]): TransactionHis
   for (const entry of entries) {
     if (entry.kind !== "installment_group") continue;
     entry.children.sort(dueDateOrder);
+    const bases = entry.children.map(row => installmentBaseDescription(row.description));
+    const commonBase = bases[0] ?? null;
+    const descriptionsMatch = bases.every(base => base === commonBase);
+    entry.descriptionState = descriptionsMatch ? "consistent" : "needs_review";
+    entry.baseDescription = descriptionsMatch ? commonBase : null;
     entry.firstDueDate = entry.children[0]?.date ?? null;
     const latestDue = entry.children[entry.children.length - 1];
     entry.latestDueDate = latestDue?.date ?? null;
@@ -230,4 +247,35 @@ export async function loadHistoryPage(
     rows: completeRows,
     nextOffset: selectedRows.length === HISTORY_PAGE_SIZE ? offset + HISTORY_PAGE_SIZE : null,
   };
+}
+
+export async function loadHistoryTransaction(
+  client: any,
+  userId: string,
+  transactionId: string,
+): Promise<TransactionHistoryRow | null> {
+  const { data, error } = await client
+    .from("transactions")
+    .select(HISTORY_SELECT)
+    .eq("user_id", userId)
+    .eq("id", transactionId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as TransactionHistoryRow | null;
+}
+
+export async function loadHistoryGroup(
+  client: any,
+  userId: string,
+  groupId: string,
+): Promise<TransactionHistoryRow[]> {
+  const { data, error } = await client
+    .from("transactions")
+    .select(HISTORY_SELECT)
+    .eq("user_id", userId)
+    .eq("installment_group_id", groupId)
+    .order("date", { ascending: true })
+    .order("id", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as TransactionHistoryRow[];
 }
