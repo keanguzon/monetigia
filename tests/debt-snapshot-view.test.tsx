@@ -9,16 +9,26 @@ vi.mock("@/hooks/use-data", () => ({ useAccounts: () => ({ data: pageState.accou
 vi.mock("@/hooks/use-goals", () => ({ useGoals: () => ({ userId: "10000000-0000-4000-8000-000000000001", financeSnapshot: { goals: [], wallets: [] }, isLoading: false, isError: null, refresh: async () => {} }) }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: "10000000-0000-4000-8000-000000000001" } }, error: null }), getSession: async () => ({ data: { session: { user: { id: "10000000-0000-4000-8000-000000000001" }, access_token: "token" } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) }, rpc: () => { const response = Promise.resolve({ data: pageState.snapshot, error: null }); return { setHeader: () => response, then: response.then.bind(response) }; } }) }));
 import AccountsPage from "@/app/(dashboard)/accounts/page";
+import DebtPage from "@/app/(dashboard)/accounts/debt/page";
 import { DebtScheduleSection } from "@/components/accounts/DebtScheduleSection";
 import { DebtHistoryGroup } from "@/components/accounts/DebtHistoryGroup";
 import { debtCorrectionRecovery } from "@/components/accounts/DebtHistoryGroup";
 import type { DebtSnapshot } from "@/lib/debt/contracts";
 afterEach(cleanup);
 const snapshot: DebtSnapshot = { accounts: [{ accountId: "actual-wallet", totalOutstanding: "6600.00", undatedOutstanding: "5000.00", reconciliation: "balanced", reconciliationDelta: "0.00", fingerprint: "f" }], rows: [{ id: "r", accountId: "actual-wallet", groupId: "g", source: "opening", transactionId: null, dueDate: "2026-10-08", originalAmount: "2000.00", paidAmount: "400.00", correctedAmount: "0.00", remainingAmount: "1600.00", ordinal: 1, name: "Remaining laptop" }] };
+test("dedicated Debt route renders the shared workspace without the Wallets overview", async () => {
+  pageState.accounts = [];
+  pageState.snapshot = { accounts: [], rows: [] };
+  render(<SWRConfig value={{ provider: () => new Map(), revalidateOnFocus: false }}><DebtPage /></SWRConfig>);
+  expect(screen.getByRole("heading", { name: "PayLater & Credit" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: /Wallets & Accounts/ })).toBeNull();
+  expect(screen.getByRole("link", { name: "← Wallets" }).getAttribute("href")).toBe("/accounts");
+  expect(await screen.findByRole("button", { name: "History" })).toBeTruthy();
+});
 test("snapshot schedule displays remaining opening debt and reviews real wallet", () => {
   const pay = vi.fn(); const review = vi.fn();
   render(<DebtScheduleSection snapshot={snapshot} isLoading={false} error={null} onPayDebt={pay} onReviewLegacy={review} />);
-  expect(screen.getAllByText("Remaining laptop").length).toBe(2);
+  expect(screen.getAllByText("Remaining laptop").length).toBe(1);
   expect(screen.getByText(/Existing debt/)).toBeTruthy();
   expect(screen.getAllByText(/₱1,600\.00/).length).toBeGreaterThan(0);
   fireEvent.click(screen.getByRole("button", { name: /Pay debt/ })); expect(pay).toHaveBeenCalledWith("actual-wallet");
@@ -26,8 +36,8 @@ test("snapshot schedule displays remaining opening debt and reviews real wallet"
 });
 test("cached refresh preserves history but disables payments; errors hide stale figures", () => {
   const { rerender } = render(<DebtScheduleSection snapshot={snapshot} isLoading error={null} onPayDebt={() => {}} onReviewLegacy={() => {}} />);
-  expect(screen.getAllByText("Remaining laptop")).toHaveLength(2);
-  expect((screen.getByRole("button", { name: "Pay debt" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getAllByText("Remaining laptop")).toHaveLength(1);
+  expect((screen.getByRole("button", { name: /Pay debt/ }) as HTMLButtonElement).disabled).toBe(true);
   expect((screen.getByRole("button", { name: "Review due dates" }) as HTMLButtonElement).disabled).toBe(true);
   rerender(<DebtScheduleSection snapshot={snapshot} isLoading={false} error={new Error()} onReviewLegacy={() => {}} />);
   expect(screen.getByRole("alert")).toBeTruthy(); expect(screen.queryByRole("button", { name: /Pay debt/ })).toBeNull();
@@ -43,7 +53,9 @@ test("unknown due dates remain unknown and settled audit rows stay in snapshot",
   const unknown = { ...snapshot.rows[0], id: "unknown", source: "purchase" as const, transactionId: "transaction", dueDate: null, name: "Actual purchase" };
   const input = { ...snapshot, rows: [zero, unknown] };
   render(<DebtScheduleSection snapshot={input} isLoading={false} error={null} onReviewLegacy={() => {}} />);
-  expect(screen.getAllByText(/Actual purchase.*Due date unknown/).length).toBeGreaterThan(0);
+  expect(screen.getByText("Actual purchase")).toBeTruthy();
+  expect(screen.getAllByText(/Due date unknown/).length).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole("button", { name: "History" }));
   expect(screen.getAllByText("Settled audit").length).toBeGreaterThan(0);
   expect(screen.queryByText("2026-10")).toBeNull();
   expect(input.rows).toHaveLength(2);
@@ -53,10 +65,11 @@ test("unknown due dates remain unknown and settled audit rows stay in snapshot",
 test("complete debt ledger keeps paid values and snapshot ordinal visible", async () => {
   const paid = { ...snapshot.rows[0], id: "paid-row", name: "Paid laptop", paidAmount: "1500.00", remainingAmount: "0.00" };
   render(<DebtScheduleSection snapshot={{ ...snapshot, rows: [paid] }} isLoading={false} error={null} onReviewLegacy={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "History" }));
   const header = screen.getByRole("button", { name: /show debt history for paid laptop/i });
   fireEvent.click(header);
   expect(screen.getByText("Installment 1")).toBeTruthy();
-  expect(screen.getAllByText("Remaining ₱0.00").length).toBe(2);
+  expect(screen.getAllByText("Remaining ₱0.00").length).toBe(1);
   expect(screen.getByText("Paid ₱1,500.00 · Corrected ₱0.00")).toBeTruthy();
 });
 test("Escape exits debt-ledger selection when its list has focus", () => {

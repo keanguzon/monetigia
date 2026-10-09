@@ -32,6 +32,12 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+test("nested debt route keeps Wallets selected", () => {
+  navigationState.pathname = "/accounts/debt";
+  render(<MobileNavigation />);
+  expect(screen.getByRole("link", { name: "Wallets" }).getAttribute("aria-current")).toBe("page");
+});
+
 test("renders five direct routes in display order", () => {
   render(<MobileNavigation />);
   const nav = screen.getByRole("navigation", { name: "Primary mobile navigation" });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InstallmentSelection } from "@/components/transactions/InstallmentSelection";
 import { DebtCorrectionDialog } from "@/components/transactions/DebtCorrectionDialog";
@@ -15,6 +15,7 @@ type Props = {
   onSaved: () => Promise<unknown>;
   walletName?: string;
   busy?: boolean;
+  feed?: boolean;
 };
 
 const emptySelection: DebtSelectionState = { active: false, selectedIds: [], anchorId: null };
@@ -36,7 +37,7 @@ function moneyLabel(rows: DebtDueRow[]): string {
   return formatCurrency(Number(`${(total / BigInt(100)).toString()}.${(total % BigInt(100)).toString().padStart(2, "0")}`));
 }
 
-export function DebtHistoryGroup({ account, rows, onSaved, walletName = "Credit wallet", busy = false }: Props) {
+export function DebtHistoryGroup({ account, rows, onSaved, walletName = "Credit wallet", busy = false, feed = false }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [selection, setSelection] = useState<DebtSelectionState>(emptySelection);
   const [correctionOpen, setCorrectionOpen] = useState(false);
@@ -96,7 +97,7 @@ export function DebtHistoryGroup({ account, rows, onSaved, walletName = "Credit 
 
   return (
     <div className="group min-w-0">
-      <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:gap-4 sm:px-4">
+      <div className={`flex flex-wrap items-center gap-2 px-3 py-3 sm:gap-4 ${feed ? "sm:px-5 sm:py-4" : "sm:px-4"}`}>
         <button
           type="button"
           aria-label={`${expanded ? "Hide" : "Show"} debt history for ${groupName}`}
@@ -105,13 +106,15 @@ export function DebtHistoryGroup({ account, rows, onSaved, walletName = "Credit 
           onClick={toggleExpanded}
           className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-md text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
+          {feed && <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500"><ArrowUpRight className="h-5 w-5" /></span>}
           <span className="min-w-0 flex-1">
-            <span className="block break-words text-sm font-semibold text-foreground">{groupName}</span>
+            <span className={`block break-words text-sm font-semibold text-foreground ${feed ? "tracking-tight sm:text-base" : ""}`}>{groupName}</span>
             <span className="mt-0.5 block break-words text-xs text-muted-foreground">
               {walletName} · {orderedRows.length} {orderedRows.length === 1 ? "installment" : "installments"}
+              {feed && <> · {source === "opening" ? "Existing debt" : "Purchase"} · {account.reconciliation !== "balanced" ? "Needs review" : orderedRows.every(row => row.remainingAmount === "0.00") ? "Completed" : orderedRows.find(row => row.remainingAmount !== "0.00")?.dueDate ?? "Due date unknown"}</>}
             </span>
           </span>
-          <span className="whitespace-nowrap text-sm font-semibold tabular-nums sm:text-base">Remaining {listRemaining}</span>
+          <span className={`whitespace-nowrap text-sm font-semibold tabular-nums sm:text-base ${feed ? "text-red-700 dark:text-red-400" : ""}`}>{feed ? account.reconciliation === "balanced" ? `−${listRemaining}` : "Needs review" : `Remaining ${listRemaining}`}</span>
           <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
         </button>
         {expanded && <div className="ml-auto">

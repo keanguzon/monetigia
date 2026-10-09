@@ -104,7 +104,7 @@ test("schedule retains original installment denominator after the first row is p
   const paidRows = rows.map(row => row.ordinal === 1
     ? { ...row, paidAmount: "10.00", remainingAmount: "0.00" }
     : row);
-  render(<DebtScheduleSection snapshot={{ accounts: [account], rows: paidRows }} isLoading={false} error={null} onReviewLegacy={vi.fn()} />);
+  render(<DebtScheduleSection preview snapshot={{ accounts: [account], rows: paidRows }} isLoading={false} error={null} onReviewLegacy={vi.fn()} />);
   expect(screen.getByText(/Existing debt.*Installment 2\/3/)).toBeTruthy();
   expect(screen.getByText(/Existing debt.*Installment 3\/3/)).toBeTruthy();
   expect(screen.queryByText(/Existing debt.*Installment 1\/3/)).toBeNull();

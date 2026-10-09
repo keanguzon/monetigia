@@ -100,7 +100,7 @@ export function MobileNavigation(): JSX.Element {
     >
       <div ref={surfaceRef} className="mobile-navigation-surface">
         {primaryItems.map((item) => {
-          const isActive = selectedPath === item.href;
+          const isActive = selectedPath === item.href || Boolean(selectedPath?.startsWith(`${item.href}/`));
           const isRequested = requestedItem?.href === item.href;
           const isPending = mobileRequest ? isRequested && mobileRequest.phase === "loading" : pendingHref === item.href;
           const Icon = item.icon;
@@ -111,7 +111,7 @@ export function MobileNavigation(): JSX.Element {
               href={item.href}
               navigationSource="mobile"
               aria-label={item.label}
-              aria-current={pathname === item.href ? "page" : undefined}
+              aria-current={pathname === item.href || pathname?.startsWith(`${item.href}/`) ? "page" : undefined}
               aria-busy={isPending ? "true" : undefined}
               aria-describedby={isRequested ? requestDescriptionId : undefined}
               className={cn(
