@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -12,6 +12,13 @@ const debtMocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => undefined),
   command: { isSaving: false, unresolved: false, saved: null as any, error: null as string | null, refreshError: null as unknown, pendingCommand: null as any,
     submit: vi.fn(async () => undefined), retry: vi.fn(async () => undefined), reset: vi.fn() },
+}));
+const descriptionMocks = vi.hoisted(() => ({
+  state: null as any,
+  submit: vi.fn(),
+  retry: vi.fn(),
+  refresh: vi.fn(),
+  reset: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -27,12 +34,23 @@ vi.mock("@/hooks/use-transaction-submit", () => ({
     remove: vi.fn(),
   }),
 }));
-vi.mock("next/dynamic", () => ({ default: () => () => null }));
+vi.mock("next/dynamic", () => ({ default: () => (props: any) => props?.transaction
+  ? <div data-testid="mock-detail-description">{props.transaction.description}</div>
+  : null }));
 vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("@/hooks/use-goals", () => ({ useGoals: () => ({ userId: "owner-1", refresh: async () => undefined }) }));
 vi.mock("@/hooks/use-debt", () => ({
   useDebt: () => ({ snapshot: debtMocks.snapshot, isLoading: false, error: null, refresh: debtMocks.refresh }),
   useDebtCommand: () => debtMocks.command,
+}));
+vi.mock("@/hooks/use-transaction-description", () => ({
+  useTransactionDescription: (_userId: string | null, refreshHistory: () => Promise<unknown>) => ({
+    ...descriptionMocks.state,
+    submit: (command: unknown) => descriptionMocks.submit(command, refreshHistory),
+    retry: () => descriptionMocks.retry(),
+    refresh: () => descriptionMocks.refresh(),
+    reset: () => descriptionMocks.reset(),
+  }),
 }));
 vi.mock("@/components/transactions/DebtCorrectionDialog", () => ({
   DebtCorrectionDialog: ({ open, onSaved, accountId, groupId, selectedIds }: { open: boolean; onSaved: () => Promise<unknown>; accountId: string; groupId: string; selectedIds: string[] }) => open
@@ -91,11 +109,38 @@ function configureHistoryPages() {
   return { ranges, orders };
 }
 
-function configureHistoryRows(rows: HistoryTestRow[]) {
+function configureHistoryRows(rows: HistoryTestRow[], operationOverrides?: any[]) {
   const ranges: Array<[number, number]> = [];
   const groupReads: string[] = [];
+  const groupRows = new Map<string, HistoryTestRow[]>();
+  rows.forEach(item => {
+    if (!item.installment_group_id) return;
+    const siblings = groupRows.get(item.installment_group_id) ?? [];
+    siblings.push(item);
+    groupRows.set(item.installment_group_id, siblings);
+  });
+  const operations = operationOverrides ?? Array.from(groupRows, ([groupId, siblings]) => ({
+    id: groupId,
+    user_id: "owner-1",
+    completed_at: "2026-01-01T00:00:00Z",
+    command: { kind: "transaction", draft: { type: "expense", accountId: siblings[0].account_id, installments: { count: siblings.length } } },
+    result: { operationId: groupId, transactionIds: siblings.map(item => item.id) },
+  }));
   mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-1" } } });
-  mocks.from.mockImplementation(() => {
+  mocks.from.mockImplementation((table: string) => {
+    if (table === "financial_operations") {
+      const filters: Array<[string, unknown]> = [];
+      const query: any = {
+        select: () => query,
+        eq: (column: string, value: unknown) => { filters.push([column, value]); return query; },
+        maybeSingle: async () => {
+          const id = filters.find(([column]) => column === "id")?.[1];
+          const owner = filters.find(([column]) => column === "user_id")?.[1];
+          return { data: operations.find(item => item.id === id && item.user_id === owner) ?? null, error: null };
+        },
+      };
+      return query;
+    }
     let range: [number, number] = [0, 49];
     let siblingIds: string[] = [];
     const filters: Array<[string, unknown]> = [];
@@ -120,6 +165,92 @@ function configureHistoryRows(rows: HistoryTestRow[]) {
   return { ranges, groupReads };
 }
 
+function configureDescriptionRefreshPages() {
+  const groupId = "40000000-0000-4000-8000-000000000004";
+  const accountId = "60000000-0000-4000-8000-000000000006";
+  let currentGroupRows: HistoryTestRow[] = [1, 2, 3].map(index => ({
+    ...row(index),
+    id: `50000000-0000-4000-8000-00000000000${index}`,
+    account_id: accountId,
+    description: `Original purchase (Installment ${index}/3)`,
+    installment_group_id: groupId,
+    purchase_date: "2026-01-10",
+    history_date: "2026-01-10",
+  }));
+  const firstPageRows = () => [currentGroupRows[0], ...Array.from({ length: 49 }, (_, index) => row(index + 2))];
+  const secondPageRows = Array.from({ length: 50 }, (_, index) => row(index + 51));
+  const lateRows = [row(151)];
+  lateRows[0].description = "Late stale page row";
+  const ranges: Array<[number, number]> = [];
+  const detailReads: string[] = [];
+  let resolveLatePage!: (value: { data: HistoryTestRow[]; error: null }) => void;
+  const latePage = new Promise<{ data: HistoryTestRow[]; error: null }>(resolve => { resolveLatePage = resolve; });
+  const operation = {
+    id: groupId,
+    user_id: "owner-1",
+    completed_at: "2026-01-01T00:00:00Z",
+    command: { kind: "transaction", draft: { type: "expense", accountId, installments: { count: 3 } } },
+    result: { operationId: groupId, transactionIds: currentGroupRows.map(item => item.id) },
+  };
+  mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-1" } } });
+  mocks.from.mockImplementation((table: string) => {
+    const filters: Array<[string, unknown]> = [];
+    if (table === "financial_operations") {
+      const query: any = {
+        select: () => query,
+        eq: (column: string, value: unknown) => { filters.push([column, value]); return query; },
+        maybeSingle: async () => ({ data: filters.some(([column, value]) => column === "user_id" && value === "owner-1")
+          && filters.some(([column, value]) => column === "id" && value === groupId) ? operation : null, error: null }),
+      };
+      return query;
+    }
+
+    let groupIds: string[] | null = null;
+    let requestedGroup: unknown;
+    let requestedId: unknown;
+    let offset: number | null = null;
+    const query: any = {
+      select: () => query,
+      eq: (column: string, value: unknown) => {
+        filters.push([column, value]);
+        if (column === "installment_group_id") requestedGroup = value;
+        if (column === "id") requestedId = value;
+        return query;
+      },
+      in: (_column: string, ids: string[]) => { groupIds = ids; return query; },
+      order: () => query,
+      range: (start: number, end: number) => { offset = start; ranges.push([start, end]); return query; },
+      maybeSingle: async () => {
+        if (requestedId) detailReads.push(String(requestedId));
+        const rowValue = [...currentGroupRows, ...firstPageRows().slice(1), ...secondPageRows]
+          .find(item => item.id === requestedId);
+        return { data: rowValue ?? null, error: null };
+      },
+      then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
+        if (offset === 100) return latePage.then(resolve, reject);
+        if (offset === 0) return Promise.resolve({ data: firstPageRows(), error: null }).then(resolve, reject);
+        if (offset === 50) return Promise.resolve({ data: secondPageRows, error: null }).then(resolve, reject);
+        if (groupIds) return Promise.resolve({ data: currentGroupRows.filter(item => groupIds?.includes(item.installment_group_id ?? "")), error: null }).then(resolve, reject);
+        if (requestedGroup) return Promise.resolve({ data: currentGroupRows.filter(item => item.installment_group_id === requestedGroup), error: null }).then(resolve, reject);
+        return Promise.resolve({ data: [], error: null }).then(resolve, reject);
+      },
+    };
+    return query;
+  });
+
+  return {
+    groupId,
+    ranges,
+    detailReads,
+    lateRows,
+    resolveLatePage,
+    updateDescription(description: string) {
+      currentGroupRows = currentGroupRows.map((item, index) => ({ ...item, description: `${description} (Installment ${index + 1}/3)` }));
+      operation.result.transactionIds = currentGroupRows.map(item => item.id);
+    },
+  };
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -130,6 +261,11 @@ beforeEach(() => {
   debtMocks.refresh = vi.fn(async () => undefined);
   debtMocks.command = { isSaving: false, unresolved: false, saved: null, error: null, refreshError: null, pendingCommand: null,
     submit: vi.fn(async () => undefined), retry: vi.fn(async () => undefined), reset: vi.fn() };
+  descriptionMocks.state = { isSaving: false, unresolved: false, saved: null, error: null, errorCode: null, refreshError: null, pendingCommand: null };
+  descriptionMocks.submit.mockReset();
+  descriptionMocks.retry.mockReset();
+  descriptionMocks.refresh.mockReset();
+  descriptionMocks.reset.mockReset();
 });
 
 describe("transactions history pagination", () => {
@@ -266,6 +402,7 @@ describe("transactions history pagination", () => {
     const groupRows = [1, 2, 3].map(index => ({
       ...row(index),
       id: `50000000-0000-4000-8000-00000000000${index}`,
+      account_id: "60000000-0000-4000-8000-000000000006",
       description: `QA purchase (Installment ${index}/3)`,
       installment_group_id: purchaseId,
       purchase_date: "2026-01-10",
@@ -281,6 +418,83 @@ describe("transactions history pagination", () => {
     expect((screen.getByRole("textbox", { name: "Description" }) as HTMLTextAreaElement).value).toBe("QA purchase");
     expect(screen.getByRole("button", { name: /show payment schedule/i }).getAttribute("aria-expanded")).toBe("false");
     expect(groupReads).toContain(purchaseId);
+  });
+
+  test("does not open a group editor when its original transaction proof is missing", async () => {
+    const user = userEvent.setup();
+    const purchaseId = "40000000-0000-4000-8000-000000000004";
+    const groupRows = [1, 2].map(index => ({
+      ...row(index),
+      id: `50000000-0000-4000-8000-00000000000${index}`,
+      account_id: "60000000-0000-4000-8000-000000000006",
+      description: `QA purchase (Installment ${index}/2)`,
+      installment_group_id: purchaseId,
+      purchase_date: "2026-01-10",
+      history_date: "2026-01-10",
+    }));
+    configureHistoryRows(groupRows, []);
+    render(<TransactionsPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Edit description for QA purchase" }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not be verified against its original transaction/i);
+    expect(screen.queryByRole("textbox", { name: "Description" })).toBeNull();
+  });
+
+  test("refreshes both loaded pages and selected detail, then rejects an older pending load-more response", async () => {
+    const user = userEvent.setup();
+    const fixture = configureDescriptionRefreshPages();
+    render(<TransactionsPage />);
+
+    await screen.findByRole("button", { name: "Edit description for Original purchase" });
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByText("Transaction 100")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(fixture.ranges).toContainEqual([100, 149]));
+
+    await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
+    await user.click(screen.getByRole("button", { name: "View installment 1 details" }));
+    expect(screen.getByTestId("mock-detail-description").textContent).toBe("Original purchase (Installment 1/3)");
+    await user.click(screen.getByRole("button", { name: "Edit description for Original purchase" }));
+    const textarea = await screen.findByRole("textbox", { name: "Description" }) as HTMLTextAreaElement;
+    await user.clear(textarea);
+    await user.type(textarea, "Updated purchase");
+
+    descriptionMocks.submit.mockImplementation(async (command: any, refreshHistory: () => Promise<unknown>) => {
+      fixture.updateDescription(command.description);
+      descriptionMocks.state = {
+        ...descriptionMocks.state,
+        saved: { operationId: "80000000-0000-4000-8000-000000000008", transactionIds: [
+          "50000000-0000-4000-8000-000000000001",
+          "50000000-0000-4000-8000-000000000002",
+          "50000000-0000-4000-8000-000000000003",
+        ], replayed: false },
+      };
+      await refreshHistory();
+    });
+    await user.click(screen.getByRole("button", { name: "Save description" }));
+
+    expect(await screen.findByText("Updated purchase")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("mock-detail-description").textContent).toBe("Updated purchase (Installment 1/3)"));
+    expect(descriptionMocks.submit).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "edit_transaction_description",
+      transactionId: null,
+      groupId: fixture.groupId,
+      description: "Updated purchase",
+      expectedDescription: "Original purchase",
+    }), expect.any(Function));
+    expect(fixture.ranges.slice(-2)).toEqual([[0, 49], [50, 99]]);
+
+    await act(async () => {
+      fixture.resolveLatePage({ data: fixture.lateRows, error: null });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText("Late stale page row")).toBeNull();
+    expect(screen.getByText("Transaction 100")).toBeTruthy();
+
+    const search = screen.getByRole("searchbox", { name: "Search transactions" });
+    await user.type(search, "Updated purchase");
+    expect(screen.getByRole("button", { name: "Edit description for Updated purchase" })).toBeTruthy();
   });
 
   test("routes a standalone credit purchase to its exact debt row and refreshes without hiding the purchase", async () => {

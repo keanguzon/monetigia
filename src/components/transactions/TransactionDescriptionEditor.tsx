@@ -23,10 +23,10 @@ type Props = {
   onSaved: () => void;
 };
 
-function historyGroupBase(rows: TransactionHistoryRow[], groupId: string): { found: boolean; description: string | null; consistent: boolean } {
+function historyGroupBase(rows: TransactionHistoryRow[], groupId: string): { found: boolean; description: string | null; consistent: boolean; proofNeedsReview: boolean } {
   const group = groupTransactions(rows).find(entry => entry.kind === "installment_group" && entry.groupId === groupId);
-  if (!group || group.kind !== "installment_group") return { found: false, description: null, consistent: false };
-  return { found: true, description: group.baseDescription, consistent: group.descriptionState === "consistent" };
+  if (!group || group.kind !== "installment_group") return { found: false, description: null, consistent: false, proofNeedsReview: false };
+  return { found: true, description: group.baseDescription, consistent: group.descriptionState === "consistent", proofNeedsReview: group.descriptionProofState === "needs_review" };
 }
 
 export default function TransactionDescriptionEditor({ target, currentDescription, userId, refreshHistory, onCancel, onSaved }: Props) {
@@ -90,7 +90,9 @@ export default function TransactionDescriptionEditor({ target, currentDescriptio
         if (currentOwner.current !== openedOwner) throw new Error("The signed-in account changed before the latest description could be reviewed.");
         const latest = historyGroupBase(rows, openedTarget.groupId);
         if (!latest.found) throw new Error("This installment group is no longer available in your history.");
-        if (!latest.consistent) throw new Error("The installment descriptions need review before this group can be edited.");
+        if (!latest.consistent) throw new Error(latest.proofNeedsReview
+          ? "This installment group could not be verified against its original transaction. Review history before editing it."
+          : "The installment descriptions need review before this group can be edited.");
         setExpectedDescription(latest.description);
         setReviewedLatest(latest.description);
       } else if (openedTarget.transactionId) {

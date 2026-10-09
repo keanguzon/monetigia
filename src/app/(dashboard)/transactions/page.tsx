@@ -184,7 +184,9 @@ export default function TransactionsPage() {
           return;
         }
         if (latestGroup.descriptionState !== "consistent") {
-          setDescriptionReviewError("The installment descriptions need review before this group can be edited.");
+          setDescriptionReviewError(latestGroup.descriptionProofState === "needs_review"
+            ? "This installment group could not be verified against its original transaction, so its description cannot be edited."
+            : "The installment descriptions need review before this group can be edited.");
           return;
         }
         setDescriptionEditor({

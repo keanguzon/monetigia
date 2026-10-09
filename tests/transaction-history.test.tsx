@@ -47,6 +47,31 @@ const twoInstallments = () => [
   transaction({ id: "tx-2", amount: "0.20", description: "Coffee maker (Installment 2/2)", date: "2026-03-10" }),
 ];
 
+function originalPurchaseOperation(groupId: string, count: number, transactionIds: string[], accountId = "60000000-0000-4000-8000-000000000006") {
+  return {
+    id: groupId,
+    user_id: "owner-1",
+    completed_at: "2026-01-01T00:00:00Z",
+    command: { kind: "transaction", draft: { type: "expense", accountId, installments: { count } } },
+    result: { operationId: groupId, transactionIds },
+  };
+}
+
+function historyGroupClient(rows: TransactionHistoryRow[], operation: unknown) {
+  return {
+    from(table: string) {
+      const query: any = {
+        select: () => query,
+        eq: () => query,
+        order: () => query,
+        maybeSingle: async () => ({ data: table === "financial_operations" ? operation : rows[0] ?? null, error: null }),
+        then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(resolve, reject),
+      };
+      return query;
+    },
+  };
+}
+
 const creditRows: DebtDueRow[] = [
   { id: "debt-1", accountId: "account-1", groupId: "purchase-1", source: "purchase", transactionId: "tx-1", dueDate: "2026-02-10", originalAmount: "0.10", paidAmount: "0.00", correctedAmount: "0.00", remainingAmount: "0.10", ordinal: 1, name: "Coffee maker" },
   { id: "debt-2", accountId: "account-1", groupId: "purchase-1", source: "purchase", transactionId: "tx-2", dueDate: "2026-03-10", originalAmount: "0.20", paidAmount: "0.00", correctedAmount: "0.00", remainingAmount: "0.20", ordinal: 2, name: "Coffee maker" },
@@ -237,18 +262,20 @@ describe("transaction history grouping", () => {
 
 describe("history query window", () => {
   test("loads one owned detail and every owned explicit group sibling", async () => {
-    const selected = transaction({ id: "selected", installment_group_id: "purchase-1" });
-    const sibling = transaction({ id: "sibling", installment_group_id: "purchase-1", date: "2026-03-10" });
-    const calls: Array<{ filters: Array<[string, unknown]>; orders: string[]; select: string }> = [];
+    const groupId = "70000000-0000-4000-8000-000000000007";
+    const accountId = "60000000-0000-4000-8000-000000000006";
+    const selected = transaction({ id: "70000000-0000-4000-8000-000000000001", account_id: accountId, installment_group_id: groupId });
+    const sibling = transaction({ id: "70000000-0000-4000-8000-000000000002", account_id: accountId, installment_group_id: groupId, date: "2026-03-10" });
+    const calls: Array<{ table: string; filters: Array<[string, unknown]>; orders: string[]; select: string }> = [];
     const client = {
-      from() {
-        const call = { filters: [] as Array<[string, unknown]>, orders: [] as string[], select: "" };
+      from(table: string) {
+        const call = { table, filters: [] as Array<[string, unknown]>, orders: [] as string[], select: "" };
         calls.push(call);
         const query: any = {
           select: (value: string) => { call.select = value; return query; },
           eq: (column: string, value: unknown) => { call.filters.push([column, value]); return query; },
           order: (column: string) => { call.orders.push(column); return query; },
-          maybeSingle: async () => ({ data: selected, error: null }),
+          maybeSingle: async () => ({ data: table === "financial_operations" ? originalPurchaseOperation(groupId, 2, [selected.id, sibling.id], accountId) : selected, error: null }),
           then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve({ data: [selected, sibling], error: null }).then(resolve, reject),
         };
         return query;
@@ -256,12 +283,56 @@ describe("history query window", () => {
     };
 
     await expect(loadHistoryTransaction(client, "owner-1", "selected")).resolves.toEqual(selected);
-    await expect(loadHistoryGroup(client, "owner-1", "purchase-1")).resolves.toEqual([selected, sibling]);
+    await expect(loadHistoryGroup(client, "owner-1", groupId)).resolves.toEqual([
+      { ...selected, descriptionProof: { count: 2, ordinal: 1 } },
+      { ...sibling, descriptionProof: { count: 2, ordinal: 2 } },
+    ]);
     expect(calls[0].filters).toEqual([["user_id", "owner-1"], ["id", "selected"]]);
-    expect(calls[1].filters).toEqual([["user_id", "owner-1"], ["installment_group_id", "purchase-1"]]);
-    expect(calls[1].orders).toEqual(["date", "id"]);
+    expect(calls[1].table).toBe("financial_operations");
+    expect(calls[1].filters).toEqual([["user_id", "owner-1"], ["id", groupId]]);
+    expect(calls[2].filters).toEqual([["user_id", "owner-1"], ["installment_group_id", groupId]]);
+    expect(calls[2].orders).toEqual(["date", "id"]);
     expect(calls[0].select).toContain("description");
-    expect(calls[1].select).toBe(calls[0].select);
+    expect(calls[2].select).toBe(calls[0].select);
+  });
+
+  test("uses original count one proof so a literal suffix-shaped description stays intact", async () => {
+    const groupId = "70000000-0000-4000-8000-000000000007";
+    const accountId = "60000000-0000-4000-8000-000000000006";
+    const onlyId = "70000000-0000-4000-8000-000000000001";
+    const rows = [transaction({ id: onlyId, account_id: accountId, installment_group_id: groupId, description: "Course (Installment 1/2)" })];
+    const loaded = await loadHistoryGroup(historyGroupClient(rows, originalPurchaseOperation(groupId, 1, [onlyId], accountId)), "owner-1", groupId);
+    const [group] = groupTransactions(loaded);
+
+    expect(loaded[0].descriptionProof).toEqual({ count: 1, ordinal: 1 });
+    expect(group.kind === "installment_group" && group.baseDescription).toBe("Course (Installment 1/2)");
+    expect(group.kind === "installment_group" && group.descriptionState).toBe("consistent");
+  });
+
+  test("retains original ordinal three when earlier members were deleted", async () => {
+    const groupId = "70000000-0000-4000-8000-000000000007";
+    const accountId = "60000000-0000-4000-8000-000000000006";
+    const originalIds = [1, 2, 3].map(index => `70000000-0000-4000-8000-${String(index).padStart(12, "0")}`);
+    const live = transaction({ id: originalIds[2], account_id: accountId, installment_group_id: groupId, description: "Course (Installment 3/3)" });
+    const loaded = await loadHistoryGroup(historyGroupClient([live], originalPurchaseOperation(groupId, 3, originalIds, accountId)), "owner-1", groupId);
+    const [group] = groupTransactions(loaded);
+
+    expect(loaded[0].descriptionProof).toEqual({ count: 3, ordinal: 3 });
+    expect(group.kind === "installment_group" && group.baseDescription).toBe("Course");
+    expect(group.kind === "installment_group" && group.descriptionState).toBe("consistent");
+  });
+
+  test("fails closed with proof guidance when the original operation is missing", async () => {
+    const groupId = "70000000-0000-4000-8000-000000000007";
+    const accountId = "60000000-0000-4000-8000-000000000006";
+    const live = transaction({ id: "70000000-0000-4000-8000-000000000001", account_id: accountId, installment_group_id: groupId, description: "Course (Installment 1/2)" });
+    const loaded = await loadHistoryGroup(historyGroupClient([live], null), "owner-1", groupId);
+    const [group] = groupTransactions(loaded);
+
+    expect(loaded[0].descriptionProof).toBeNull();
+    expect(group.kind === "installment_group" && group.descriptionProofState).toBe("needs_review");
+    expect(group.kind === "installment_group" && group.descriptionState).toBe("needs_review");
+    expect(group.kind === "installment_group" && group.baseDescription).toBeNull();
   });
 
   test("hydrates every selected group's siblings with an owner-scoped query", async () => {

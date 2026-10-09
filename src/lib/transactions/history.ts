@@ -17,7 +17,10 @@ export type TransactionHistoryRow = {
   category?: { name?: string | null } | null;
   account?: { name?: string | null } | null;
   transfer_to_account?: { name?: string | null } | null;
+  descriptionProof?: InstallmentDescriptionProof | null;
 };
+
+export type InstallmentDescriptionProof = { count: number; ordinal: number };
 
 export type InstallmentHistoryEntry = {
   kind: "installment_group";
@@ -27,6 +30,7 @@ export type InstallmentHistoryEntry = {
   description: string;
   baseDescription: string | null;
   descriptionState: "consistent" | "needs_review";
+  descriptionProofState?: "verified" | "needs_review";
   purchaseDate: string | null;
   firstDueDate: string | null;
   remainingAmount: number | null;
@@ -83,6 +87,74 @@ function installmentBaseDescription(description: string | null): string | null {
   return normalizeTransactionDescription(suffix?.index === undefined ? description : description.slice(0, suffix.index));
 }
 
+function hasOwnDescriptionProof(row: TransactionHistoryRow): boolean {
+  return Object.prototype.hasOwnProperty.call(row, "descriptionProof");
+}
+
+function provenInstallmentBase(row: TransactionHistoryRow): { valid: boolean; base: string | null } {
+  const proof = row.descriptionProof;
+  if (!proof || !Number.isInteger(proof.count) || proof.count < 1 || proof.count > 12
+    || !Number.isInteger(proof.ordinal) || proof.ordinal < 1 || proof.ordinal > proof.count) {
+    return { valid: false, base: null };
+  }
+  if (proof.count === 1) return { valid: true, base: normalizeTransactionDescription(row.description) };
+  if (row.description === null) return { valid: false, base: null };
+  const suffix = ` (Installment ${proof.ordinal}/${proof.count})`;
+  if (!row.description.endsWith(suffix)) return { valid: false, base: null };
+  return { valid: true, base: normalizeTransactionDescription(row.description.slice(0, -suffix.length)) };
+}
+
+type OriginalInstallmentOperation = {
+  id?: unknown;
+  user_id?: unknown;
+  completed_at?: unknown;
+  command?: unknown;
+  result?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function proveLiveInstallments(
+  operation: OriginalInstallmentOperation | null,
+  userId: string,
+  groupId: string,
+  rows: TransactionHistoryRow[],
+): Map<string, InstallmentDescriptionProof> | null {
+  if (!operation || operation.id !== groupId || operation.user_id !== userId
+    || typeof operation.completed_at !== "string" || !operation.completed_at) return null;
+  const command = isRecord(operation.command) ? operation.command : null;
+  const draft = command && isRecord(command.draft) ? command.draft : null;
+  const installments = draft && isRecord(draft.installments) ? draft.installments : null;
+  const result = isRecord(operation.result) ? operation.result : null;
+  if (command?.kind !== "transaction" || draft?.type !== "expense" || !installments || !result
+    || result.operationId !== groupId || !Array.isArray(result.transactionIds)) return null;
+
+  const count = installments.count;
+  const accountId = draft.accountId;
+  const rawIds = result.transactionIds;
+  if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 12
+    || typeof accountId !== "string" || !uuidPattern.test(accountId)
+    || rawIds.length !== count || rawIds.some(id => typeof id !== "string" || !uuidPattern.test(id))) return null;
+
+  const orderedIds = (rawIds as string[]).map(id => id.toLowerCase());
+  if (new Set(orderedIds).size !== count || rows.some(row => row.user_id !== userId
+    || row.installment_group_id !== groupId || row.type !== "expense" || row.account_id.toLowerCase() !== accountId.toLowerCase())
+    || new Set(rows.map(row => row.id.toLowerCase())).size !== rows.length) return null;
+
+  const ordinalById = new Map(orderedIds.map((id, index) => [id, index + 1]));
+  const proof = new Map<string, InstallmentDescriptionProof>();
+  for (const row of rows) {
+    const ordinal = ordinalById.get(row.id.toLowerCase());
+    if (!ordinal) return null;
+    proof.set(row.id, { count, ordinal });
+  }
+  return proof;
+}
+
 export function installmentPosition(row: TransactionHistoryRow, fallbackIndex: number, fallbackCount: number) {
   const match = row.description?.match(/\(Installment\s+(\d+)\s*\/\s*(\d+)\)/i);
   if (match) return { number: Number(match[1]), count: Number(match[2]) };
@@ -134,11 +206,28 @@ export function groupTransactions(rows: TransactionHistoryRow[]): TransactionHis
   for (const entry of entries) {
     if (entry.kind !== "installment_group") continue;
     entry.children.sort(dueDateOrder);
-    const bases = entry.children.map(row => installmentBaseDescription(row.description));
-    const commonBase = bases[0] ?? null;
-    const descriptionsMatch = bases.every(base => base === commonBase);
-    entry.descriptionState = descriptionsMatch ? "consistent" : "needs_review";
-    entry.baseDescription = descriptionsMatch ? commonBase : null;
+    const proofRows = entry.children.filter(hasOwnDescriptionProof);
+    if (proofRows.length > 0) {
+      const proofValues = entry.children.map(row => row.descriptionProof);
+      const count = proofValues[0]?.count;
+      const ordinals = new Set<number>();
+      const completeProof = proofValues.every(proof => proof !== null && proof !== undefined
+        && Number.isInteger(proof.count) && proof.count >= 1 && proof.count <= 12 && proof.count === count
+        && Number.isInteger(proof.ordinal) && proof.ordinal >= 1 && proof.ordinal <= proof.count
+        && !ordinals.has(proof.ordinal) && Boolean(ordinals.add(proof.ordinal)));
+      const provenBases = completeProof ? entry.children.map(provenInstallmentBase) : [];
+      entry.descriptionProofState = completeProof && provenBases.every(base => base.valid) ? "verified" : "needs_review";
+      const descriptionsMatch = entry.descriptionProofState === "verified"
+        && provenBases.every(base => base.base === provenBases[0]?.base);
+      entry.descriptionState = descriptionsMatch ? "consistent" : "needs_review";
+      entry.baseDescription = descriptionsMatch ? provenBases[0]?.base ?? null : null;
+    } else {
+      const bases = entry.children.map(row => installmentBaseDescription(row.description));
+      const commonBase = bases[0] ?? null;
+      const descriptionsMatch = bases.every(base => base === commonBase);
+      entry.descriptionState = descriptionsMatch ? "consistent" : "needs_review";
+      entry.baseDescription = descriptionsMatch ? commonBase : null;
+    }
     entry.firstDueDate = entry.children[0]?.date ?? null;
     const latestDue = entry.children[entry.children.length - 1];
     entry.latestDueDate = latestDue?.date ?? null;
@@ -269,6 +358,14 @@ export async function loadHistoryGroup(
   userId: string,
   groupId: string,
 ): Promise<TransactionHistoryRow[]> {
+  const { data: operation, error: operationError } = await client
+    .from("financial_operations")
+    .select("id,user_id,command,result,completed_at")
+    .eq("user_id", userId)
+    .eq("id", groupId)
+    .maybeSingle();
+  if (operationError) throw operationError;
+
   const { data, error } = await client
     .from("transactions")
     .select(HISTORY_SELECT)
@@ -277,5 +374,7 @@ export async function loadHistoryGroup(
     .order("date", { ascending: true })
     .order("id", { ascending: true });
   if (error) throw error;
-  return (data ?? []) as TransactionHistoryRow[];
+  const rows = (data ?? []) as TransactionHistoryRow[];
+  const proof = proveLiveInstallments(operation as OriginalInstallmentOperation | null, userId, groupId, rows);
+  return rows.map(row => ({ ...row, descriptionProof: proof?.get(row.id) ?? null }));
 }
