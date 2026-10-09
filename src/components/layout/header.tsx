@@ -52,7 +52,7 @@ export function Header({ user }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6">
       <div className="min-w-0 flex-1 pr-2">
-        <div className="flex items-center gap-2 font-heading text-lg font-bold md:text-xl">
+        <div className="flex items-center gap-2 font-heading text-lg font-bold md:text-xl lg:hidden">
           <Image src="/logos/main-logo.png" alt="" width={28} height={28} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="truncate">Monetigia</span>
         </div>
