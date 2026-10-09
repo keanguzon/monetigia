@@ -25,6 +25,7 @@ interface TransactionDetailModalProps {
   onClose: () => void;
   transaction: any;
   onRequestDelete?: (tx: any) => void;
+  deleteDisabledReason?: string | null;
 }
 
 function GoalTransactionHistory({ goal, userId, transactionId }: { goal: GoalFinanceGoal; userId: string | null; transactionId: string }) {
@@ -43,7 +44,8 @@ export default function TransactionDetailModal({
   isOpen,
   onClose,
   transaction,
-  onRequestDelete
+  onRequestDelete,
+  deleteDisabledReason,
 }: TransactionDetailModalProps) {
   const { financeSnapshot, userId } = useGoals();
   if (!isOpen || !transaction) return null;
@@ -199,21 +201,22 @@ export default function TransactionDetailModal({
               >
                 Close
               </Button>
-              {/* Styled tooltip wraps the Delete button */}
-              <Tooltip content={transaction?.id ? "Delete transaction\nRevert balances" : "Cannot delete this transaction"}>
+              <Tooltip content={deleteDisabledReason || (transaction?.id ? "Delete transaction\nRevert balances" : "Cannot delete this transaction")}>
                 <button
                   onClick={() => {
+                    if (deleteDisabledReason) return;
                     if (onRequestDelete) onRequestDelete(transaction);
                     onClose();
                   }}
-                  disabled={!transaction?.id}
-                  className={`min-w-[100px] h-12 text-base font-semibold rounded-lg transition-colors ${transaction?.id ? "bg-red-700 text-white hover:bg-red-800 dark:bg-red-400 dark:text-slate-950 dark:hover:bg-red-300" : "bg-red-500/30 text-white/60 cursor-not-allowed"}`}
-                  title={transaction?.id ? "Delete transaction" : ""}
+                  disabled={!transaction?.id || Boolean(deleteDisabledReason)}
+                  className={`min-h-11 min-w-[100px] rounded-lg px-4 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 ${transaction?.id && !deleteDisabledReason ? "bg-red-700 text-white hover:bg-red-800 dark:bg-red-400 dark:text-slate-950 dark:hover:bg-red-300" : "bg-red-500/30 text-white/60"}`}
+                  title={deleteDisabledReason ?? (transaction?.id ? "Delete transaction" : "")}
                 >
-                  Delete
+                  {deleteDisabledReason ? "Delete unavailable" : "Delete"}
                 </button>
               </Tooltip>
             </div>
+            {deleteDisabledReason && <p role="status" className="mt-3 break-words text-center text-sm text-muted-foreground">{deleteDisabledReason}</p>}
           </div>
         </div>
       </Dialog.Content>

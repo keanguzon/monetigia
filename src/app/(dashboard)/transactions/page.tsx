@@ -11,6 +11,11 @@ import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search, List
 import { useToast } from "@/components/ui/use-toast";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { DebtCorrectionDialog } from "@/components/transactions/DebtCorrectionDialog";
+import { debtCorrectionRecovery } from "@/components/accounts/DebtHistoryGroup";
+import { useGoals } from "@/hooks/use-goals";
+import { useDebt, useDebtCommand } from "@/hooks/use-debt";
+import type { DebtAccountSnapshot, DebtDueRow, DebtSnapshot } from "@/lib/debt/contracts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +30,7 @@ import {
   loadHistoryPage,
   mergeHistoryRows,
   sortHistoryEntries,
+  type InstallmentHistoryEntry,
   type TransactionHistoryRow,
   type TransactionHistorySort,
 } from "@/lib/transactions/history";
@@ -37,11 +43,52 @@ const TransactionDetailModal = dynamic(() => import("@/components/transactions/T
   ssr: false,
 });
 
+type DebtState = { account: DebtAccountSnapshot; rows: DebtDueRow[] };
+type CorrectionTarget = { accountId: string; groupId: string; groupName: string; selectedIds: string[] };
+type CorrectionRoute = { kind: "ordinary" } | { kind: "blocked"; reason: string } | { kind: "correction"; target: CorrectionTarget };
+const knownNonCreditAccountTypes = new Set(["cash", "bank", "e_wallet", "investment"]);
+
+function historyAccountType(row: TransactionHistoryRow): string | null {
+  const account = row.account as (typeof row.account & { type?: string | null }) | null | undefined;
+  return account?.type ?? null;
+}
+
+function completeCreditGroup(group: InstallmentHistoryEntry, snapshot: DebtSnapshot | undefined): DebtState | null {
+  if (!snapshot || group.children.length === 0) return null;
+  const first = group.children[0];
+  const childIds = group.children.map(row => row.id);
+  if (new Set(childIds).size !== childIds.length || group.children.some(row =>
+    row.account_id !== first.account_id || row.type !== "expense" || historyAccountType(row) !== "credit_card")) return null;
+  const account = snapshot.accounts.find(row => row.accountId === first.account_id);
+  if (!account) return null;
+  const rows = snapshot.rows.filter(row => row.accountId === first.account_id && row.groupId === group.groupId && row.source === "purchase");
+  if (rows.length !== childIds.length || rows.some(row => !row.transactionId)) return null;
+  const rowIds = new Set(rows.map(row => row.transactionId as string));
+  if (rowIds.size !== childIds.length || childIds.some(id => !rowIds.has(id))) return null;
+  return { account, rows };
+}
+
+function completeStandaloneCredit(row: TransactionHistoryRow, snapshot: DebtSnapshot | undefined): { account: DebtAccountSnapshot; row: DebtDueRow } | null {
+  if (!snapshot || row.installment_group_id || row.type !== "expense" || historyAccountType(row) !== "credit_card") return null;
+  const matches = snapshot.rows.filter(candidate => candidate.accountId === row.account_id && candidate.transactionId === row.id && candidate.source === "purchase");
+  if (matches.length !== 1) return null;
+  const debtRow = matches[0];
+  const groupRows = snapshot.rows.filter(candidate => candidate.accountId === row.account_id && candidate.groupId === debtRow.groupId && candidate.source === "purchase");
+  if (groupRows.length !== 1 || groupRows[0].id !== debtRow.id || groupRows[0].transactionId !== row.id) return null;
+  const account = snapshot.accounts.find(candidate => candidate.accountId === row.account_id);
+  return account ? { account, row: debtRow } : null;
+}
+
 
 export default function TransactionsPage() {
   const supabase = createClient();
   const sb = supabase as any;
   const { toast } = useToast();
+  const goals = useGoals();
+  const debt = useDebt(goals.userId);
+  const debtCommand = useDebtCommand(goals.userId);
+  const pendingCorrection = debtCommand.pendingCommand?.kind === "correct_debt_rows" ? debtCommand.pendingCommand : null;
+  const pendingAdoption = debtCommand.pendingCommand?.kind === "adopt_opening_debt" ? debtCommand.pendingCommand : null;
   const [transactions, setTransactions] = useState<TransactionHistoryRow[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,11 +102,20 @@ export default function TransactionsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [savedDeleteKind, setSavedDeleteKind] = useState<"transaction" | "installment">("transaction");
+  const [correctionTarget, setCorrectionTarget] = useState<CorrectionTarget | null>(null);
+  const [historyRefreshPending, setHistoryRefreshPending] = useState(() => Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId)));
+  const [refreshingDebtViews, setRefreshingDebtViews] = useState(false);
   const requestGeneration = useRef(0);
   const loadMoreLock = useRef(false);
+  const retryingCorrection = useRef(false);
   const deletion = useTransactionDelete(loadTransactions);
   const isDeleting = deletion.isDeleting;
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (goals.userId && pendingCorrection) debtCorrectionRecovery.pendingOwners.add(goals.userId);
+    setHistoryRefreshPending(Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId)));
+  }, [goals.userId, pendingCorrection]);
 
   useEffect(() => {
     void loadTransactions().catch(() => {});
@@ -145,6 +201,78 @@ export default function TransactionsPage() {
     }
   }
 
+  async function refreshLoadedHistory(): Promise<boolean> {
+    const ownerId = goals.userId;
+    if (!ownerId) throw new Error("Sign in to refresh transaction history.");
+    const targetNextOffset = nextOffset;
+    const generation = ++requestGeneration.current;
+    loadMoreLock.current = false;
+    setIsLoading(true);
+    setIsLoadingMore(false);
+    setLoadError(null);
+    setLoadMoreError(null);
+
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || user?.id !== ownerId) throw new Error("The signed-in account changed while history was refreshing.");
+      const refreshedRows: TransactionHistoryRow[] = [];
+      let offset = 0;
+      let next: number | null;
+      do {
+        const page = await loadHistoryPage(sb, ownerId, sortMode, offset);
+        if (generation !== requestGeneration.current) return false;
+        refreshedRows.splice(0, refreshedRows.length, ...mergeHistoryRows(refreshedRows, page.rows));
+        next = page.nextOffset;
+        if (next === null || targetNextOffset !== null && next >= targetNextOffset) break;
+        offset = next;
+      } while (true);
+
+      if (generation !== requestGeneration.current) return false;
+      setTransactions(refreshedRows);
+      setNextOffset(next);
+      setSelectedTransaction(current => current ? refreshedRows.find(row => row.id === current.id) ?? null : null);
+      setDeleteConfirm(null);
+      return true;
+    } catch (error) {
+      if (generation === requestGeneration.current) {
+        setLoadError("The transaction list could not refresh. Try again.");
+        console.error("Failed to refresh debt transaction history", error);
+      }
+      throw error;
+    } finally {
+      if (generation === requestGeneration.current) setIsLoading(false);
+    }
+  }
+
+  async function refreshCorrectionViews() {
+    const ownerId = goals.userId;
+    if (!ownerId) throw new Error("Sign in to refresh debt views.");
+    debtCorrectionRecovery.pendingOwners.add(ownerId);
+    debtCorrectionRecovery.refreshOwners.add(ownerId);
+    setHistoryRefreshPending(true);
+    setRefreshingDebtViews(true);
+    try {
+      await debt.refresh();
+      const refreshed = await refreshLoadedHistory();
+      if (!refreshed) throw new Error("History refresh was superseded by a newer request.");
+      debtCorrectionRecovery.refreshOwners.delete(ownerId);
+      debtCorrectionRecovery.pendingOwners.delete(ownerId);
+      setHistoryRefreshPending(false);
+      if (!debtCommand.pendingCommand && !debtCommand.isSaving && !debtCommand.refreshError) debtCommand.reset();
+    } catch (error) {
+      setHistoryRefreshPending(true);
+      throw error;
+    } finally {
+      setRefreshingDebtViews(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!retryingCorrection.current || debtCommand.isSaving) return;
+    retryingCorrection.current = false;
+    if (!pendingCorrection && debtCommand.saved) void refreshCorrectionViews().catch(() => undefined);
+  }, [pendingCorrection, debtCommand.isSaving, debtCommand.saved]);
+
   function handleSortChange(nextSort: TransactionHistorySort): void {
     if (nextSort === sortMode) return;
     requestGeneration.current += 1;
@@ -170,10 +298,92 @@ export default function TransactionsPage() {
           : "Transfer";
 
   const searchFilteredTransactions = filterHistoryEntries(historyEntries, searchQuery, filter);
+  const selectionResetKey = JSON.stringify([goals.userId, sortMode, filter, searchQuery]);
+  const correctionRefreshNeedsRecovery = historyRefreshPending || Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId));
+
+  function correctionRoute(transaction: TransactionHistoryRow): CorrectionRoute {
+    if (transaction.type !== "expense") return { kind: "ordinary" };
+    const accountType = historyAccountType(transaction);
+    if (accountType === null) return { kind: "blocked", reason: "The wallet type for this expense is unavailable. Refresh wallet details before deleting it." };
+    if (accountType !== "credit_card") {
+      if (!knownNonCreditAccountTypes.has(accountType)) return { kind: "blocked", reason: "The wallet type for this expense is unavailable. Refresh wallet details before deleting it." };
+      if (transaction.installment_group_id) {
+        const group = historyEntries.find(entry => entry.kind === "installment_group" && entry.groupId === transaction.installment_group_id);
+        if (!group || group.kind !== "installment_group" || group.children.some(child =>
+          child.type !== "expense" || child.account_id !== transaction.account_id || !knownNonCreditAccountTypes.has(historyAccountType(child) ?? ""))) {
+          return { kind: "blocked", reason: "This installment group has incomplete wallet details. Refresh history before deleting it." };
+        }
+      }
+      return { kind: "ordinary" };
+    }
+    if (pendingCorrection || pendingAdoption) return { kind: "blocked", reason: "Resolve the saved debt request before starting another correction." };
+    if (debt.isLoading || debt.error || !debt.snapshot) return { kind: "blocked", reason: "Debt details are unavailable. Refresh the debt views before correcting this credit purchase." };
+
+    let account: DebtAccountSnapshot | undefined;
+    let groupId = "";
+    let selectedRow: DebtDueRow | undefined;
+    let groupName = "";
+    if (transaction.installment_group_id) {
+      const group = historyEntries.find(entry => entry.kind === "installment_group" && entry.groupId === transaction.installment_group_id);
+      if (!group || group.kind !== "installment_group") return { kind: "blocked", reason: "This installment group is incomplete in the loaded history. Refresh history before correcting it." };
+      const matched = completeCreditGroup(group, debt.snapshot);
+      if (!matched) return { kind: "blocked", reason: "This credit purchase does not match a complete debt snapshot. Refresh debt details before correcting it." };
+      account = matched.account;
+      groupId = group.groupId;
+      selectedRow = matched.rows.find(row => row.transactionId === transaction.id);
+      groupName = group.description || transaction.description || "Credit purchase";
+    } else {
+      const matched = completeStandaloneCredit(transaction, debt.snapshot);
+      if (!matched) return { kind: "blocked", reason: "This credit purchase does not match a complete debt snapshot. Refresh debt details before correcting it." };
+      account = matched.account;
+      groupId = matched.row.groupId;
+      selectedRow = matched.row;
+      groupName = transaction.description || transaction.category?.name || "Credit purchase";
+    }
+
+    if (!account || !selectedRow) return { kind: "blocked", reason: "This credit purchase has no matching debt row. Refresh debt details before correcting it." };
+    if (account.reconciliation !== "balanced") return { kind: "blocked", reason: "This wallet needs debt reconciliation review before the purchase can be corrected." };
+    if (selectedRow.remainingAmount === "0.00") return { kind: "blocked", reason: "This purchase has no remaining unpaid amount. Paid or corrected credit purchases cannot be deleted here." };
+    return { kind: "correction", target: { accountId: account.accountId, groupId, groupName, selectedIds: [selectedRow.id] } };
+  }
+
+  function requestDelete(transaction: TransactionHistoryRow) {
+    const route = correctionRoute(transaction);
+    if (route.kind === "correction") {
+      setCorrectionTarget(route.target);
+      return;
+    }
+    if (route.kind === "blocked") {
+      toast({ title: "Credit purchase cannot be corrected", description: route.reason, variant: "destructive" });
+      return;
+    }
+    setDeleteConfirm(transaction);
+  }
+
+  const deleteDisabledReason = selectedTransaction ? (() => {
+    const route = correctionRoute(selectedTransaction);
+    return route.kind === "blocked" ? route.reason : null;
+  })() : null;
+
+  function retryPendingCorrection() {
+    if (!pendingCorrection || debtCommand.isSaving || retryingCorrection.current) return;
+    retryingCorrection.current = true;
+    void debtCommand.retry();
+  }
+
   const deleteConfirmIsInstallment = !!deleteConfirm?.installment_group_id;
 
   return (
     <>
+      {pendingCorrection && <div data-no-press-motion="" role="alert" className="mb-4 space-y-2 text-sm text-red-700 dark:text-red-300">
+        <p>This debt correction is unconfirmed. Retry the original saved request before starting another correction.</p>
+        {debtCommand.error && <p>{debtCommand.error}</p>}
+        <Button variant="outline" className="min-h-11" disabled={debtCommand.isSaving} onClick={retryPendingCorrection}>{debtCommand.isSaving ? "Retrying correction…" : "Retry same correction"}</Button>
+      </div>}
+      {correctionRefreshNeedsRecovery && <div data-no-press-motion="" role="alert" className="mb-4 space-y-2 text-sm text-red-700 dark:text-red-300">
+        <p>A debt correction saved, but some views could not refresh. Refresh the debt schedule and transaction history before continuing.</p>
+        <Button variant="outline" className="min-h-11" disabled={refreshingDebtViews} onClick={() => { void refreshCorrectionViews().catch(() => undefined); }}>{refreshingDebtViews ? "Refreshing views…" : "Refresh views"}</Button>
+      </div>}
       {deletion.error && <div data-no-press-motion="" role="alert" className="mb-4 text-sm text-red-700 dark:text-red-300 space-y-2"><p>{deletion.error}</p>{deletion.pendingTransactionId && <button type="button" disabled={isDeleting} onClick={() => { void deletion.remove(deletion.pendingTransactionId!); }} className="min-h-11 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same deletion</button>}</div>}
       {deletion.savedTransactionId && <p role="status" className="mb-4 text-sm">{savedDeleteKind === "installment" ? deletion.refreshError ? "Installment deleted, but some views could not refresh. Refresh the page to check the remaining schedule." : "Installment deleted. Its siblings remain and the remaining scheduled amount has been updated." : deletion.refreshError ? "Transaction deleted. Some views could not refresh. Refresh the page; do not delete it again." : "Transaction deleted and wallet balances updated."}</p>}
       {loadError && <div data-no-press-motion="" role="alert" className="mb-4 flex flex-col items-start gap-2 text-sm text-red-700 dark:text-red-300"><p>{loadError}</p><button type="button" onClick={() => { void loadTransactions().catch(() => {}); }} className="min-h-11 rounded-lg border px-4 focus-visible:ring-2 focus-visible:ring-primary">Retry loading transactions</button></div>}
@@ -299,11 +509,14 @@ export default function TransactionsPage() {
               <div className="divide-y divide-border/30">
                 {searchFilteredTransactions.map((entry) => {
                   if (entry.kind === "installment_group") {
-                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} onSelectTransaction={setSelectedTransaction} onRequestDelete={setDeleteConfirm} />;
+                    const debtState = debt.isLoading || debt.error ? null : completeCreditGroup(entry, debt.snapshot);
+                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} onSelectTransaction={setSelectedTransaction} onRequestDelete={requestDelete} onSaved={refreshCorrectionViews} />;
                   }
 
                   const transaction = entry.transaction;
                   const description = transaction.description || transaction.category?.name || (transaction.type === "transfer" ? "Transfer" : "Transaction");
+                  const route = correctionRoute(transaction);
+                  const blockedReason = route.kind === "blocked" ? route.reason : null;
                   return (
                     <div key={entry.key} className="flex flex-col gap-2 px-3 py-3.5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
                       <button
@@ -340,14 +553,16 @@ export default function TransactionsPage() {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setDeleteConfirm(transaction)}
+                          onClick={() => requestDelete(transaction)}
                           aria-label="Delete transaction"
-                          className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          title="Delete transaction"
+                          disabled={Boolean(blockedReason)}
+                          className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          title={blockedReason ?? "Delete transaction"}
                         >
                           <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </div>
+                      {blockedReason && <p className="break-words pl-[3.25rem] text-xs text-muted-foreground sm:text-right">{blockedReason}</p>}
                     </div>
                   );
                 })}
@@ -420,7 +635,17 @@ export default function TransactionsPage() {
         isOpen={!!selectedTransaction}
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
-        onRequestDelete={(tx) => setDeleteConfirm(tx)}
+        onRequestDelete={requestDelete}
+        deleteDisabledReason={deleteDisabledReason}
+      />
+      <DebtCorrectionDialog
+        open={correctionTarget !== null}
+        onClose={() => setCorrectionTarget(null)}
+        accountId={correctionTarget?.accountId ?? ""}
+        groupId={correctionTarget?.groupId ?? ""}
+        groupName={correctionTarget?.groupName ?? "Credit purchase"}
+        selectedIds={correctionTarget?.selectedIds ?? []}
+        onSaved={refreshCorrectionViews}
       />
     </>
   );

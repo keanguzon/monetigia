@@ -24,6 +24,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { WalletTileCard } from "@/components/accounts/WalletTileCard";
 import { WalletLedgerView } from "@/components/accounts/WalletLedgerView";
 import { DebtScheduleSection } from "@/components/accounts/DebtScheduleSection";
+import { debtCorrectionRecovery } from "@/components/accounts/DebtHistoryGroup";
 import { useAccounts } from "@/hooks/use-data";
 import { useGoals } from "@/hooks/use-goals";
 import { useDebt, useDebtCommand } from "@/hooks/use-debt";
@@ -48,6 +49,10 @@ export default function AccountsPage() {
   const debt = useDebt(goals.userId);
   const debtCommand = useDebtCommand(goals.userId);
   const pendingAdoption = debtCommand.pendingCommand?.kind === "adopt_opening_debt" ? debtCommand.pendingCommand : null;
+  const pendingCorrection = debtCommand.pendingCommand?.kind === "correct_debt_rows" ? debtCommand.pendingCommand : null;
+  const [correctionRefreshPending, setCorrectionRefreshPending] = useState(() => Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId)));
+  const [refreshingCorrectionViews, setRefreshingCorrectionViews] = useState(false);
+  const retryingCorrection = useRef(false);
   const [reviewAccountId, setReviewAccountId] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,6 +75,49 @@ export default function AccountsPage() {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingAccountName, setEditingAccountName] = useState("");
   const { toast } = useToast();
+
+  useEffect(() => {
+    const ownerId = goals.userId;
+    if (ownerId && pendingCorrection) debtCorrectionRecovery.pendingOwners.add(ownerId);
+    if (ownerId && debtCorrectionRecovery.pendingOwners.has(ownerId) && !debtCommand.pendingCommand && debtCommand.saved && debtCommand.refreshError) {
+      debtCorrectionRecovery.refreshOwners.add(ownerId);
+    }
+    setCorrectionRefreshPending(Boolean(ownerId && debtCorrectionRecovery.refreshOwners.has(ownerId)));
+  }, [goals.userId, pendingCorrection, debtCommand.saved, debtCommand.refreshError]);
+
+  async function refreshCorrectionViews() {
+    const ownerId = goals.userId;
+    if (!ownerId) throw new Error("Sign in to refresh debt views.");
+    debtCorrectionRecovery.pendingOwners.add(ownerId);
+    debtCorrectionRecovery.refreshOwners.add(ownerId);
+    setCorrectionRefreshPending(true);
+    setRefreshingCorrectionViews(true);
+    try {
+      await debt.refresh();
+      await goals.refresh();
+      debtCorrectionRecovery.pendingOwners.delete(ownerId);
+      debtCorrectionRecovery.refreshOwners.delete(ownerId);
+      setCorrectionRefreshPending(false);
+      if (!debtCommand.pendingCommand && !debtCommand.isSaving && !debtCommand.refreshError) debtCommand.reset();
+    } catch (error) {
+      setCorrectionRefreshPending(true);
+      throw error;
+    } finally {
+      setRefreshingCorrectionViews(false);
+    }
+  }
+
+  function retryPendingCorrection() {
+    if (!pendingCorrection || debtCommand.isSaving || retryingCorrection.current) return;
+    retryingCorrection.current = true;
+    void debtCommand.retry();
+  }
+
+  useEffect(() => {
+    if (!retryingCorrection.current || debtCommand.isSaving) return;
+    retryingCorrection.current = false;
+    if (!pendingCorrection && debtCommand.saved) void refreshCorrectionViews().catch(() => undefined);
+  }, [pendingCorrection, debtCommand.isSaving, debtCommand.saved]);
 
   const normalizeLogoFilename = (filename: string) => {
     const cleaned = filename.replace(/^\/?logos\//i, "").replace(/^\//, "");
@@ -798,7 +846,16 @@ export default function AccountsPage() {
         {/* ─── PayLater & Credit Schedule (No outer card, hairline statement ledger) ─── */}
         {Boolean(debtSnapshotResult.error) && <p role="alert" className="text-sm text-red-700 dark:text-red-300">Debt currency metadata is unavailable. The PHP debt total cannot be confirmed.</p>}
         {debtSnapshotResult.unsupported.map(account => <p key={account.accountId} role="alert" className="break-words text-sm text-red-700 dark:text-red-300">{account.name} ({account.currency}) is excluded from PHP debt totals. Its debt requires separate review; PHP payments and due-date adoption are unavailable.</p>)}
-        <DebtScheduleSection snapshot={debtSnapshotResult.snapshot} isLoading={debtSummaryLoading} error={debtSummaryError || exactDebtResult.error} onPayDebt={handlePayDebt} canReviewLegacy={accountId => summaryAccounts.some(account => account.id === accountId && account.currency === "PHP" && account.is_active === true)} onReviewLegacy={accountId => {
+        {pendingCorrection && <div data-no-press-motion="" role="alert" className="space-y-2 text-sm text-red-700 dark:text-red-300">
+          <p>This debt correction is unconfirmed. Retry the original saved request before starting another correction.</p>
+          {debtCommand.error && <p>{debtCommand.error}</p>}
+          <Button variant="outline" className="min-h-11" disabled={debtCommand.isSaving} onClick={retryPendingCorrection}>{debtCommand.isSaving ? "Retrying correction…" : "Retry same correction"}</Button>
+        </div>}
+        {correctionRefreshPending && <div data-no-press-motion="" role="alert" className="space-y-2 text-sm text-red-700 dark:text-red-300">
+          <p>A debt correction saved, but the debt views could not refresh. Refresh them before starting another correction.</p>
+          <Button variant="outline" className="min-h-11" disabled={refreshingCorrectionViews} onClick={() => { void refreshCorrectionViews().catch(() => undefined); }}>{refreshingCorrectionViews ? "Refreshing views…" : "Refresh views"}</Button>
+        </div>}
+        <DebtScheduleSection snapshot={debtSnapshotResult.snapshot} isLoading={debtSummaryLoading} error={debtSummaryError || exactDebtResult.error} onPayDebt={handlePayDebt} onCorrectionSaved={refreshCorrectionViews} canReviewLegacy={accountId => summaryAccounts.some(account => account.id === accountId && account.currency === "PHP" && account.is_active === true)} onReviewLegacy={accountId => {
           const wallet = summaryAccounts.find(account => account.id === accountId);
           if (wallet?.currency === "PHP" && wallet.is_active === true) setReviewAccountId(accountId);
         }} />

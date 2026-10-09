@@ -16,6 +16,10 @@ Unit 8.1 source ruling: the installed conventions use SECURITY DEFINER, fixed se
 
 **Spec:** [Approved design](../specs/2026-10-07-existing-debt-selection-design.md), [existing-debt plan](2026-10-07-existing-debt-selection.md), [rollout inventory](2026-10-08-pending-rollout.md), [Task 7 brief](../../codex-review/pending-rollout/task-7-brief.md), [Task 8 brief](../../codex-review/pending-rollout/task-8-brief.md). This plan supplies tighter execution boundaries and supersedes stale model, approval, source-baseline and API assumptions in those files. It preserves the approved product design.
 
+### Task 9 review override (October 9)
+
+Keep one minimal Sol 6.1 low review per coding unit. Task 9 uses Sol 6.1 medium for the integrated review and remaining coverage, alongside the full automated checks and rendered QA. Do not repeat earlier reviews or expand simple implementation units into broad audits.
+
 ## Global Constraints
 
 - Latest current-PC override: Astra low executes Unit 7.1 using the same exact scope, followed by an independent review, commit/push and handoff. The earlier stop-before-code checkpoint was superseded by the user asking to finish 7.1 here. Later units stay deferred to the next PC.

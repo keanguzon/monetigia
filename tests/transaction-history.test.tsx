@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import InstallmentHistoryGroup from "@/components/transactions/InstallmentHistoryGroup";
+import TransactionDetailModal from "@/components/transactions/TransactionDetailModal";
+import type { DebtAccountSnapshot, DebtDueRow } from "@/lib/debt/contracts";
 import {
   filterHistoryEntries,
   groupTransactions,
@@ -11,6 +13,14 @@ import {
   type InstallmentHistoryEntry,
   type TransactionHistoryRow,
 } from "@/lib/transactions/history";
+
+const debtView = vi.hoisted(() => ({ snapshot: null as unknown }));
+vi.mock("@/hooks/use-goals", () => ({ useGoals: () => ({ userId: "owner-1" }) }));
+vi.mock("@/hooks/use-debt", () => ({
+  useDebt: () => ({ snapshot: debtView.snapshot, isLoading: false, error: null, refresh: async () => undefined }),
+  useDebtCommand: () => ({ isSaving: false, unresolved: false, saved: null, error: null, refreshError: null, pendingCommand: null,
+    submit: async () => undefined, retry: async () => undefined, reset: () => undefined }),
+}));
 
 afterEach(() => cleanup());
 
@@ -26,7 +36,7 @@ const transaction = (overrides: Partial<TransactionHistoryRow> = {}): Transactio
   installment_group_id: "purchase-1",
   created_at: "2026-01-10T10:00:00Z",
   category: { name: "Home" },
-  account: { name: "Card" },
+  account: { name: "Card", type: "cash" } as TransactionHistoryRow["account"],
   ...overrides,
 });
 
@@ -34,6 +44,13 @@ const twoInstallments = () => [
   transaction({ id: "tx-1", amount: "0.10", description: "Coffee maker (Installment 1/2)", date: "2026-02-10" }),
   transaction({ id: "tx-2", amount: "0.20", description: "Coffee maker (Installment 2/2)", date: "2026-03-10" }),
 ];
+
+const creditRows: DebtDueRow[] = [
+  { id: "debt-1", accountId: "account-1", groupId: "purchase-1", source: "purchase", transactionId: "tx-1", dueDate: "2026-02-10", originalAmount: "0.10", paidAmount: "0.00", correctedAmount: "0.00", remainingAmount: "0.10", ordinal: 1, name: "Coffee maker" },
+  { id: "debt-2", accountId: "account-1", groupId: "purchase-1", source: "purchase", transactionId: "tx-2", dueDate: "2026-03-10", originalAmount: "0.20", paidAmount: "0.00", correctedAmount: "0.00", remainingAmount: "0.20", ordinal: 2, name: "Coffee maker" },
+];
+const creditAccount: DebtAccountSnapshot = { accountId: "account-1", totalOutstanding: "0.30", undatedOutstanding: "0.00", fingerprint: "a".repeat(64), reconciliation: "balanced", reconciliationDelta: "0.00" };
+const creditGroup = () => groupTransactions(twoInstallments().map(row => ({ ...row, account: { name: "Card", type: "credit_card" } })))[0] as InstallmentHistoryEntry;
 
 describe("transaction history grouping", () => {
   test("groups only rows with the same explicit installment id", () => {
@@ -303,7 +320,7 @@ describe("installment history row", () => {
     const entry = groupTransactions(twoInstallments().map(row => ({ ...row, purchase_date: null })))[0] as InstallmentHistoryEntry;
     const onRequestDelete = vi.fn();
     const onSelectTransaction = vi.fn();
-    render(<InstallmentHistoryGroup group={entry} sortMode="transaction_date" onRequestDelete={onRequestDelete} onSelectTransaction={onSelectTransaction} />);
+    render(<InstallmentHistoryGroup group={entry} sortMode="transaction_date" debtState={null} selectionResetKey="test" onRequestDelete={onRequestDelete} onSelectTransaction={onSelectTransaction} />);
     expect(screen.getByText("Sorted by latest due date")).toBeTruthy();
 
     const header = screen.getByRole("button", { name: /show payment schedule/i });
@@ -328,7 +345,7 @@ describe("installment history row", () => {
   test("opens a child's original transaction details from the schedule", async () => {
     const entry = groupTransactions(twoInstallments())[0] as InstallmentHistoryEntry;
     const onSelectTransaction = vi.fn();
-    render(<InstallmentHistoryGroup group={entry} sortMode="date_added" onRequestDelete={vi.fn()} onSelectTransaction={onSelectTransaction} />);
+    render(<InstallmentHistoryGroup group={entry} sortMode="date_added" debtState={null} selectionResetKey="test" onRequestDelete={vi.fn()} onSelectTransaction={onSelectTransaction} />);
     fireEvent.click(screen.getByRole("button", { name: /show payment schedule/i }));
     fireEvent.click(screen.getByRole("button", { name: /view installment 2 details/i }));
 
@@ -338,12 +355,12 @@ describe("installment history row", () => {
   test("collapses and recalculates the remaining amount when a child disappears", async () => {
     const user = userEvent.setup();
     const originalGroup = groupTransactions(twoInstallments())[0] as InstallmentHistoryEntry;
-    const { rerender } = render(<InstallmentHistoryGroup group={originalGroup} sortMode="date_added" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
+    const { rerender } = render(<InstallmentHistoryGroup group={originalGroup} sortMode="date_added" debtState={null} selectionResetKey="test" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
     expect(screen.getByText("₱0.30")).toBeTruthy();
 
     const remainingGroup = groupTransactions(twoInstallments().slice(1))[0] as InstallmentHistoryEntry;
-    rerender(<InstallmentHistoryGroup group={remainingGroup} sortMode="date_added" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
+    rerender(<InstallmentHistoryGroup group={remainingGroup} sortMode="date_added" debtState={null} selectionResetKey="test" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: /show payment schedule/i }).getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByText("₱0.20")).toBeTruthy();
@@ -352,5 +369,111 @@ describe("installment history row", () => {
     const schedule = document.getElementById(header.getAttribute("aria-controls") ?? "");
     expect(schedule?.getAttribute("aria-hidden")).toBe("true");
     expect(schedule?.hasAttribute("inert")).toBe(true);
+  });
+
+  test("credit history uses complete snapshot ordinals and focused-list shortcuts", async () => {
+    const snapshot = { accounts: [creditAccount], rows: creditRows };
+    debtView.snapshot = snapshot;
+    const entry = creditGroup();
+    render(<InstallmentHistoryGroup group={entry} sortMode="date_added" debtState={{ account: creditAccount, rows: creditRows }} selectionResetKey="credit" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /show payment schedule/i }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Select" }));
+    const list = screen.getByRole("list", { name: "Installments for Coffee maker" });
+    list.focus();
+    fireEvent.keyDown(list, { key: "a", ctrlKey: true });
+    expect((screen.getByRole("checkbox", { name: "Select installment 1" }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: "Select installment 2" }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText("Installment 1")).toBeTruthy();
+    expect(screen.queryByText("Installment 1 of 2")).toBeNull();
+    fireEvent.keyDown(list, { key: "Delete" });
+    expect(await screen.findByText(/2 installments · PHP 0\.30 remaining/)).toBeTruthy();
+  });
+
+  test("Escape exits selection only from the focused list and ignores IME and row controls", async () => {
+    debtView.snapshot = { accounts: [creditAccount], rows: creditRows };
+    const entry = creditGroup();
+    render(<InstallmentHistoryGroup group={entry} sortMode="date_added" debtState={{ account: creditAccount, rows: creditRows }} selectionResetKey="escape" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
+    await user.click(screen.getByRole("button", { name: "Select" }));
+    const list = screen.getByRole("list", { name: "Installments for Coffee maker" });
+    const firstCheckbox = screen.getByRole("checkbox", { name: "Select installment 1" }) as HTMLInputElement;
+
+    fireEvent.keyDown(firstCheckbox, { key: "a", ctrlKey: true });
+    fireEvent.keyDown(list, { key: "a", ctrlKey: true, isComposing: true, keyCode: 229 });
+    expect(firstCheckbox.checked).toBe(false);
+
+    list.focus();
+    fireEvent.keyDown(list, { key: "a", ctrlKey: true });
+    expect(firstCheckbox.checked).toBe(true);
+    fireEvent.keyDown(list, { key: "Escape" });
+    expect(screen.queryByRole("checkbox", { name: "Select installment 1" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Select" })).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: "a", ctrlKey: true });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test("expense groups with an unknown wallet type cannot fall through to ordinary deletion", async () => {
+    const unknownGroup = groupTransactions(twoInstallments().map(row => ({ ...row, account: { name: "Unknown card", type: null } })))[0] as InstallmentHistoryEntry;
+    const onRequestDelete = vi.fn();
+    render(<InstallmentHistoryGroup group={unknownGroup} sortMode="date_added" debtState={null} selectionResetKey="unknown" onRequestDelete={onRequestDelete} onSelectTransaction={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /show payment schedule/i }));
+
+    expect(screen.getByRole("alert").textContent).toMatch(/wallet type.*unavailable/i);
+    expect(screen.getAllByRole("button", { name: "Delete installment unavailable" }).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(onRequestDelete).not.toHaveBeenCalled();
+  });
+
+  test("incomplete or unavailable credit snapshots block the old delete lane", async () => {
+    const entry = creditGroup();
+    const onRequestDelete = vi.fn();
+    const view = render(<InstallmentHistoryGroup group={entry} sortMode="date_added" debtState={null} selectionResetKey="missing" onRequestDelete={onRequestDelete} onSelectTransaction={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /show payment schedule/i }));
+    expect(screen.getByRole("alert").textContent).toMatch(/does not match a complete debt snapshot/i);
+    expect(screen.getAllByRole("button", { name: "Delete installment unavailable" }).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(onRequestDelete).not.toHaveBeenCalled();
+
+    view.rerender(<InstallmentHistoryGroup group={entry} sortMode="date_added" debtState={{ account: creditAccount, rows: [creditRows[0]] }} selectionResetKey="partial" onRequestDelete={onRequestDelete} onSelectTransaction={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /show payment schedule/i }).getAttribute("aria-expanded")).toBe("false");
+    await userEvent.setup().click(screen.getByRole("button", { name: /show payment schedule/i }));
+    expect(screen.getByRole("alert").textContent).toMatch(/does not match a complete debt snapshot/i);
+    expect(screen.getAllByRole("button", { name: "Delete installment unavailable" }).every(button => (button as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  test("page reset key clears selection and collapses the ledger", async () => {
+    debtView.snapshot = { accounts: [creditAccount], rows: creditRows };
+    const entry = creditGroup();
+    const props = { group: entry, sortMode: "date_added" as const, debtState: { account: creditAccount, rows: creditRows }, onRequestDelete: vi.fn(), onSelectTransaction: vi.fn() };
+    const view = render(<InstallmentHistoryGroup {...props} selectionResetKey="all|date_added|" />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
+    await user.click(screen.getByRole("button", { name: "Select" }));
+    const list = screen.getByRole("list", { name: "Installments for Coffee maker" });
+    list.focus();
+    fireEvent.keyDown(list, { key: "a", ctrlKey: true });
+    expect((screen.getByRole("checkbox", { name: "Select installment 1" }) as HTMLInputElement).checked).toBe(true);
+
+    view.rerender(<InstallmentHistoryGroup {...props} selectionResetKey="all|date_added|new search" />);
+    expect(screen.getByRole("button", { name: /show payment schedule/i }).getAttribute("aria-expanded")).toBe("false");
+    await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
+    await user.click(screen.getByRole("button", { name: "Select" }));
+    expect((screen.getByRole("checkbox", { name: "Select installment 1" }) as HTMLInputElement).checked).toBe(false);
+  });
+
+  test("paid credit rows expose a readable reason and cannot use the ordinary delete callback", () => {
+    const onRequestDelete = vi.fn();
+    render(<TransactionDetailModal
+      isOpen
+      transaction={{ ...twoInstallments()[0], account: { name: "Card", type: "credit_card" } }}
+      onClose={vi.fn()}
+      onRequestDelete={onRequestDelete}
+      deleteDisabledReason="This installment is fully paid."
+    />);
+
+    const deleteButton = screen.getByRole("button", { name: "Delete unavailable" }) as HTMLButtonElement;
+    expect(deleteButton.disabled).toBe(true);
+    expect(screen.getByRole("status").textContent).toBe("This installment is fully paid.");
+    fireEvent.click(deleteButton);
+    expect(onRequestDelete).not.toHaveBeenCalled();
   });
 });
