@@ -91,3 +91,4 @@ scripts/
 
 !docs/superpowers/plans/2026-10-07-existing-debt-selection.md
 !docs/superpowers/specs/2026-10-07-existing-debt-selection-design.md
+/.playwright-cli/
