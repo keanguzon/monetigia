@@ -130,70 +130,70 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
     ? creditSnapshotMissing ? "Debt snapshot unavailable" : `${eligibleIds.length} remaining ${eligibleIds.length === 1 ? "installment" : "installments"}`
     : hasUnidentifiedExpense ? "Wallet type unavailable" : `${group.children.length} remaining ${group.children.length === 1 ? "payment" : "payments"}`;
 
+  const formattedRemaining = groupRemaining === null
+    ? (protectedExpenseHistory ? "Unavailable" : group.remainingAmount === null ? "Unavailable" : formatCurrency(group.remainingAmount))
+    : groupRemaining === "Unavailable" ? groupRemaining : formatCurrency(Number(groupRemaining));
+
   return (
     <div className="group">
-      <div className="relative flex items-stretch">
+      <div className="flex flex-col gap-2 px-3 py-3.5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
         <button
           type="button"
           aria-label={`${expanded ? "Hide" : "Show"} payment schedule for ${groupLabel}`}
           aria-expanded={expanded}
           aria-controls={scheduleId}
           onClick={toggleExpanded}
-          className="flex min-h-11 min-w-0 w-full flex-1 flex-col gap-3 px-3 py-3.5 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-4"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500" aria-hidden="true">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500" aria-hidden="true">
             <ArrowUpRight className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="break-words text-sm font-semibold tracking-tight text-foreground sm:text-base">
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
               {groupLabel}
-            </p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+            </span>
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
               <span className="font-medium text-foreground/80">{group.children[0]?.account?.name || "Unknown wallet"}</span>
               {group.children[0]?.category?.name && <span>{group.children[0].category.name}</span>}
               <span>{childCountLabel}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex min-w-0 items-end justify-between gap-3 sm:ml-auto sm:items-center sm:justify-end sm:gap-4">
-          <div className="flex min-w-0 flex-1 items-end justify-between gap-3 sm:flex-initial sm:gap-4">
-            <div className="min-w-0 flex-1 sm:flex-initial">
-              <p className="text-[11px] font-medium text-muted-foreground">Purchase date</p>
-              <p className="text-sm text-foreground">
-                {group.purchaseDate ? formatDate(group.purchaseDate) : "Not recorded"}
-              </p>
-              {!group.purchaseDate && group.firstDueDate && (
-                <p className="text-xs text-muted-foreground">First due {formatDate(group.firstDueDate)}</p>
-              )}
+              {group.purchaseDate ? (
+                <span>{formatDate(group.purchaseDate)}</span>
+              ) : group.firstDueDate ? (
+                <span>First due {formatDate(group.firstDueDate)}</span>
+              ) : null}
               {!group.purchaseDate && sortMode === "transaction_date" && (
-                <p className="text-xs text-muted-foreground">Sorted by latest due date</p>
+                <span>Sorted by latest due date</span>
               )}
-            </div>
-            <div className="min-w-0 flex-1 text-right sm:flex-initial">
-              <p className="text-[11px] font-medium text-muted-foreground">Remaining scheduled amount</p>
-              <p className="break-words text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
-                {groupRemaining === null ? (protectedExpenseHistory ? "Unavailable" : group.remainingAmount === null ? "Unavailable" : formatCurrency(group.remainingAmount)) : groupRemaining === "Unavailable" ? groupRemaining : formatCurrency(Number(groupRemaining))}
-              </p>
-            </div>
-          </div>
-          <span className="flex min-h-11 w-24 shrink-0 items-center justify-end" aria-hidden="true">
-            <ChevronDown className={`h-4 w-4 text-primary ${expanded ? "rotate-180" : ""}`} />
+            </span>
           </span>
-        </div>
         </button>
-        {onRequestEditDescription && <div className="absolute right-14 top-1/2 -translate-y-1/2">
+
+        <div className="flex items-center justify-between gap-3 pl-[3.25rem] sm:justify-end sm:pl-0">
+          <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
+            {formattedRemaining}
+          </span>
+          {onRequestEditDescription && (
+            <button
+              type="button"
+              aria-label={`Edit description for ${groupLabel}`}
+              disabled={group.descriptionState === "needs_review"}
+              onClick={() => onRequestEditDescription(group)}
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
           <button
             type="button"
-            aria-label={`Edit description for ${groupLabel}`}
-            disabled={group.descriptionState === "needs_review"}
-            onClick={() => onRequestEditDescription(group)}
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={`${expanded ? "Collapse" : "Expand"} installments for ${groupLabel}`}
+            aria-expanded={expanded}
+            aria-controls={scheduleId}
+            onClick={toggleExpanded}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <Pencil className="h-4 w-4" aria-hidden="true" />
+            <ChevronDown className={`h-4 w-4 text-primary transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
           </button>
-        </div>}
+        </div>
       </div>
       {group.descriptionState === "needs_review" && <p role="status" className="px-3 pb-2 text-sm text-amber-800 dark:text-amber-200 sm:px-5">This installment description needs review before the group can be edited.</p>}
 
