@@ -141,6 +141,10 @@ monetigia/
 
 ---
 
+## Pending financial reset
+
+The current scope is all users in the intended Supabase project. The [all-users financial reset guide](docs/codex-review/pending-rollout/financial-reset-all-users-guide.md), [manual SQL](docs/codex-review/pending-rollout/financial-reset-all-users.sql) and [disposable validation](docs/codex-review/pending-rollout/financial-reset-all-users-validation.mjs) preserve wallet identities/settings, goal definitions/lifecycle, profiles/auth, preferences, categories, budgets and database protections while clearing financial history and zeroing balances. Production execution follows landing completion and requires the intended project connection, deployed-schema comparison and backup. The SQL defaults to rollback, requires a checked database name and is not a migration. Production data has not been reset. The earlier owner-only artifacts remain reference material and do not represent the current scope.
+
 ## Author
 
 Built by **[Kean Guzon](https://github.com/keanguzon)**.
