@@ -1,4 +1,18 @@
-# Beta 1.1 transfer checkpoint — 2026-10-08
+# Beta 1.1 execution checkpoint, 2026-10-09
+
+## Current status, superseding the historical transfer notes below
+
+Task 6 was completed and reviewed before this continuation. Tasks 7.1, 7.2, 8.1 and 8.2 are implemented and committed: e6888d3, 2bdd3e0, d7714f3 and 495465c. Task 9's Sol 6.1 medium review found a count-one description baseline issue; the bounded fix and missing pagination race coverage are committed at f26b845. Minimal per-task Sol 6.1 low reviews and their fixes are recorded in pending-rollout/task-7-2-review.md, task-8-1-review.md and task-8-2-review.md.
+
+Fresh Task 9.1 checks passed: seven Node tests, 429 Vitest tests, 135 disposable DB tests plus six final-installed-state checks, typecheck, lint and build. After the UI-only review fix, 42 affected tests, typecheck and production build passed. The detailed verification record distinguishes automated, rendered, device and production evidence. Task 9.2 browser evidence is recorded; outstanding device/zoom/recovery coverage must not be called complete.
+
+Current workflow: Sol 6.1 high scoped planning, Luna max coding, one minimal Sol low review per coding unit, Sol 6.1 medium integrated Task 9 review. Gemini remains paused; landing redesign remains deferred. User authorized continuing through Task 9 then QA. Preserve all data and unrelated files; no production resets.
+
+Production additive migration 202610080006_transaction_description.sql is not verified as applied. It follows the already listed migrations 060001–060006, 070001 and 080001–080005. No new frontend deployment or push occurred in this continuation. Verify the production migration/runtime before releasing dependent UI. Local preview uses a fresh disposable identity and ignored private setup; those auth files and tokens must never be committed.
+
+Read docs/codex-review/PENDING_ROLLOUT_VERIFICATION.md and docs/superpowers/plans/2026-10-08-remaining-rollout-execution.md first. Do not repeat completed Tasks 5–8 or follow the outdated stop/model/checklist instructions below.
+
+## Historical transfer notes
 
 This is a backup checkpoint, not a production release. Coding is paused at the user's request. Do not reset any database or discard dummy data.
 
