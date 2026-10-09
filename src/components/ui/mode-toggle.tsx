@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Moon, Sun } from "lucide-react"
+import { Monitor, Moon, Sun } from "lucide-react"
 import { useThemeTransition } from "@/hooks/use-theme-transition"
 
 export function ModeToggle() {
@@ -21,35 +21,53 @@ export function ModeToggle() {
   const effectiveTheme = mounted ? resolvedTheme : 'light'
   const isDark = effectiveTheme === 'dark'
   const label = !mounted ? 'Light' : (theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light')
+  const activeIcon = !mounted ? (isDark ? "dark" : "light") : theme
+  const iconColorClass = isDark ? "text-white" : "text-black"
 
   return (
     <button
       data-theme-toggle="true"
       onClick={handleToggle}
       aria-label="Toggle theme"
+      className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:h-10 md:w-[88px] md:rounded-full md:p-[3px] md:hover:bg-transparent ${
+        isDark
+          ? "md:border md:border-primary/60 md:bg-[hsl(222_47%_11%/0.9)] md:shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.15)]"
+          : "md:border md:border-[#86efac] md:bg-[#dcfce7] md:shadow-[inset_0_0_0_1px_#bbf7d0]"
+      }`}
       style={{
-        // pill track
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        width: 88,
-        height: 40,
-        borderRadius: 999,
-        border: isDark ? '1px solid hsl(var(--primary) / 0.6)' : '1px solid #86efac',
-        backgroundColor: isDark ? 'hsl(222 47% 11% / 0.9)' : '#dcfce7',
-        padding: '3px',
-        cursor: 'pointer',
-        outline: 'none',
-        boxShadow: isDark
-          ? '0 0 0 1px hsl(var(--primary) / 0.15) inset'
-          : '0 0 0 1px #bbf7d0 inset',
-        // 150ms exact sync with theme-transitioning website fade
         transition: 'background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease',
-        flexShrink: 0,
       }}
     >
+      {/* Mobile animated icons: Monitor -> Moon -> Sun */}
+      <span className="relative flex h-6 w-6 items-center justify-center md:hidden" aria-hidden="true">
+        <Monitor
+          className={`absolute h-6 w-6 transition-all duration-300 ${iconColorClass} ${
+            activeIcon === "system"
+              ? "scale-100 rotate-0 opacity-100"
+              : "scale-50 -rotate-90 opacity-0 pointer-events-none"
+          }`}
+          strokeWidth={2.5}
+        />
+        <Moon
+          className={`absolute h-6 w-6 transition-all duration-300 ${iconColorClass} ${
+            activeIcon === "dark"
+              ? "scale-100 rotate-0 opacity-100"
+              : "scale-50 rotate-90 opacity-0 pointer-events-none"
+          }`}
+          strokeWidth={2.5}
+        />
+        <Sun
+          className={`absolute h-6 w-6 transition-all duration-300 ${iconColorClass} ${
+            activeIcon === "light"
+              ? "scale-100 rotate-0 opacity-100"
+              : "scale-50 rotate-90 opacity-0 pointer-events-none"
+          }`}
+          strokeWidth={2.5}
+        />
+      </span>
       {/* Sliding circle */}
       <div
+        className="!hidden md:!flex"
         data-theme-toggle="true"
         aria-hidden="true"
         style={{
@@ -79,6 +97,7 @@ export function ModeToggle() {
 
       {/* Label text */}
       <span
+        className="hidden md:inline"
         data-theme-toggle="true"
         style={{
           position: 'absolute',

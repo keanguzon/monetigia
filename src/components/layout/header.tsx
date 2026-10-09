@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, Settings, User as UserIcon } from "lucide-react";
+import { LogOut, RefreshCw, Settings, User as UserIcon } from "lucide-react";
 import { getInitials } from "@/lib/utils";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { clearTabSessionMarker } from "@/lib/session-preferences";
@@ -50,13 +50,16 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6">
-      <div className="flex items-center gap-2 md:gap-4">
-        <h1 className="text-sm font-semibold md:text-lg lg:text-xl">
+      <div className="min-w-0 flex-1 pr-2">
+        <h1 className="truncate text-sm font-semibold md:text-lg lg:text-xl">
           Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}!
         </h1>
       </div>
 
-      <div className="flex items-center gap-2 md:gap-4">
+      <div className="flex shrink-0 items-center gap-1 md:gap-4">
+        <Button variant="ghost" size="icon" aria-label="Refresh page" data-tooltip="Refresh page" className="h-11 w-11 text-muted-foreground md:hidden" onClick={() => window.location.reload()}>
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+        </Button>
         {/* Theme toggle */}
         <ModeToggle />
 
