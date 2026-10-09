@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InstallmentSelection } from "@/components/transactions/InstallmentSelection";
 import { DebtCorrectionDialog } from "@/components/transactions/DebtCorrectionDialog";
@@ -179,9 +179,17 @@ export function DebtHistoryGroup({ account, rows, onSaved, walletName = "Credit 
                         {unavailableReason && <p className="mt-1 break-words text-xs text-muted-foreground">{unavailableReason}</p>}
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs tabular-nums sm:justify-end">
-                      <span className="whitespace-nowrap font-semibold">Remaining {formatCurrency(Number(row.remainingAmount))}</span>
-                      {row.remainingAmount !== "0.00" && <span className="whitespace-nowrap">Original {formatCurrency(Number(row.originalAmount))}</span>}
+                    <div className="flex flex-col items-end gap-1 text-xs tabular-nums sm:justify-end">
+                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 sm:justify-end">
+                        <span className="whitespace-nowrap font-semibold">Remaining {formatCurrency(Number(row.remainingAmount))}</span>
+                        {row.remainingAmount !== "0.00" && <span className="whitespace-nowrap">Original {formatCurrency(Number(row.originalAmount))}</span>}
+                      </div>
+                      {row.remainingAmount === "0.00" && (
+                        <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+                          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                          {row.paidAmount !== "0.00" ? "Paid" : "Done"}
+                        </span>
+                      )}
                     </div>
                   </li>
                 );
