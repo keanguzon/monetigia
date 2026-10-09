@@ -24,6 +24,8 @@ export function DebtScheduleSection({ snapshot, isLoading, error, onPayDebt, onR
     groups.set(key, group);
     return groups;
   }, new Map<string, typeof historyRows>()).entries());
+  const installmentTotals = new Map(historyGroups.map(([key, groupRows]) =>
+    [key, Math.max(...groupRows.map(row => row.ordinal))]));
   return <section className="min-w-0 space-y-4" aria-busy={isLoading}>
     <div className="border-b border-border pb-3"><h2 className="font-heading text-xl font-bold">PayLater & Credit Schedule</h2><p className="mt-1 text-sm text-muted-foreground">Remaining debt by due date. Payments apply across the wallet in due-date order, regardless of the month filter.</p>
       {ready && !isLoading && <p className="mt-2 text-sm font-semibold tabular-nums sm:text-base">Outstanding total: {money(summarizeDebt(snapshot, null).totalOutstanding)}</p>}
@@ -40,7 +42,7 @@ export function DebtScheduleSection({ snapshot, isLoading, error, onPayDebt, onR
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-3"><h3 className="font-semibold">{new Date(`${month}-01T12:00:00`).toLocaleDateString("en-PH", { month: "long", year: "numeric" })}</h3><p className="text-sm font-semibold tabular-nums text-muted-foreground sm:text-base">{schedule === null ? "Total needs review" : money(schedule)}</p></div>
           {accountIds.map(accountId => <div key={accountId} className="border-b border-border px-4 py-3 last:border-b-0">
             <div className="flex items-center justify-between gap-3"><p className="min-w-0 break-words text-sm font-semibold">{walletName(accountId)}</p>{onPayDebt && snapshot.accounts.find(account => account.accountId === accountId)?.reconciliation === "balanced" && <Button variant="outline" size="sm" disabled={isLoading} className="min-h-11 shrink-0" onClick={() => onPayDebt(accountId)}>Pay debt</Button>}</div>
-            <ul className="divide-y divide-border">{monthRows.filter(row => row.accountId === accountId).map(row => <li key={row.id} className="flex items-start justify-between gap-3 py-3"><div className="min-w-0"><p className="break-words text-sm font-medium">{row.name}</p><p className="mt-1 text-xs text-muted-foreground">{row.source === "opening" ? "Existing debt" : "Purchase"} · Due {new Date(`${row.dueDate}T12:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })} · Installment {row.ordinal}</p></div><span className="shrink-0 text-sm font-semibold tabular-nums sm:text-base">{money(row.remainingAmount)}</span></li>)}</ul>
+            <ul className="divide-y divide-border">{monthRows.filter(row => row.accountId === accountId).map(row => <li key={row.id} className="flex items-start justify-between gap-3 py-3"><div className="min-w-0"><p className="break-words text-sm font-medium">{row.name}</p><p className="mt-1 text-xs text-muted-foreground">{row.source === "opening" ? "Existing debt" : "Purchase"} · Due {new Date(`${row.dueDate}T12:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })} · Installment {row.ordinal}/{installmentTotals.get(`${row.accountId}:${row.groupId}:${row.source}`)}</p></div><span className="shrink-0 text-sm font-semibold tabular-nums sm:text-base">{money(row.remainingAmount)}</span></li>)}</ul>
           </div>)}
         </div>;
       })}

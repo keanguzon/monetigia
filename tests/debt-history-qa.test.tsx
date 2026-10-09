@@ -98,3 +98,14 @@ test("clicking an installment row toggles selection without double toggling its 
   await user.keyboard("{/Shift}");
   expect(screen.getByText("2 selected")).toBeTruthy();
 });
+
+
+test("schedule retains original installment denominator after the first row is paid", () => {
+  const paidRows = rows.map(row => row.ordinal === 1
+    ? { ...row, paidAmount: "10.00", remainingAmount: "0.00" }
+    : row);
+  render(<DebtScheduleSection snapshot={{ accounts: [account], rows: paidRows }} isLoading={false} error={null} onReviewLegacy={vi.fn()} />);
+  expect(screen.getByText(/Existing debt.*Installment 2\/3/)).toBeTruthy();
+  expect(screen.getByText(/Existing debt.*Installment 3\/3/)).toBeTruthy();
+  expect(screen.queryByText(/Existing debt.*Installment 1\/3/)).toBeNull();
+});
