@@ -156,21 +156,13 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
               <span className="font-medium text-foreground/80">{group.children[0]?.account?.name || "Unknown wallet"}</span>
               {group.children[0]?.category?.name && <span>{group.children[0].category.name}</span>}
               <span>{childCountLabel}</span>
-              {group.purchaseDate ? (
-                <span>{formatDate(group.purchaseDate)}</span>
-              ) : group.firstDueDate ? (
-                <span>First due {formatDate(group.firstDueDate)}</span>
-              ) : null}
-              {!group.purchaseDate && sortMode === "transaction_date" && (
-                <span>Sorted by latest due date</span>
-              )}
             </span>
           </span>
         </button>
 
         <div className="flex items-center justify-between gap-3 pl-[3.25rem] sm:justify-end sm:pl-0">
           <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
-            {formattedRemaining}
+            {formattedRemaining === "Unavailable" ? formattedRemaining : `−${formattedRemaining}`}
           </span>
           {onRequestEditDescription && (
             <button
@@ -205,6 +197,11 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
       >
         <div className="min-h-0 overflow-hidden">
           <div className={`bg-muted/10 px-3 sm:pl-[4.5rem] sm:pr-5 ${expanded ? "border-t border-border/40 py-2" : "border-t-0 py-0"}`}>
+            {expanded && <div className="mb-3 text-xs text-muted-foreground">
+              <p>Purchase date: {group.purchaseDate ? formatDate(group.purchaseDate) : "Not recorded"}</p>
+              {!group.purchaseDate && group.firstDueDate && <p className="mt-0.5">First due {formatDate(group.firstDueDate)}</p>}
+              {!group.purchaseDate && sortMode === "transaction_date" && <p className="mt-0.5">Sorted by latest due date</p>}
+            </div>}
             {expanded && hasCreditPurchase && snapshotRows && debtState?.account.reconciliation === "balanced" && <div className="mb-2">
               <InstallmentSelection
                 active={selection.active}

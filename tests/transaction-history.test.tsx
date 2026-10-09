@@ -463,11 +463,14 @@ describe("installment history row", () => {
     const onRequestDelete = vi.fn();
     const onSelectTransaction = vi.fn();
     render(<InstallmentHistoryGroup group={entry} sortMode="transaction_date" debtState={null} selectionResetKey="test" onRequestDelete={onRequestDelete} onSelectTransaction={onSelectTransaction} />);
-    expect(screen.getByText("Sorted by latest due date")).toBeTruthy();
+    expect(screen.queryByText("Sorted by latest due date")).toBeNull();
+    expect(screen.queryByText("Purchase date: Not recorded")).toBeNull();
 
     const header = screen.getByRole("button", { name: /show payment schedule/i });
     await user.click(screen.getByText("Coffee maker"));
     expect(header.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Purchase date: Not recorded")).toBeTruthy();
+    expect(screen.getByText("Sorted by latest due date")).toBeTruthy();
     expect(screen.getByText("Installment 1 of 2")).toBeTruthy();
 
     const disclosure = header;
@@ -499,13 +502,13 @@ describe("installment history row", () => {
     const originalGroup = groupTransactions(twoInstallments())[0] as InstallmentHistoryEntry;
     const { rerender } = render(<InstallmentHistoryGroup group={originalGroup} sortMode="date_added" debtState={null} selectionResetKey="test" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
-    expect(screen.getByText("₱0.30")).toBeTruthy();
+    expect(screen.getByText("−₱0.30")).toBeTruthy();
 
     const remainingGroup = groupTransactions(twoInstallments().slice(1))[0] as InstallmentHistoryEntry;
     rerender(<InstallmentHistoryGroup group={remainingGroup} sortMode="date_added" debtState={null} selectionResetKey="test" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: /show payment schedule/i }).getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getByText("₱0.20")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /show payment schedule/i }).parentElement?.querySelector("span.tabular-nums")?.textContent).toBe("−₱0.20");
     expect(screen.queryByRole("button", { name: /view installment 2 details/i })).toBeNull();
     const header = screen.getByRole("button", { name: /show payment schedule/i });
     const schedule = document.getElementById(header.getAttribute("aria-controls") ?? "");
