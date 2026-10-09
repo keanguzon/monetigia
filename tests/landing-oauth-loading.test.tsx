@@ -61,7 +61,7 @@ test("puts authentication in the hero without redundant navigation", () => {
     const href = link.getAttribute("href");
     if (href?.startsWith("#")) expect(document.getElementById(href.slice(1))).not.toBeNull();
   }
-  expect(screen.getByText("Sample screen")).toBeTruthy();
+  expect(screen.queryByText("Sample screen")).toBeNull();
   expect(screen.queryByRole("navigation", { name: "Main navigation" })).toBeNull();
   expect(screen.queryByText("Open Monetigia")).toBeNull();
   expect(screen.queryByText("See how it works")).toBeNull();

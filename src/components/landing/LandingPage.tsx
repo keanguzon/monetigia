@@ -64,8 +64,8 @@ function LandingPageInner() {
   };
 
   return (
-    <div className="min-h-[100svh] bg-muted/60 text-foreground" style={{ paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: "max(16px, env(safe-area-inset-bottom))", paddingLeft: "max(clamp(12px, 3vw, 40px), env(safe-area-inset-left))", paddingRight: "max(clamp(12px, 3vw, 40px), env(safe-area-inset-right))" }}>
-      <div className="mx-auto max-w-[1400px] bg-background px-5 sm:px-10 lg:my-8 lg:px-16" style={{ clipPath: "polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px)" }}>
+    <div className="min-h-[100svh] bg-background text-foreground" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
+      <div className="mx-auto max-w-[1400px] px-5 sm:px-10 lg:px-16">
         <header className="flex min-h-24 flex-wrap items-center justify-between gap-3 py-5">
           <Link href="/" className="flex min-h-11 items-center gap-2 font-heading text-xl font-bold sm:text-2xl"><Image src="/logos/main-logo.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />Monetigia</Link>
           <div className="flex items-center gap-2"><ModeToggle /><Link href="#sign-in" className="inline-flex min-h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Sign in</Link></div>

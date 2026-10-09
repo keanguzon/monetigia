@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export function HeroPhone() {
   return (
-    <figure className="relative mx-auto w-full max-w-[620px]">
+    <figure className="relative mx-auto aspect-[1063/1086] w-full max-w-[460px] overflow-hidden">
       <Image
         src="/landing/phone-goals-light.png"
         alt="Sample Monetigia Goals screen shown on a phone held in one hand"
@@ -10,7 +10,7 @@ export function HeroPhone() {
         height={1086}
         sizes="(min-width: 1024px) 45vw, 90vw"
         priority
-        className="h-auto w-full dark:hidden"
+        className="absolute -left-[36.22%] top-0 h-auto w-[136.22%] max-w-none dark:hidden"
       />
       <Image
         src="/landing/phone-goals-dark.png"
@@ -19,9 +19,9 @@ export function HeroPhone() {
         height={1086}
         sizes="(min-width: 1024px) 45vw, 90vw"
         priority
-        className="hidden h-auto w-full dark:block"
+        className="absolute -left-[36.22%] top-0 hidden h-auto w-[136.22%] max-w-none dark:block"
+        style={{ transform: "translate(0.76%, 0.83%)" }}
       />
-      <figcaption className="mt-2 text-right text-xs text-muted-foreground">Sample screen</figcaption>
     </figure>
   );
 }
