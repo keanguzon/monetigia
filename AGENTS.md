@@ -31,3 +31,7 @@ When starting tasks or entering workflows, use the installed superpowers skills:
 - Dispatching Parallel Agents: `.agents/skills/dispatching-parallel-agents/SKILL.md`
 - Finishing a Development Branch: `.agents/skills/finishing-a-development-branch/SKILL.md`
 <!-- superpowers:end -->
+
+## Design Tokens & Button Styling
+- **Primary Action & Confirmation Buttons:** ALWAYS use the universal design token `bg-primary text-primary-foreground hover:bg-primary/90` (or `variant="default"` on `<Button>`).
+- **NEVER use ad-hoc shades:** Do not hardcode custom shades like `bg-emerald-700` or custom dark greens. The `--primary` theme token automatically provides the universal bright green and theme-correct contrast across both Light and Dark modes.

@@ -7,7 +7,8 @@ import { useGoals } from '@/hooks/use-goals';
 import { useAccounts } from '@/hooks/use-data';
 import { useDebt, useDebtCommand } from '@/hooks/use-debt';
 import type { AdoptOpeningDebtCommand, DebtAccountSnapshot } from '@/lib/debt/contracts';
-const actionClass = "min-h-11 bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-400 dark:text-green-950 dark:hover:bg-emerald-300";
+// Universal primary button: always use bg-primary text-primary-foreground hover:bg-primary/90 for consistent bright green tokens
+const actionClass = "min-h-11 bg-primary text-primary-foreground hover:bg-primary/90";
 const empty = (): ExistingDebtFieldsValue => ({ enabled: true, items: [] });
 export function LegacyDebtReviewDialog({ isOpen, onClose, account }: { isOpen: boolean; onClose: () => void; account: DebtAccountSnapshot | null }) {
   const { userId } = useGoals();

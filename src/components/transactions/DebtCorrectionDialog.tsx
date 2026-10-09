@@ -314,18 +314,19 @@ export function DebtCorrectionDialog({ open, onClose, accountId, groupId, groupN
 
           <footer className="flex flex-col-reverse gap-2 border-t border-border p-5 sm:flex-row sm:justify-end">
             <Button variant="outline" className="min-h-11" onClick={close}>Cancel</Button>
+            {/* Universal primary button: always use bg-primary text-primary-foreground for consistent bright green tokens */}
             {pendingCorrection ? (
-              <Button className="min-h-11 bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-400 dark:text-green-950" disabled={write.isSaving || refreshing} onClick={() => void retrySameCorrection()}>
+              <Button className="min-h-11 bg-primary text-primary-foreground hover:bg-primary/90" disabled={write.isSaving || refreshing} onClick={() => void retrySameCorrection()}>
                 {write.isSaving ? "Retrying correction…" : "Retry same correction"}
               </Button>
             ) : savedNeedsRecovery || savedReceiptNeedsRecovery ? (
-              <Button className="min-h-11 bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-400 dark:text-green-950" disabled={refreshing} onClick={() => void refreshViews()}>
+              <Button className="min-h-11 bg-primary text-primary-foreground hover:bg-primary/90" disabled={refreshing} onClick={() => void refreshViews()}>
                 {refreshing ? "Refreshing views…" : "Refresh views"}
               </Button>
             ) : sameOwner && (stale || session?.needsReview || (!session?.review && Boolean(session) && Boolean(debt.snapshot) && !reviewError)) ? (
-              <Button className="min-h-11 bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-400 dark:text-green-950" disabled={!canRenew} onClick={renewReview}>Review updated debt</Button>
+              <Button className="min-h-11 bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canRenew} onClick={renewReview}>Review updated debt</Button>
             ) : sameOwner && session?.review && !localSaved ? (
-              <Button className="min-h-11 bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-400 dark:text-green-950" disabled={!canConfirm} onClick={() => void confirmCorrection()}>
+              <Button className="min-h-11 bg-primary text-primary-foreground hover:bg-primary/90" disabled={!canConfirm} onClick={() => void confirmCorrection()}>
                 {write.isSaving ? "Saving correction…" : "Confirm correction"}
               </Button>
             ) : null}
