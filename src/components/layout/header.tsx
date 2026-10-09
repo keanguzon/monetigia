@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useNavigation } from "./navigation-provider";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -51,9 +52,10 @@ export function Header({ user }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6">
       <div className="min-w-0 flex-1 pr-2">
-        <h1 className="truncate text-sm font-semibold md:text-lg lg:text-xl">
-          Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}!
-        </h1>
+        <div className="flex items-center gap-2 font-heading text-lg font-bold md:text-xl">
+          <Image src="/logos/main-logo.png" alt="" width={28} height={28} className="h-7 w-7 shrink-0 rounded-md" />
+          <span className="truncate">Monetigia</span>
+        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-1 md:gap-4">

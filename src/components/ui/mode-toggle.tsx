@@ -29,7 +29,7 @@ export function ModeToggle() {
       data-theme-toggle="true"
       onClick={handleToggle}
       aria-label="Toggle theme"
-      className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:h-10 md:w-[88px] md:rounded-full md:p-[3px] md:hover:bg-transparent ${
+      className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:h-10 md:w-[88px] md:rounded-full md:p-[3px] md:hover:bg-transparent ${
         isDark
           ? "md:border md:border-primary/60 md:bg-[hsl(222_47%_11%/0.9)] md:shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.15)]"
           : "md:border md:border-[#86efac] md:bg-[#dcfce7] md:shadow-[inset_0_0_0_1px_#bbf7d0]"
