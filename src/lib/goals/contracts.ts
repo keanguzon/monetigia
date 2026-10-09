@@ -35,7 +35,33 @@ export const TransactionDraftSchema = z.object({
   reservationMoves: z.array(ReservationMoveSchema),
 });
 export type TransactionDraft = z.infer<typeof TransactionDraftSchema>;
-export const FinancialCommandSchema = z.discriminatedUnion("kind", [
+export type EditTransactionDescriptionCommand = {
+  kind: "edit_transaction_description";
+  transactionId: string | null;
+  groupId: string | null;
+  description: string | null;
+  expectedDescription: string | null;
+};
+
+export const EditTransactionDescriptionCommandSchema: z.ZodType<EditTransactionDescriptionCommand> = z.object({
+  kind: z.literal("edit_transaction_description"),
+  transactionId: id.nullable(),
+  groupId: id.nullable(),
+  description: z.string().nullable(),
+  expectedDescription: z.string().nullable(),
+}).strict().superRefine((command, context) => {
+  if ((command.transactionId === null) === (command.groupId === null)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Choose exactly one transaction or installment group." });
+  }
+  for (const key of ["description", "expectedDescription"] as const) {
+    const value = command[key];
+    if (value !== null && Array.from(value).length > 500) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: "Descriptions must be 500 Unicode code points or fewer." });
+    }
+  }
+});
+
+export const FinancialCommandSchema = z.union([
   CorrectDebtRowsCommandSchema,
   AdoptOpeningDebtCommandSchema,
   z.object({ kind: z.enum(["reserve", "release"]), goalId: id, accountId: id, amount: PositiveMoneySchema }),
@@ -46,6 +72,7 @@ export const FinancialCommandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("delete_transaction"), transactionId: id }),
   z.object({ kind: z.literal("adopt_legacy"), goalId: id, status: GoalStatusSchema,
     reservations: z.array(z.object({ accountId: id, amount: PositiveMoneySchema })), spentTransactionIds: z.array(id) }),
+  EditTransactionDescriptionCommandSchema,
 ]);
 export type FinancialCommand = z.infer<typeof FinancialCommandSchema>;
 export const TransactionQuoteSchema = z.object({ fingerprint: z.string().min(1), actual: SignedMoneySchema,

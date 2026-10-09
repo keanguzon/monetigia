@@ -79,6 +79,18 @@ test("retry recovers a committed operation using the caller's same UUID", async 
   expect(second.replayed).toBe(true);
 });
 
+test("applies a transaction description command through the existing financial RPC without a quote", async () => {
+  const saved = { operationId: requestId, transactionIds: [accountId], replayed: false };
+  const command = { kind: "edit_transaction_description" as const, transactionId: accountId, groupId: null,
+    description: "Updated lunch", expectedDescription: "Lunch" };
+  rpcState.rpc.mockResolvedValue({ data: saved, error: null });
+
+  await expect(applyFinancialCommand(requestId, command)).resolves.toEqual(saved);
+  expect(rpcState.rpc).toHaveBeenCalledWith("goal_finance_apply", {
+    p_request_id: requestId, p_command: command, p_quote: null,
+  });
+});
+
 test("restores an archived goal through the owner-authorized RPC with the caller's request UUID", async () => {
   const saved = { operationId: requestId, transactionIds: [], replayed: false };
   rpcState.rpc.mockResolvedValue({ data: saved, error: null });

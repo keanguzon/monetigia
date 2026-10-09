@@ -168,7 +168,7 @@ export async function fetchGoalHistory(userId: string, goalId: string): Promise<
   const operationRows = [...sourceOperations, ...reversalOperations];
   const operationKinds = new Map<string, FinancialCommand["kind"] | null>(operationRows.map((row) => [
     row.id,
-    typeof row.command?.kind === "string" && ["reserve", "release", "reallocate", "close", "reopen", "archive", "transaction", "delete_transaction", "adopt_legacy"].includes(row.command.kind)
+    typeof row.command?.kind === "string" && ["reserve", "release", "reallocate", "close", "reopen", "archive", "transaction", "delete_transaction", "adopt_legacy", "edit_transaction_description"].includes(row.command.kind)
       ? row.command.kind as FinancialCommand["kind"]
       : null,
   ]));

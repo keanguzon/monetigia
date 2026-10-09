@@ -167,6 +167,7 @@ test('final chronological state dispatches corrections with only the existing pu
   const { queryAdmin } = await databaseRuntime();
   const [state] = await queryAdmin(`SELECT
     position('public.goal_debt_correction_apply' in pg_get_functiondef('public.goal_finance_apply(uuid,jsonb,jsonb)'::regprocedure))>0 AS dispatches_correction,
+    position('public.goal_transaction_description_apply' in pg_get_functiondef('public.goal_finance_apply(uuid,jsonb,jsonb)'::regprocedure))>0 AS dispatches_description,
     has_function_privilege('authenticated','public.goal_finance_apply(uuid,jsonb,jsonb)','EXECUTE') AS authenticated_dispatch,
     has_function_privilege('service_role','public.goal_finance_apply(uuid,jsonb,jsonb)','EXECUTE') AS service_dispatch,
     has_function_privilege('anon','public.goal_finance_apply(uuid,jsonb,jsonb)','EXECUTE') AS anonymous_dispatch,
@@ -174,11 +175,36 @@ test('final chronological state dispatches corrections with only the existing pu
     has_function_privilege('service_role','public.goal_debt_correction_apply(uuid,jsonb,jsonb)','EXECUTE') AS service_handler`);
 
   assert.deepEqual(state, {
-    dispatches_correction: true,
+    dispatches_correction: true, dispatches_description: true,
     authenticated_dispatch: true,
     service_dispatch: true,
     anonymous_dispatch: false,
     authenticated_handler: false,
     service_handler: false,
   });
+});
+
+test('final chronological runtime edits transaction text through the existing public dispatcher', async t => {
+  const f = await setup(t);
+  requireSuccess(await reserve(f));
+  const purchase = await spend(f);
+  const transactionId = purchase.result.transactionIds[0];
+  const before = await state(f);
+  const beforeEvents = await events(f);
+  const sourceBefore = requireSuccess(await f.admin.from('financial_operations').select('*')
+    .eq('id', purchase.result.operationId).single());
+  const request = randomUUID();
+  const saved = requireSuccess(await apply(f, {
+    kind: 'edit_transaction_description', transactionId, groupId: null,
+    description: 'Final migration text', expectedDescription: 'Final migration cash acceptance',
+  }, request));
+
+  assert.deepEqual(saved.transactionIds, [transactionId]);
+  assert.equal(saved.replayed, false);
+  assert.equal(requireSuccess(await f.admin.from('transactions').select('description').eq('id', transactionId).single()).description,
+    'Final migration text');
+  assert.deepEqual(await state(f), before);
+  assert.deepEqual(await events(f), beforeEvents);
+  const source = requireSuccess(await f.admin.from('financial_operations').select('*').eq('id', purchase.result.operationId).single());
+  assert.deepEqual([source.command, source.result], [sourceBefore.command, purchase.result]);
 });
