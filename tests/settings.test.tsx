@@ -524,7 +524,7 @@ describe("settings page", () => {
   test("explains PHP goal progress, reservations, credit exclusion, and online-only financial actions", async () => {
     renderSettings();
 
-    expect(await screen.findByText(/version 1\.0\.0/i)).toBeTruthy();
+    expect(await screen.findByText(/version 1\.1\.0/i)).toBeTruthy();
     expect(screen.getByText(/philippine peso.*php/i)).toBeTruthy();
     expect(screen.getByText(/actual.*recorded balance.*reserved.*assigned.*available.*actual minus reserved/i)).toBeTruthy();
     expect(screen.getByText(/active goals.*reserved.*spent/i)).toBeTruthy();

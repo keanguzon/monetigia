@@ -33,7 +33,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next-verification/types/**/*.ts",
-    ".superpowers/preview-next/types/**/*.ts"
+    ".superpowers/preview-next/types/**/*.ts",
+    ".superpowers/qa-current/next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
