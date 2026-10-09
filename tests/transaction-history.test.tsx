@@ -528,7 +528,7 @@ describe("installment history row", () => {
     expect(screen.getByText("Installment 1")).toBeTruthy();
     expect(screen.queryByText("Installment 1 of 2")).toBeNull();
     fireEvent.keyDown(list, { key: "Delete" });
-    expect(await screen.findByText(/2 installments · PHP 0\.30 remaining/)).toBeTruthy();
+    expect(await screen.findByText(/2 installments · ₱0\.30 remaining/)).toBeTruthy();
   });
 
   test("Escape exits selection only from the focused list and ignores IME and row controls", async () => {

@@ -41,6 +41,7 @@ export type EditTransactionDescriptionCommand = {
   groupId: string | null;
   description: string | null;
   expectedDescription: string | null;
+  metadata?: { date: string; categoryId: string | null; expectedDate: string | null; expectedCategoryId: string | null };
 };
 
 export const EditTransactionDescriptionCommandSchema: z.ZodType<EditTransactionDescriptionCommand> = z.object({
@@ -49,6 +50,7 @@ export const EditTransactionDescriptionCommandSchema: z.ZodType<EditTransactionD
   groupId: id.nullable(),
   description: z.string().nullable(),
   expectedDescription: z.string().nullable(),
+  metadata: z.object({ date, categoryId: id.nullable(), expectedDate: date.nullable(), expectedCategoryId: id.nullable() }).strict().optional(),
 }).strict().superRefine((command, context) => {
   if ((command.transactionId === null) === (command.groupId === null)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: "Choose exactly one transaction or installment group." });

@@ -855,7 +855,7 @@ export default function AccountsPage() {
           <p>A debt correction saved, but the debt views could not refresh. Refresh them before starting another correction.</p>
           <Button variant="outline" className="min-h-11" disabled={refreshingCorrectionViews} onClick={() => { void refreshCorrectionViews().catch(() => undefined); }}>{refreshingCorrectionViews ? "Refreshing views…" : "Refresh views"}</Button>
         </div>}
-        <DebtScheduleSection snapshot={debtSnapshotResult.snapshot} isLoading={debtSummaryLoading} error={debtSummaryError || exactDebtResult.error} onPayDebt={handlePayDebt} onCorrectionSaved={refreshCorrectionViews} canReviewLegacy={accountId => summaryAccounts.some(account => account.id === accountId && account.currency === "PHP" && account.is_active === true)} onReviewLegacy={accountId => {
+        <DebtScheduleSection wallets={summaryAccounts} snapshot={debtSnapshotResult.snapshot} isLoading={debtSummaryLoading} error={debtSummaryError || exactDebtResult.error} onPayDebt={handlePayDebt} onCorrectionSaved={refreshCorrectionViews} canReviewLegacy={accountId => summaryAccounts.some(account => account.id === accountId && account.currency === "PHP" && account.is_active === true)} onReviewLegacy={accountId => {
           const wallet = summaryAccounts.find(account => account.id === accountId);
           if (wallet?.currency === "PHP" && wallet.is_active === true) setReviewAccountId(accountId);
         }} />

@@ -109,7 +109,7 @@ export function Sidebar({
                   "transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   pendingHref === item.href && "bg-muted text-foreground",
                   isActive
-                    ? "bg-primary text-slate-950 font-semibold"
+                    ? "bg-primary text-primary-foreground font-semibold"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >

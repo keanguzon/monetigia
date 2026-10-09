@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, isValidUuid } from "@/lib/utils";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search, ListFilter } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search, ListFilter, Pencil, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -51,7 +51,7 @@ const TransactionDetailModal = dynamic(() => import("@/components/transactions/T
 type DebtState = { account: DebtAccountSnapshot; rows: DebtDueRow[] };
 type CorrectionTarget = { accountId: string; groupId: string; groupName: string; selectedIds: string[] };
 type CorrectionRoute = { kind: "ordinary" } | { kind: "blocked"; reason: string } | { kind: "correction"; target: CorrectionTarget };
-type DescriptionEditorSession = { key: number; target: { transactionId: string | null; groupId: string | null }; currentDescription: string | null };
+type DescriptionEditorSession = { key: number; target: { transactionId: string | null; groupId: string | null }; currentDescription: string | null; transaction?: TransactionHistoryRow };
 const knownNonCreditAccountTypes = new Set(["cash", "bank", "e_wallet", "investment"]);
 
 function historyAccountType(row: TransactionHistoryRow): string | null {
@@ -161,6 +161,12 @@ export default function TransactionsPage() {
     setSelectedTransaction(transaction);
   }
 
+  function requestOrdinaryEdit(transaction: TransactionHistoryRow) {
+    if (descriptionCommand.pendingCommand || descriptionCommand.isSaving || descriptionCommand.refreshError) return;
+    if (document.activeElement instanceof HTMLElement) descriptionEditorFocus.current = document.activeElement;
+    setDescriptionEditor({ key: ++descriptionEditorSequence.current, target: { transactionId: transaction.id, groupId: null }, currentDescription: transaction.description, transaction });
+  }
+
   function requestEditDescription(group: InstallmentHistoryEntry) {
     const ownerId = goals.userId;
     if (!ownerId) {
@@ -193,6 +199,7 @@ export default function TransactionsPage() {
           key: ++descriptionEditorSequence.current,
           target: { transactionId: null, groupId: latestGroup.groupId },
           currentDescription: latestGroup.baseDescription,
+          transaction: { ...latestGroup.children[0], amount: latestGroup.children.reduce((sum, row) => sum + Number(row.amount), 0) },
         });
       })
       .catch(() => {
@@ -527,17 +534,20 @@ export default function TransactionsPage() {
         <Button variant="outline" className="min-h-11" disabled={refreshingDebtViews} onClick={() => { void refreshCorrectionViews().catch(() => undefined); }}>{refreshingDebtViews ? "Refreshing views…" : "Refresh views"}</Button>
       </div>}
       {descriptionReviewError && <p data-no-press-motion="" role="alert" className="mb-4 text-sm text-amber-800 dark:text-amber-200">{descriptionReviewError}</p>}
-      {showPageDescriptionEditor && <div className="mb-4">
+      {showPageDescriptionEditor && <Dialog.Root open onOpenChange={open => { if (!open && !descriptionCommand.pendingCommand && !descriptionCommand.refreshError) closeDescriptionEditor(); }}>
+        <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" /><Dialog.Content data-mobile-nav-blocking="" aria-describedby={undefined} onEscapeKeyDown={event => { if (descriptionCommand.pendingCommand || descriptionCommand.refreshError) event.preventDefault(); }} onPointerDownOutside={event => { if (descriptionCommand.pendingCommand || descriptionCommand.refreshError) event.preventDefault(); }} className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-card p-5 text-card-foreground shadow-xl">
+        <div className="mb-4 flex items-center justify-between"><Dialog.Title className="text-xl font-semibold">Edit transaction</Dialog.Title><button type="button" aria-label="Close edit transaction" disabled={Boolean(descriptionCommand.pendingCommand || descriptionCommand.refreshError)} onClick={closeDescriptionEditor} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"><X className="h-5 w-5" /></button></div>
         <TransactionDescriptionEditor
           key={descriptionEditor?.key ?? `description-recovery-${goals.userId ?? "signed-out"}`}
           target={descriptionEditor?.target ?? { transactionId: null, groupId: null }}
           currentDescription={descriptionEditor?.currentDescription ?? null}
+          transaction={descriptionEditor?.transaction}
           userId={goals.userId}
           refreshHistory={refreshDescriptionHistory}
           onCancel={closeDescriptionEditor}
           onSaved={closeDescriptionEditor}
         />
-      </div>}
+      </Dialog.Content></Dialog.Portal></Dialog.Root>}
       {deletion.error && <div data-no-press-motion="" role="alert" className="mb-4 text-sm text-red-700 dark:text-red-300 space-y-2"><p>{deletion.error}</p>{deletion.pendingTransactionId && <button type="button" disabled={isDeleting} onClick={() => { void deletion.remove(deletion.pendingTransactionId!); }} className="min-h-11 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same deletion</button>}</div>}
       {deletion.savedTransactionId && <p role="status" className="mb-4 text-sm">{savedDeleteKind === "installment" ? deletion.refreshError ? "Installment deleted, but some views could not refresh. Refresh the page to check the remaining schedule." : "Installment deleted. Its siblings remain and the remaining scheduled amount has been updated." : deletion.refreshError ? "Transaction deleted. Some views could not refresh. Refresh the page; do not delete it again." : "Transaction deleted and wallet balances updated."}</p>}
       {loadError && <div data-no-press-motion="" role="alert" className="mb-4 flex flex-col items-start gap-2 text-sm text-red-700 dark:text-red-300"><p>{loadError}</p><button type="button" onClick={() => { void loadTransactions().catch(() => {}); }} className="min-h-11 rounded-lg border px-4 focus-visible:ring-2 focus-visible:ring-primary">Retry loading transactions</button></div>}
@@ -552,7 +562,7 @@ export default function TransactionsPage() {
             </div>
             <Button
               onClick={() => setIsModalOpen(true)}
-              className="h-11 text-sm font-semibold gap-1.5 w-full sm:w-auto text-slate-950"
+              className="h-11 text-sm font-semibold gap-1.5 w-full sm:w-auto text-primary-foreground"
             >
               <Plus className="h-4 w-4" />
               <span>Add Transaction</span>
@@ -569,7 +579,7 @@ export default function TransactionsPage() {
                     onClick={() => setFilter(type)}
                     className={`min-h-11 min-w-11 px-1 rounded-lg text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:px-3 lg:text-sm ${
                       filter === type
-                        ? "bg-primary text-slate-950"
+                        ? "bg-primary text-primary-foreground"
                         : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted"
                     }`}
                   >
@@ -700,11 +710,12 @@ export default function TransactionsPage() {
                       </button>
 
                       <div className="flex items-center justify-between gap-3 pl-[3.25rem] sm:justify-end sm:pl-0">
-                        <span className={`whitespace-nowrap font-mono text-sm font-bold tabular-nums tracking-tight sm:text-base ${
+                        <span className={`whitespace-nowrap text-sm font-semibold tabular-nums sm:text-base ${
                           transaction.type === "income" ? "text-green-700 dark:text-primary" : transaction.type === "expense" ? "text-red-700 dark:text-red-400" : "text-blue-700 dark:text-blue-400"
                         }`}>
                           {transaction.type === "income" ? "+" : transaction.type === "expense" ? "−" : ""}{formatCurrency(Number(transaction.amount))}
                         </span>
+                        <button type="button" aria-label={`Edit transaction for ${description}`} onClick={() => requestOrdinaryEdit(transaction)} className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
                         <button
                           type="button"
                           onClick={() => requestDelete(transaction)}
@@ -730,7 +741,7 @@ export default function TransactionsPage() {
                 <p className="text-xs text-muted-foreground mt-0.5 mb-4">
                   {searchQuery.trim() && nextOffset !== null ? "Search covers loaded history. Load more to include older records." : "Try adjusting your filter or search query."}
                 </p>
-                <Button size="sm" onClick={() => setIsModalOpen(true)} className="h-11 text-sm font-semibold gap-1.5 text-slate-950">
+                <Button size="sm" onClick={() => setIsModalOpen(true)} className="h-11 text-sm font-semibold gap-1.5 text-primary-foreground">
                   <Plus className="h-4 w-4" />
                   Add Transaction
                 </Button>

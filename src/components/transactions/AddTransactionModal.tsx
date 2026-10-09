@@ -655,7 +655,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
             )}
             {submit.unresolved && (
               <div className="px-4 pt-3 sm:px-6">
-                <button ref={retryButtonRef} type="button" disabled={isLoading} onClick={() => { void submit.confirm(); }} className="min-h-11 px-4 py-3 rounded-lg bg-primary text-slate-950 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary">Retry same transaction</button>
+                <button ref={retryButtonRef} type="button" disabled={isLoading} onClick={() => { void submit.confirm(); }} className="min-h-11 px-4 py-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary">Retry same transaction</button>
               </div>
             )}
             {submit.phase === "saved" && <p role="status" className="max-h-28 overflow-y-auto overscroll-contain break-words px-4 pt-3 text-sm sm:px-6">{submit.refreshError ? "Transaction saved. Some views could not refresh. Close and refresh the page; do not save it again." : "Transaction saved."}</p>}
@@ -673,7 +673,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
                 ref={submitButtonRef}
                 type="submit"
                 disabled={isLoading || isDataLoading || !!dataError || accounts.length === 0 || submit.phase === "review" || submit.phase === "saved"}
-                className="flex-1 min-h-11 px-4 py-3 text-sm rounded-lg bg-primary text-slate-950 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 motion-reduce:transition-none font-medium hover:shadow-lg"
+                className="flex-1 min-h-11 px-4 py-3 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 motion-reduce:transition-none font-medium hover:shadow-lg"
               >
                 {isLoading ? "Checking..." : isDataLoading ? "Loading accounts..." : submit.phase === "saved" ? "Saved" : "Add Transaction"}
               </button>

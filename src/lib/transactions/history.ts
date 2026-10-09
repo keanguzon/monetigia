@@ -6,6 +6,7 @@ export type TransactionHistoryRow = {
   id: string;
   user_id: string;
   account_id: string;
+  category_id?: string | null;
   type: "expense" | "income" | "transfer";
   amount: number | string;
   description: string | null;

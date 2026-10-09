@@ -15,7 +15,7 @@ const ui = vi.hoisted(() => ({
 vi.mock("@/hooks/use-transaction-description", () => ({
   useTransactionDescription: () => ({ ...ui.command, submit: ui.submit, retry: ui.retry, reset: ui.reset, refresh: ui.refresh }),
 }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({}) }));
+vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ from: () => ({ select: async () => ({ data: [{ id: "category-1", name: "Shopping", type: "expense", user_id: "owner-1", is_default: false }], error: null }) }) }) }));
 vi.mock("@/lib/transactions/history", () => ({
   groupTransactions: vi.fn(() => []),
   loadHistoryGroup: ui.loadGroup,
@@ -35,6 +35,35 @@ beforeEach(() => {
 });
 
 describe("transaction description editor", () => {
+  test("unconfirmed metadata survives recovery without the original transaction prop", async () => {
+    const user = userEvent.setup();
+    const row = { id: "transaction-1", user_id: "owner-1", account_id: "wallet-1", type: "expense" as const, amount: "125.00", description: "Old", date: "2026-10-01", created_at: "2026-10-01", category_id: null, account: { name: "Cash" } };
+    ui.loadTransaction.mockResolvedValue(row);
+    ui.command = { ...idleCommand(), unresolved: true, pendingCommand: { kind: "edit_transaction_description", transactionId: row.id, groupId: null, description: "Draft", expectedDescription: "Old", metadata: { date: "2026-10-09", categoryId: "category-1", expectedDate: row.date, expectedCategoryId: null } } };
+    const props = { target: { transactionId: null, groupId: null }, currentDescription: null, userId: "owner-1", refreshHistory: ui.refresh, onCancel: vi.fn(), onSaved: vi.fn() };
+    const view = render(<TransactionDescriptionEditor {...props} />);
+    await waitFor(() => expect(ui.loadTransaction).toHaveBeenCalled());
+    ui.command = { ...idleCommand(), errorCode: "STALE_QUOTE", error: "Changed" };
+    view.rerender(<TransactionDescriptionEditor {...props} />);
+    await waitFor(() => expect((screen.getByRole("button", { name: "Save changes" }) as HTMLButtonElement).disabled).toBe(false));
+    expect((screen.getByLabelText("Date") as HTMLInputElement).value).toBe("2026-10-09");
+    await user.click(screen.getByRole("button", { name: "Review latest description" }));
+    await waitFor(() => expect(screen.getByText(/Latest saved date: 2026-10-01/)).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(ui.submit.mock.calls[0][0].metadata).toEqual({ date: "2026-10-09", categoryId: "category-1", expectedDate: "2026-10-01", expectedCategoryId: null });
+  });
+  test("metadata editor locks money and wallet fields while submitting date and category", async () => {
+    const user = userEvent.setup();
+    render(<TransactionDescriptionEditor target={{ transactionId: "transaction-1", groupId: null }} currentDescription="Old" userId="owner-1" refreshHistory={ui.refresh} onCancel={vi.fn()} onSaved={vi.fn()} transaction={{ id: "transaction-1", user_id: "owner-1", account_id: "wallet-1", type: "expense", amount: "125.00", description: "Old", date: "2026-10-01", created_at: "2026-10-01", category_id: null, account: { name: "Cash" } }} />);
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Transaction Type") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Account") as HTMLInputElement).disabled).toBe(true);
+    await waitFor(() => expect((screen.getByRole("button", { name: "Save changes" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-10-09" } });
+    await user.selectOptions(screen.getByLabelText("Category"), "category-1");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(ui.submit).toHaveBeenCalledWith({ kind: "edit_transaction_description", transactionId: "transaction-1", groupId: null, description: "Old", expectedDescription: "Old", metadata: { date: "2026-10-09", categoryId: "category-1", expectedDate: "2026-10-01", expectedCategoryId: null } });
+  });
   test("preserves multiline input and accepts 500 Unicode code points without intercepting native selection keys", async () => {
     const user = userEvent.setup();
     render(<TransactionDescriptionEditor

@@ -189,7 +189,7 @@ export default function AddAccountForm() {
 
       </fieldset>
       <div className="flex gap-2">
-        {!creation.unresolved && !creation.saved && <Button type="submit" className="min-h-11 text-green-950" disabled={isLoading || frozen}>{isLoading || creation.isSaving ? "Saving..." : "Create Wallet"}</Button>}
+        {!creation.unresolved && !creation.saved && <Button type="submit" className="min-h-11 text-primary-foreground" disabled={isLoading || frozen}>{isLoading || creation.isSaving ? "Saving..." : "Create Wallet"}</Button>}
         <Button type="button" className="min-h-11" variant="ghost" onClick={() => { window.history.back(); }}>Cancel</Button>
       </div>
     </form>

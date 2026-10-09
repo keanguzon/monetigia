@@ -374,7 +374,7 @@ export default function SettingsPage() {
                 <Button
                   type="submit"
                   disabled={profileActionBusy}
-                  className="h-11 min-w-32 bg-primary text-slate-950 hover:bg-primary/90 focus-visible:ring-primary"
+                  className="h-11 min-w-32 bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary"
                 >
                   {savingProfile ? "Saving…" : "Save profile"}
                 </Button>
@@ -455,7 +455,7 @@ export default function SettingsPage() {
                     type="button"
                     disabled={install.promptPending}
                     onClick={() => void install.requestInstall()}
-                    className="h-11 min-w-36 bg-primary text-slate-950 hover:bg-primary/90 focus-visible:ring-primary"
+                    className="h-11 min-w-36 bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary"
                   >
                     {install.promptPending ? "Opening install prompt…" : "Install Monetigia"}
                   </Button>

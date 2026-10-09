@@ -46,7 +46,7 @@ export function GoalReleaseNotice({ quote, draft, snapshot, disabled, errorMessa
       {disabled && <p role="status" className="mb-3 text-sm text-muted-foreground">Checking or saving this transaction…</p>}
     <div className="flex flex-col sm:flex-row gap-3">
       <button ref={keepRef} type="button" disabled={disabled} onClick={onCancel} className="min-h-11 flex-1 px-3 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Keep reservations</button>
-      <button type="button" disabled={disabled || custom} onClick={onConfirm} className="min-h-11 flex-1 px-3 rounded-lg bg-primary text-slate-950 hover:bg-primary/90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">Release funds and save</button>
+      <button type="button" disabled={disabled || custom} onClick={onConfirm} className="min-h-11 flex-1 px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">Release funds and save</button>
     </div>
     </div>
   </>;

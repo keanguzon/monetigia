@@ -133,30 +133,37 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {accountOptions.filter(option => category === "savings" ? option.isSavings : category === "paylater" ? option.type === "credit_card" : !option.isSavings && option.type !== "credit_card").map(option => {
                     const disabled = !!option.icon && existingAccounts.some(account => account.icon === option.icon && account.is_savings === option.isSavings);
-                    return <button key={option.name} type="button" aria-label={option.name === "Cash on Hand" ? "Cash" : option.name} disabled={disabled || frozen || loading} onClick={() => { setSelected(option); setCustom(null); }} className={`flex min-h-11 flex-col items-center rounded-xl border-2 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${disabled ? 'cursor-not-allowed opacity-40' : selected === option ? 'border-primary' : 'border-gray-200 dark:border-slate-700 hover:border-primary/50'}`}>
+                    const expanded = selected === option && option.type === "credit_card";
+                    return <div key={option.name} className={expanded ? "col-span-full min-w-0 rounded-xl border-2 border-primary" : "min-w-0"}>
+                    <button type="button" aria-label={option.name === "Cash on Hand" ? "Cash" : option.name} disabled={disabled || frozen || loading} onClick={() => { setSelected(option); setCustom(null); }} className={`flex w-full min-h-11 flex-col items-center rounded-xl border-2 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${disabled ? 'cursor-not-allowed opacity-40' : expanded ? 'border-transparent' : selected === option ? 'border-primary' : 'border-gray-200 dark:border-slate-700 hover:border-primary/50'}`}>
                       <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg border bg-white dark:bg-slate-900 dark:border-slate-700">{option.icon ? <Image src={`/logos/${option.icon}`} alt="" width={40} height={40} className="h-10 w-10 object-contain" /> : <span className="text-xl" aria-hidden="true">₱</span>}</div>
                       <span className="text-xs font-medium leading-tight">{option.name === "Cash on Hand" ? "Cash" : option.name}</span>
-                    </button>;
+                    </button>
+                    {expanded && <div className="border-t border-primary/20 p-4"><ExistingDebtFields value={debts} onChange={setDebts} disabled={frozen || loading} errors={errors} /></div>}
+                    </div>;
                   })}
-                  <button type="button" disabled={frozen || loading} onClick={() => { setCustom(category); setSelected(null); }} className={`flex flex-col items-center rounded-xl border-2 border-dashed p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${custom === category ? 'border-primary' : 'border-gray-300 dark:border-slate-600'}`}><span className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10"><Plus className="h-6 w-6 text-primary" /></span><span className="text-sm font-medium">Custom</span></button>
-                </div>
-              </div>)}
-              {custom && <div className="space-y-4 rounded-xl border-2 border-primary/20 bg-slate-50 p-4 dark:bg-slate-800/50">
+                  <div className={custom === category ? "col-span-full min-w-0" : "min-w-0"}>
+                  <button type="button" disabled={frozen || loading} onClick={() => { setCustom(category); setSelected(null); }} className={`flex w-full flex-col items-center rounded-xl border-2 border-dashed p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${custom === category ? 'border-primary' : 'border-gray-300 dark:border-slate-600'}`}><span className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10"><Plus className="h-6 w-6 text-primary" /></span><span className="text-sm font-medium">Custom</span></button>
+{custom === category && <div className="space-y-4 rounded-xl border-2 border-primary/20 bg-slate-50 p-4 dark:bg-slate-800/50">
                 <h4 className="text-sm font-semibold">Create Custom {custom === "wallet" ? "Wallet" : custom === "savings" ? "Savings Account" : "PayLater Account"}</h4>
                 <div><label htmlFor="customName" className="mb-2 block text-sm font-medium">Account Name *</label><input id="customName" value={name} onChange={e => setName(e.target.value)} className={inputClass} required maxLength={60} /></div>
                 <div><label htmlFor="customColor" className="mb-2 block text-sm font-medium">Color *</label><div className="flex min-w-0 gap-3"><input id="customColor" type="color" value={color} onChange={e => setColor(e.target.value)} className="h-11 w-16 shrink-0" /><input aria-label="Color hex value" value={color} onChange={e => setColor(e.target.value)} className={inputClass} pattern="^#[0-9A-Fa-f]{6}$" /></div></div>
                 <div><label htmlFor="customType" className="mb-2 block text-sm font-medium">Account Type *</label><select id="customType" value={custom === "paylater" ? "credit_card" : type} onChange={e => setType(e.target.value as typeof type)} className={inputClass}>{custom === "paylater" ? <option value="credit_card">Credit Card / PayLater</option> : <>{custom === "wallet" && <option value="cash">Cash</option>}<option value="bank">{custom === "savings" ? "Bank Savings" : "Bank Account"}</option><option value="e_wallet">{custom === "savings" ? "E-Wallet Savings" : "E-Wallet"}</option></>}</select></div>
+                {custom === "paylater" && <ExistingDebtFields value={debts} onChange={setDebts} disabled={frozen || loading} errors={errors} />}
               </div>}
+                  </div>
+                </div>
+              </div>)}
               {(selected || custom) && <>
                 {!credit && <div><label className="flex min-h-11 items-center gap-2 text-sm font-medium"><input type="checkbox" checked={includeNetworth} onChange={e => setIncludeNetworth(e.target.checked)} />Include in Total Net Worth</label><p className="text-xs text-muted-foreground">Uncheck if you don&apos;t want this account counted in your total net worth</p></div>}
-                {credit ? <ExistingDebtFields value={debts} onChange={setDebts} disabled={frozen || loading} errors={errors} /> : <div><label htmlFor="balance" className="mb-2 block text-sm font-medium">Initial Balance</label><input id="balance" value={balance} onChange={e => setBalance(e.target.value)} type="text" inputMode="decimal" placeholder="0.00" className={inputClass} required /></div>}
+                {!credit && <div><label htmlFor="balance" className="mb-2 block text-sm font-medium">Initial Balance</label><input id="balance" value={balance} onChange={e => setBalance(e.target.value)} type="text" inputMode="decimal" placeholder="0.00" className={inputClass} required /></div>}
                 {savings && <div><label htmlFor="interestRate" className="mb-2 block text-sm font-medium">Interest Rate (% per year)</label><input id="interestRate" value={interest} onChange={e => setInterest(e.target.value)} inputMode="decimal" className={inputClass} placeholder="0.00" /></div>}
               </>}
             </fieldset>
           </div>
           <div className="flex shrink-0 gap-3 border-t p-4 sm:px-6 dark:border-slate-700" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
             <button type="button" onClick={onClose} className={`${actionClass} flex-1`}>Cancel</button>
-            {!creation.unresolved && !creation.saved && <button type="submit" disabled={(!selected && (!custom || !name.trim())) || loading || frozen} className={`${actionClass} flex-1 border-primary bg-primary text-green-950 hover:bg-primary/90`}>{loading || creation.isSaving ? "Saving..." : "Create Wallet"}</button>}
+            {!creation.unresolved && !creation.saved && <button type="submit" disabled={(!selected && (!custom || !name.trim())) || loading || frozen} className={`${actionClass} flex-1 border-primary bg-primary text-primary-foreground hover:bg-primary/90`}>{loading || creation.isSaving ? "Saving..." : "Create Wallet"}</button>}
           </div>
         </form>
       </Dialog.Content>

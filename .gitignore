@@ -73,6 +73,7 @@ supabase/*
 !supabase/schema.sql
 !supabase/migrations/
 supabase/migrations/*
+!supabase/migrations/202610090001_transaction_metadata.sql
 !supabase/migrations/202610060001_runtime_baseline.sql
 !supabase/migrations/202610060002_goal_allocation_ledger.sql
 !supabase/migrations/202610060003_goal_reservation_operations.sql

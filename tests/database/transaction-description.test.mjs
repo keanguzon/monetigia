@@ -6,6 +6,40 @@ import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLa
 before(installLatestMigrations);
 after(installLatestMigrations);
 
+test('metadata edits preserve finance, reject stale/category ownership, and replay once', async t => {
+  const fixture = await setup(t);
+  const purchase = await transact(fixture, fixture.owner.account.id);
+  const id = purchase.transactionIds[0];
+  const category = requireSuccess(await fixture.admin.from('categories').insert({ user_id: fixture.owner.id, name: 'Metadata QA', type: 'expense' }).select().single());
+  const before = requireSuccess(await fixture.owner.client.rpc('goal_finance_snapshot'));
+  const command = { ...edit({ transactionId: id }, 'Updated metadata', 'Original purchase'), metadata: { date: '2026-10-09', categoryId: category.id, expectedDate: '2026-10-01', expectedCategoryId: null } };
+  const request = randomUUID();
+  requireSuccess(await apply(fixture, command, request));
+  assert.equal(requireSuccess(await apply(fixture, command, request)).replayed, true);
+  const row = requireSuccess(await readTransaction(fixture, id));
+  assert.equal(row.date, '2026-10-09'); assert.equal(row.category_id, category.id);
+  assert.equal(row.amount, 90); assert.equal(row.type, 'expense'); assert.equal(row.account_id, fixture.owner.account.id);
+  assert.deepEqual(requireSuccess(await fixture.owner.client.rpc('goal_finance_snapshot')), before);
+  assert.equal((await apply(fixture, command)).error?.message, 'STALE_QUOTE');
+  const foreign = requireSuccess(await fixture.admin.from('categories').insert({ user_id: fixture.other.id, name: 'Other owner', type: 'expense' }).select().single());
+  const invalid = { ...command, expectedDescription: 'Updated metadata', metadata: { ...command.metadata, expectedDate: '2026-10-09', expectedCategoryId: category.id, categoryId: foreign.id } };
+  assert.equal((await apply(fixture, invalid)).error?.message, 'NOT_ALLOWED');
+  assert.equal((await apply(fixture, { ...invalid, amount: '1.00' })).error?.message, 'INVALID_STATE');
+});
+
+test('group metadata edits purchase date without moving installment due dates', async t => {
+  const fixture = await setup(t);
+  const credit = requireSuccess(await creditAccount(fixture));
+  const purchase = await transact(fixture, credit.id, { installments: { count: 3, firstDueDate: '2026-11-01' } });
+  const before = requireSuccess(await fixture.admin.from('transactions').select('*').in('id', purchase.transactionIds).order('id'));
+  const command = { ...edit({ groupId: purchase.operationId }, 'Group metadata', 'Original purchase'), metadata: { date: '2026-10-09', categoryId: null, expectedDate: '2026-10-01', expectedCategoryId: null } };
+  requireSuccess(await apply(fixture, command));
+  const after = requireSuccess(await fixture.admin.from('transactions').select('*').in('id', purchase.transactionIds).order('id'));
+  assert.deepEqual(after.map(row => [row.id,row.date,row.amount,row.account_id]), before.map(row => [row.id,row.date,row.amount,row.account_id]));
+  assert.ok(after.every(row => row.purchase_date === '2026-10-09'));
+  requireSuccess(await fixture.owner.client.rpc('debt_snapshot'));
+});
+
 async function setup(t) {
   const fixture = await createFinanceFixture();
   t.after(() => cleanupFinanceFixture(fixture));

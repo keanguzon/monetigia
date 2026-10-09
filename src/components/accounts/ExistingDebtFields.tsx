@@ -7,6 +7,7 @@ import type { Money } from "@/lib/money/contracts";
 import { MAX_OPENING_DEBT_AMOUNT, MAX_OPENING_DEBT_DUE_ROWS, MAX_OPENING_DEBT_ITEMS, OpeningDebtDraftSchema, type OpeningDebtDraft } from "@/lib/debt/contracts";
 import { buildDebtSchedule, parseRemainingMonths } from "@/lib/debt/schedule";
 import { fromMinorUnits, parseMoney, toMinorUnits } from "@/lib/goals/summary";
+import { formatCurrency } from "@/lib/utils";
 
 export type ExistingDebtFieldItem = {
   clientId: string; name: string; mode: "single" | "installments";
@@ -50,7 +51,7 @@ export function validateExistingDebtFields(value: ExistingDebtFieldsValue):
     }
   }
   if (rowCount > MAX_OPENING_DEBT_DUE_ROWS) errors.form = "Existing debts cannot exceed 6000 due rows in total.";
-  if (totalCentavos > BigInt(toMinorUnits(MAX_OPENING_DEBT_AMOUNT))) errors.form = "Total existing debt cannot exceed PHP 9999999999999.99.";
+  if (totalCentavos > BigInt(toMinorUnits(MAX_OPENING_DEBT_AMOUNT))) errors.form = `Total existing debt cannot exceed ${formatCurrency(Number(MAX_OPENING_DEBT_AMOUNT))}.`;
   if (Object.keys(errors).length) return { success: false, errors };
   return { success: true, openingDebts, total: fromMinorUnits(Number(totalCentavos)) };
 }
@@ -63,12 +64,12 @@ function DebtPreview({ draft, disabled, id }: { draft: OpeningDebtDraft; disable
   const [expanded, setExpanded] = useState(false);
   const schedule = useMemo(() => buildDebtSchedule(draft.amount, draft.firstDueDate, draft.count), [draft.amount, draft.firstDueDate, draft.count]);
   return <div className="space-y-2 text-sm">
-    <p className="font-medium">PHP {draft.amount} · {draft.count} {draft.count === 1 ? "due row" : "due rows"}</p>
+    <p className="text-sm font-semibold tabular-nums sm:text-base">{formatCurrency(Number(draft.amount))} · {draft.count} {draft.count === 1 ? "due row" : "due rows"}</p>
     <div id={id} className={expanded ? "max-h-72 overflow-y-auto rounded-md border border-border" : ""}>
       <table className="w-full text-left text-xs sm:text-sm">
         <caption className="sr-only">Remaining schedule for {draft.name}</caption>
         <thead><tr><th scope="col" className="px-2 py-2">Row</th><th scope="col" className="px-2 py-2">Due date</th><th scope="col" className="px-2 py-2 text-right">Amount</th></tr></thead>
-        <tbody>{(expanded ? schedule : schedule.slice(0, 3)).map(row => <tr key={row.ordinal}><td className="px-2 py-2">{row.ordinal}</td><td className="whitespace-nowrap px-2 py-2">{row.dueDate}</td><td className="break-all px-2 py-2 text-right tabular-nums">PHP {row.amount}</td></tr>)}</tbody>
+        <tbody>{(expanded ? schedule : schedule.slice(0, 3)).map(row => <tr key={row.ordinal}><td className="px-2 py-2">{row.ordinal}</td><td className="whitespace-nowrap px-2 py-2">{row.dueDate}</td><td className="break-all px-2 py-2 text-right tabular-nums">{formatCurrency(Number(row.amount))}</td></tr>)}</tbody>
       </table>
     </div>
     {draft.count > 3 && <Button type="button" variant="outline" disabled={disabled} className="min-h-11 whitespace-normal" aria-expanded={expanded} aria-controls={id} onClick={() => { if (!disabled) setExpanded(current => !current); }}>{expanded ? "Hide full schedule" : "View full schedule"}</Button>}
@@ -112,7 +113,7 @@ export function ExistingDebtFields({ value, onChange, disabled = false, errors =
       })}</div>
       <Button type="button" variant="outline" disabled={disabled || Boolean(capReason)} aria-describedby={capReason ? `${prefix}-cap` : undefined} className="min-h-11 max-w-full whitespace-normal" onClick={() => { if (!capReason) change({ ...value, items: [...value.items, emptyDebt()] }); }}>Add another existing debt</Button>
       {capReason && <p id={`${prefix}-cap`} className="text-sm text-muted-foreground">{capReason}</p>}
-      {validated.success && <p className="break-words text-sm font-semibold tabular-nums">Total existing debt: PHP {validated.total}</p>}
+      {validated.success && <p className="break-words text-sm font-semibold tabular-nums sm:text-base">Total existing debt: {formatCurrency(Number(validated.total))}</p>}
     </>}
   </fieldset>;
 }

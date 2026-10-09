@@ -70,10 +70,10 @@ describe("shared existing debt fields", () => {
   test("previews approved remainder and month-end dates", () => {
     render(<Harness initial={{ enabled: true, items: [debt()] }} />);
     const table = screen.getByRole("table");
-    expect(within(table).getAllByText("PHP 333.33")).toHaveLength(2);
-    expect(within(table).getByText("PHP 333.34")).toBeTruthy();
+    expect(within(table).getAllByText("₱333.33")).toHaveLength(2);
+    expect(within(table).getByText("₱333.34")).toBeTruthy();
     expect(within(table).getByText("2026-03-31")).toBeTruthy();
-    expect(screen.getByText("Total existing debt: PHP 1000.00")).toBeTruthy();
+    expect(screen.getByText("Total existing debt: ₱1,000.00")).toBeTruthy();
   });
   test("renders only three rows until full 600-row schedule is requested", () => {
     render(<Harness initial={{ enabled: true, items: [debt({ countText: "600", amountText: "6" })] }} />);

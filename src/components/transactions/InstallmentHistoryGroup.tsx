@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
-import { ChevronDown, ArrowUpRight, Trash2 } from "lucide-react";
+import { ChevronDown, ArrowUpRight, Trash2, Pencil } from "lucide-react";
 import { InstallmentSelection } from "@/components/transactions/InstallmentSelection";
 import { DebtCorrectionDialog } from "@/components/transactions/DebtCorrectionDialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -49,7 +49,7 @@ function exactRemaining(rows: DebtDueRow[]): string {
   const values = rows.map(row => /^\d+\.\d{2}$/.test(row.remainingAmount) ? BigInt(row.remainingAmount.replace(".", "")) : null);
   if (values.some(value => value === null)) return "Unavailable";
   const total = (values as bigint[]).reduce((sum, value) => sum + value, BigInt(0));
-  return `PHP ${(total / BigInt(100)).toString()}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
+  return `${(total / BigInt(100)).toString()}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
 }
 
 export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, onSelectTransaction, onRequestDelete, onRequestEditDescription, onSaved }: Props) {
@@ -132,7 +132,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
 
   return (
     <div className="group">
-      <div className="flex flex-col sm:flex-row sm:items-stretch">
+      <div className="relative flex items-stretch">
         <button
           type="button"
           aria-label={`${expanded ? "Hide" : "Show"} payment schedule for ${groupLabel}`}
@@ -173,25 +173,25 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
             </div>
             <div className="min-w-0 flex-1 text-right sm:flex-initial">
               <p className="text-[11px] font-medium text-muted-foreground">Remaining scheduled amount</p>
-              <p className="break-words text-sm font-bold tabular-nums tracking-tight text-red-700 dark:text-red-400 sm:text-base">
-                {groupRemaining ?? (protectedExpenseHistory ? "Unavailable" : group.remainingAmount === null ? "Unavailable" : formatCurrency(group.remainingAmount))}
+              <p className="break-words text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
+                {groupRemaining === null ? (protectedExpenseHistory ? "Unavailable" : group.remainingAmount === null ? "Unavailable" : formatCurrency(group.remainingAmount)) : groupRemaining === "Unavailable" ? groupRemaining : formatCurrency(Number(groupRemaining))}
               </p>
             </div>
           </div>
-          <span className="flex min-h-11 min-w-11 shrink-0 items-center justify-center" aria-hidden="true">
+          <span className="flex min-h-11 w-24 shrink-0 items-center justify-end" aria-hidden="true">
             <ChevronDown className={`h-4 w-4 text-primary ${expanded ? "rotate-180" : ""}`} />
           </span>
         </div>
         </button>
-        {onRequestEditDescription && <div className="flex items-center justify-end px-3 pb-3 sm:px-4 sm:py-2">
+        {onRequestEditDescription && <div className="absolute right-14 top-1/2 -translate-y-1/2">
           <button
             type="button"
             aria-label={`Edit description for ${groupLabel}`}
             disabled={group.descriptionState === "needs_review"}
             onClick={() => onRequestEditDescription(group)}
-            className="min-h-11 rounded-md border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            Edit description
+            <Pencil className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>}
       </div>
@@ -249,7 +249,6 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
                         checked={checked}
                         disabled={!eligible}
                         onClick={event => {
-                          event.preventDefault();
                           if (debtRow) setSelection(current => toggleDebtSelection(current, eligibleIds, debtRow.id, event.shiftKey));
                         }}
                         onChange={() => undefined}
@@ -263,12 +262,12 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
                       >
                         <span className="block break-words text-sm font-medium text-foreground">{rowLabel}</span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">Due {formatDate(child.date, "long")}</span>
-                        {debtRow && <span className="mt-0.5 block break-words text-xs text-muted-foreground">Remaining PHP {debtRow.remainingAmount} · Paid PHP {debtRow.paidAmount} · Corrected PHP {debtRow.correctedAmount}</span>}
+                        {debtRow && <span className="mt-0.5 block break-words text-xs text-muted-foreground">Remaining {formatCurrency(Number(debtRow.remainingAmount))} · Paid {formatCurrency(Number(debtRow.paidAmount))} · Corrected {formatCurrency(Number(debtRow.correctedAmount))}</span>}
                         {reason && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{reason}</span>}
                       </button>
                     </div>
                     <div className="flex items-center justify-between gap-3 pl-2 sm:justify-end sm:pl-0">
-                      <span className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-red-700 dark:text-red-400">
+                      <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
                         −{formatCurrency(Number(child.amount))}
                       </span>
                       <button

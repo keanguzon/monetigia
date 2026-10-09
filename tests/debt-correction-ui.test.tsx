@@ -85,7 +85,7 @@ function mount(props: Partial<React.ComponentProps<typeof DebtCorrectionDialog>>
 }
 
 async function waitForReview() {
-  return screen.findByText(/2 installments · PHP 0\.30 remaining/);
+  return screen.findByText(/2 installments · ₱0\.30 remaining/);
 }
 
 beforeEach(() => {
@@ -183,7 +183,7 @@ test("the 600-row boundary is submitted whole and a larger selection is rejected
   }));
   state.snapshot = { accounts: [{ ...balancedSnapshot().accounts[0], totalOutstanding: "600.00" }], rows };
   mount({ selectedIds: rows.map((row) => row.id) });
-  expect(await screen.findByText(/600 installments · PHP 600\.00 remaining/)).toBeTruthy();
+  expect(await screen.findByText(/600 installments · ₱600\.00 remaining/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Confirm correction" }));
   await waitFor(() => expect(commandCalls()).toHaveLength(1));
   expect((commandCalls()[0].p_command as { rowIds: string[] }).rowIds).toHaveLength(600);
@@ -241,7 +241,7 @@ test("an unknown correction keeps the same request after close and remount even 
   mount({ selectedIds: [] });
   expect(await screen.findByText(/unconfirmed.*original correction/i)).toBeTruthy();
   expect(await screen.findByText(/2 installments in the saved request/i)).toBeTruthy();
-  expect(screen.queryByText(/PHP 0\.30 remaining/)).toBeNull();
+  expect(screen.queryByText(/₱0\.30 remaining/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Retry same correction" }));
   await waitFor(() => expect(commandCalls()).toHaveLength(2));
   expect(commandCalls()[1].p_request_id).toBe(original.p_request_id);

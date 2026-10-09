@@ -205,9 +205,9 @@ test.each([false, true])("newer debt refresh survives an older response (old fai
   fixture.debtSnapshot = { ...makeDebtSnapshot(), rows: [{ ...makeDebtSnapshot().rows[1], originalAmount: "300.00", paidAmount: "0.00", remainingAmount: "300.00" }] };
   fireEvent.click(screen.getByRole("button", { name: "Refresh finance" }));
   await waitFor(() => expect(fixture.debtReads).toBe(2));
-  await screen.findAllByText("PHP 300.00");
+  await screen.findAllByText("₱300.00");
   await act(async () => resolveOld({ data: makeDebtSnapshot(), error: oldFailure ? new Error("stale debt failure") : null }));
-  expect(screen.queryAllByText("PHP 300.00").length).toBeGreaterThan(0);
+  expect(screen.queryAllByText("₱300.00").length).toBeGreaterThan(0);
   expect(screen.queryByText("Unavailable")).toBeNull();
   expect(screen.getByText("Fresh wallet")).not.toBeNull();
   expect(fixture.accountWrites).toHaveLength(0);

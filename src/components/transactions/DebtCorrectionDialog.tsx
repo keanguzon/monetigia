@@ -7,6 +7,7 @@ import { useGoals } from "@/hooks/use-goals";
 import { useDebt, useDebtCommand } from "@/hooks/use-debt";
 import type { DebtDueRow, DebtSnapshot } from "@/lib/debt/contracts";
 import { toMinorUnits } from "@/lib/goals/summary";
+import { formatCurrency } from "@/lib/utils";
 
 type DebtCorrectionDialogProps = {
   open: boolean;
@@ -293,8 +294,8 @@ export function DebtCorrectionDialog({ open, onClose, accountId, groupId, groupN
               <p role="alert" className="text-sm">The previous correction was rejected. Review the current debt before confirming again.</p>
             )}
             {sameOwner && session?.review && !stale && !session.needsReview && !pending && !localSaved && !savedNeedsRecovery && (
-              <p className="break-words text-sm tabular-nums">
-                {session.review.rowIds.length} installments · PHP {totalLabel(session.review.remainingCents)} remaining
+              <p className="break-words text-sm font-semibold tabular-nums sm:text-base">
+                {session.review.rowIds.length} installments · {formatCurrency(Number(totalLabel(session.review.remainingCents)))} remaining
               </p>
             )}
             {sameOwner && write.error && !write.unresolved && !localSaved && <p role="alert" className="text-sm">{write.error}</p>}

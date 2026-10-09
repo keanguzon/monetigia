@@ -20,13 +20,15 @@ test("snapshot schedule displays remaining opening debt and reviews real wallet"
   render(<DebtScheduleSection snapshot={snapshot} isLoading={false} error={null} onPayDebt={pay} onReviewLegacy={review} />);
   expect(screen.getAllByText("Remaining laptop").length).toBe(2);
   expect(screen.getByText(/Existing debt/)).toBeTruthy();
-  expect(screen.getAllByText(/1600.00/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/₱1,600\.00/).length).toBeGreaterThan(0);
   fireEvent.click(screen.getByRole("button", { name: /Pay debt/ })); expect(pay).toHaveBeenCalledWith("actual-wallet");
   fireEvent.click(screen.getByRole("button", { name: /Review due dates/ })); expect(review).toHaveBeenCalledWith("actual-wallet");
 });
-test("loading and errors hide stale payable figures", () => {
-  const { rerender } = render(<DebtScheduleSection snapshot={snapshot} isLoading error={null} onReviewLegacy={() => {}} />);
-  expect(screen.queryByText("Remaining laptop")).toBeNull();
+test("cached refresh preserves history but disables payments; errors hide stale figures", () => {
+  const { rerender } = render(<DebtScheduleSection snapshot={snapshot} isLoading error={null} onPayDebt={() => {}} onReviewLegacy={() => {}} />);
+  expect(screen.getAllByText("Remaining laptop")).toHaveLength(2);
+  expect((screen.getByRole("button", { name: "Pay debt" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Review due dates" }) as HTMLButtonElement).disabled).toBe(true);
   rerender(<DebtScheduleSection snapshot={snapshot} isLoading={false} error={new Error()} onReviewLegacy={() => {}} />);
   expect(screen.getByRole("alert")).toBeTruthy(); expect(screen.queryByRole("button", { name: /Pay debt/ })).toBeNull();
 });
@@ -54,8 +56,8 @@ test("complete debt ledger keeps paid values and snapshot ordinal visible", asyn
   const header = screen.getByRole("button", { name: /show debt history for paid laptop/i });
   fireEvent.click(header);
   expect(screen.getByText("Installment 1")).toBeTruthy();
-  expect(screen.getAllByText("Remaining PHP 0.00").length).toBe(2);
-  expect(screen.getByText("Paid PHP 1500.00 · Corrected PHP 0.00")).toBeTruthy();
+  expect(screen.getAllByText("Remaining ₱0.00").length).toBe(2);
+  expect(screen.getByText("Paid ₱1,500.00 · Corrected ₱0.00")).toBeTruthy();
 });
 test("Escape exits debt-ledger selection when its list has focus", () => {
   render(<DebtHistoryGroup account={snapshot.accounts[0]} rows={snapshot.rows} onSaved={async () => undefined} />);

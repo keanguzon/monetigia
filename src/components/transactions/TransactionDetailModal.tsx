@@ -198,6 +198,7 @@ export default function TransactionDetailModal({
                   key={descriptionEditor.key}
                   target={descriptionEditor.target}
                   currentDescription={descriptionEditor.currentDescription}
+                  transaction={transaction}
                   userId={userId}
                   refreshHistory={refreshDescriptionHistory}
                   onCancel={closeDescriptionEditor}

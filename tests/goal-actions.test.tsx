@@ -279,7 +279,7 @@ describe("goal lifecycle presentation", () => {
     expect(actions[0].className).toContain("dark:text-red-400");
     expect(actions[0].className).not.toContain("bg-destructive");
     expect(actions[1].className).toContain("bg-primary");
-    expect(actions[1].className).toContain("text-slate-950");
+    expect(actions[1].className).toContain("text-primary-foreground");
     const complete = within(card).getByRole("button", { name: "Complete" });
     expect(complete.className).toContain("border-muted-foreground");
 

@@ -128,6 +128,7 @@ function configureHistoryRows(rows: HistoryTestRow[], operationOverrides?: any[]
   }));
   mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-1" } } });
   mocks.from.mockImplementation((table: string) => {
+    if (table === "categories") return { select: async () => ({ data: [], error: null }) };
     if (table === "financial_operations") {
       const filters: Array<[string, unknown]> = [];
       const query: any = {
@@ -194,6 +195,7 @@ function configureDescriptionRefreshPages() {
   };
   mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-1" } } });
   mocks.from.mockImplementation((table: string) => {
+    if (table === "categories") return { select: async () => ({ data: [], error: null }) };
     const filters: Array<[string, unknown]> = [];
     if (table === "financial_operations") {
       const query: any = {
@@ -416,7 +418,8 @@ describe("transactions history pagination", () => {
 
     expect(await screen.findByRole("textbox", { name: "Description" })).toBeTruthy();
     expect((screen.getByRole("textbox", { name: "Description" }) as HTMLTextAreaElement).value).toBe("QA purchase");
-    expect(screen.getByRole("button", { name: /show payment schedule/i }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("dialog", { name: "Edit transaction" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /show payment schedule/i, hidden: true }).getAttribute("aria-expanded")).toBe("false");
     expect(groupReads).toContain(purchaseId);
   });
 
@@ -472,7 +475,7 @@ describe("transactions history pagination", () => {
       };
       await refreshHistory();
     });
-    await user.click(screen.getByRole("button", { name: "Save description" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     expect(await screen.findByText("Updated purchase")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("mock-detail-description").textContent).toBe("Updated purchase (Installment 1/3)"));
