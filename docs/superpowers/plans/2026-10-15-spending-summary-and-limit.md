@@ -1,6 +1,8 @@
 # Spending Summary + Optional Limit on Transactions: Implementation Plan
 
-**Status:** User approved implementation October 15, 2026. Execute scoped tasks with subagents: Sol6.1 low/medium for integration and review, Luna max for small coding units. No production SQL, merge or push is authorized by this approval. Preserve unrelated changes and inspect current HEAD before implementation.
+**Status:** Tasks 1–7 implemented and reviewed; local Task 8 QA complete. Production release gate remains pending. Sol6.1 low/medium handled integration and review; Luna max handled small coding units, with Sol low fallback after Luna's usage limit. No production SQL, merge or push is authorized by this approval. Preserve unrelated changes.
+
+**User copy override (October 15):** Keep the summary concise, especially on mobile. Show “Expenses + card payments” and one “Totals” date range; place accounting and list-scope explanations inside a default-collapsed “How totals work” disclosure. This supersedes the always-visible explanatory paragraphs below without changing accounting behavior.
 
 **Requirements:** This document records the approved spending-summary requirements and calendar-half model from the conversation. Use browser-local calendar and All time default. Earlier external drafts are superseded by this repository copy.
 
@@ -199,12 +201,12 @@ Most likely failure modes no single test naturally hits, and where each one gets
 - `toLocalDateString(date)`: `yyyy-MM-dd` via date-fns `format`
 
 **Steps**
-- [ ] Write a failing test that runs the **current** Dashboard range logic with `TZ=Asia/Manila` and a clock at 2026-10-01 00:30. It should expect current start `2026-10-01`. If the test **passes**, the bug isn't real: drop the Dashboard change from this task, note it in the report, and keep only the helper.
-- [ ] Write helper tests: Feb 2026 second half ends the 28th; Feb 2028 ends the 29th; next after Dec 16–31 is Jan 1–15 of the next year; previous of Jan (month) is Dec of the prior year; `spentToDateEnd` clamps to today in the current period and returns the full end for past periods; the label strings above.
-- [ ] Implement the helper with date-fns (`startOfMonth`, `endOfMonth`, `addMonths`, `format`). No UTC conversions.
-- [ ] Point the Dashboard's `getDateRange` at the helper for "This month". Last 7 and last 30 days keep their shape but use `toLocalDateString`.
-- [ ] Run `npx vitest run tests/spending-periods.test.ts`, then `npx tsc --noEmit`. Expected: pass, exit 0.
-- [ ] Commit: `feat(spending): add local period helper and fix dashboard date range`
+- [x] Write a failing test that runs the **current** Dashboard range logic with `TZ=Asia/Manila` and a clock at 2026-10-01 00:30. It should expect current start `2026-10-01`. If the test **passes**, the bug isn't real: drop the Dashboard change from this task, note it in the report, and keep only the helper.
+- [x] Write helper tests: Feb 2026 second half ends the 28th; Feb 2028 ends the 29th; next after Dec 16–31 is Jan 1–15 of the next year; previous of Jan (month) is Dec of the prior year; `spentToDateEnd` clamps to today in the current period and returns the full end for past periods; the label strings above.
+- [x] Implement the helper with date-fns (`startOfMonth`, `endOfMonth`, `addMonths`, `format`). No UTC conversions.
+- [x] Point the Dashboard's `getDateRange` at the helper for "This month". Last 7 and last 30 days keep their shape but use `toLocalDateString`.
+- [x] Run `npx vitest run tests/spending-periods.test.ts`, then `npx tsc --noEmit`. Expected: pass, exit 0.
+- [x] Commit: `feat(spending): add local period helper and fix dashboard date range`
 
 ---
 
@@ -231,17 +233,17 @@ Most likely failure modes no single test naturally hits, and where each one gets
 - Check that an index on `(user_id, date)` exists. If it doesn't, add `transactions_owner_date_idx` in the same migration.
 
 **DB tests (assertions written as test names)**
-- [ ] `counts non-credit expenses and card repayments once, ignores card purchases and wallet-to-wallet transfers`
-- [ ] `groups by category with Uncategorized for null category and keeps debt payments out of categories`
-- [ ] `is exact for 1,200 expenses in one month` (guards against the 1000-row cap)
-- [ ] `includes rows on the start and end dates and excludes the day before and after`
-- [ ] `returns another user's rows to no one` (owner A sees only A's rows; a direct call as `anon` is denied)
-- [ ] `rejects reversed ranges and ranges over 366 days with INVALID_RANGE`
-- [ ] `installs from raw CRLF and raw LF text with identical function body and grants` (audit M25; send the file bytes as-is, without the helper's LF normalization, for both new migrations)
-- [ ] `matches the current useDashboardStats arithmetic for a mixed fixture` (compute both ways in the test)
-- [ ] PHP totals exclude foreign source/destination currency as applicable, count excluded rows once, and never add credit purchases or wallet transfers to transactionCount.
-- [ ] Run `node --test --test-concurrency=1 tests/database/spending-summary.test.mjs` using the configured disposable harness environment. Do not append a focused filename to the npm script, which already expands all DB test files. Expected: all pass.
-- [ ] Commit: `feat(spending): add owner-scoped spending_summary RPC`
+- [x] `counts non-credit expenses and card repayments once, ignores card purchases and wallet-to-wallet transfers`
+- [x] `groups by category with Uncategorized for null category and keeps debt payments out of categories`
+- [x] `is exact for 1,200 expenses in one month` (guards against the 1000-row cap)
+- [x] `includes rows on the start and end dates and excludes the day before and after`
+- [x] `returns another user's rows to no one` (owner A sees only A's rows; a direct call as `anon` is denied)
+- [x] `rejects reversed ranges and ranges over 366 days with INVALID_RANGE`
+- [x] `installs from raw CRLF and raw LF text with identical function body and grants` (audit M25; send the file bytes as-is, without the helper's LF normalization, for both new migrations)
+- [x] `matches the current useDashboardStats arithmetic for a mixed fixture` (compute both ways in the test)
+- [x] PHP totals exclude foreign source/destination currency as applicable, count excluded rows once, and never add credit purchases or wallet transfers to transactionCount.
+- [x] Run `node --test --test-concurrency=1 tests/database/spending-summary.test.mjs` using the configured disposable harness environment. Do not append a focused filename to the npm script, which already expands all DB test files. Expected: all pass.
+- [x] Commit: `feat(spending): add owner-scoped spending_summary RPC`
 
 ---
 
@@ -259,11 +261,11 @@ Most likely failure modes no single test naturally hits, and where each one gets
 - The unused legacy `budgets` table is **not** touched or reused. It's per-category with weekly/monthly/yearly periods, which is a different model, and the Categories page delete copy still mentions it.
 
 **DB tests**
-- [ ] `owner can create, update and delete their own limit`
-- [ ] `other users cannot read or write someone else's limit`
-- [ ] `rejects zero, negative and unknown cadence`
-- [ ] Run the suite. Expected: pass.
-- [ ] Commit: `feat(spending): add optional per-user spending limit`
+- [x] `owner can create, update and delete their own limit`
+- [x] `other users cannot read or write someone else's limit`
+- [x] `rejects zero, negative and unknown cadence`
+- [x] Run the suite. Expected: pass.
+- [x] Commit: `feat(spending): add optional per-user spending limit`
 
 ---
 
@@ -284,12 +286,12 @@ Most likely failure modes no single test naturally hits, and where each one gets
 - Extend `refreshFinancialData(userId, mutateCache, cache)` to match owner-scoped spending-summary and dashboardStats array keys. Reuse the existing scoped SWR cache and saved-but-refresh-failed contract; do not introduce a second global mutation bus. Revalidate after confirmed saves, deletions, supported date/category metadata edits and category-name changes. Include debt payments/reversals if they change counted transaction rows. Pure reservations/corrections without counted-row changes need no new spending semantics. Never replay a committed write merely because refresh failed.
 
 **Steps**
-- [ ] Tests first: the key changes when the period changes; no fetch for All time; a malformed RPC payload becomes an error state, not zeros; switching user drops the previous user's data; a successful transaction save triggers revalidation, and a failed save does not.
-- [ ] Include late old-owner responses and owner-bound limit save/remove attempts. Pin owner identity at action start, gate unresolved identity, and keep errors distinct from absent limits. Never reuse an old owner's form against a newly authenticated owner.
-- [ ] Verify shared-cache invalidation after date/category edits, deletion, payment/reversal and category rename, plus scoped dashboard refresh. Inspect actual write paths: ordinary wallet creation uses direct insert, not exclusively financial RPCs. Add only relevant wiring; wallet opening balance is not automatically a spending transaction.
-- [ ] Implement. Owner checks follow the same pattern as the existing hooks (current user id read from the session, used in the key).
-- [ ] Run `npx vitest run tests/spending-hooks.test.tsx`, then `npx tsc --noEmit`.
-- [ ] Commit: `feat(spending): add spending summary and limit hooks`
+- [x] Tests first: the key changes when the period changes; no fetch for All time; a malformed RPC payload becomes an error state, not zeros; switching user drops the previous user's data; a successful transaction save triggers revalidation, and a failed save does not.
+- [x] Include late old-owner responses and owner-bound limit save/remove attempts. Pin owner identity at action start, gate unresolved identity, and keep errors distinct from absent limits. Never reuse an old owner's form against a newly authenticated owner.
+- [x] Verify shared-cache invalidation after date/category edits, deletion, payment/reversal and category rename, plus scoped dashboard refresh. Inspect actual write paths: ordinary wallet creation uses direct insert, not exclusively financial RPCs. Add only relevant wiring; wallet opening balance is not automatically a spending transaction.
+- [x] Implement. Owner checks follow the same pattern as the existing hooks (current user id read from the session, used in the key).
+- [x] Run `npx vitest run tests/spending-hooks.test.tsx`, then `npx tsc --noEmit`.
+- [x] Commit: `feat(spending): add spending summary and limit hooks`
 
 ---
 
@@ -300,12 +302,12 @@ Most likely failure modes no single test naturally hits, and where each one gets
 - Test: extend the existing dashboard test if one exists, or add `tests/dashboard-stats.test.tsx`.
 
 **Steps**
-- [ ] Test: given mocked RPC results, the Dashboard shows the RPC's `spent` as Expenses and its `income` as Income, for This month, Last 7 and Last 30.
-- [ ] Parity test: for the same `SpendingPeriod`, the value `useDashboardStats` shows as expenses equals what `useSpendingSummary` returns as `spent`.
-- [ ] Dashboard key includes owner plus all four current/previous boundary dates. Update shared refresh predicates/tests for that array key. Gate old-owner data and late responses. This does not claim the remaining generic hooks' M02 defects are fixed.
-- [ ] Implement; delete the now-unused client-side filters in `useDashboardStats`.
-- [ ] Run `npx vitest run`, then `npx tsc --noEmit`.
-- [ ] Commit: `refactor(dashboard): read period totals from spending_summary`
+- [x] Test: given mocked RPC results, the Dashboard shows the RPC's `spent` as Expenses and its `income` as Income, for This month, Last 7 and Last 30.
+- [x] Parity test: for the same `SpendingPeriod`, the value `useDashboardStats` shows as expenses equals what `useSpendingSummary` returns as `spent`.
+- [x] Dashboard key includes owner plus all four current/previous boundary dates. Update shared refresh predicates/tests for that array key. Gate old-owner data and late responses. This does not claim the remaining generic hooks' M02 defects are fixed.
+- [x] Implement; delete the now-unused client-side filters in `useDashboardStats`.
+- [x] Run `npx vitest run`, then `npx tsc --noEmit`.
+- [x] Commit: `refactor(dashboard): read period totals from spending_summary`
 
 ---
 
@@ -339,14 +341,14 @@ Most likely failure modes no single test naturally hits, and where each one gets
 - Error: "Spending totals couldn't load. Your transactions below are unaffected." with a **Retry** button that revalidates.
 
 **Tests**
-- [ ] Period change reloads the list with the new range and discards a late response from the previous period.
-- [ ] Load-more and refresh after a description edit keep the range.
-- [ ] An installment group with children inside and outside the period renders as one complete group.
-- [ ] Panel shows the "Spent so far" label in the current period and "Spent" in a past one; comparison text for more/less/same; empty, loading and error states with their exact copy; Retry calls revalidate.
-- [ ] Keyboard: period prev/next/menu reachable by Tab, operable by Enter/Space, visible focus ring.
-- [ ] All time initial state; current-period Next disabled; no reversed-range requests; elapsed/full comparisons; cutoff/month midnight rollover; comparison failure and foreign-only/income-only states.
-- [ ] Run `npx vitest run`, then `npx tsc --noEmit`.
-- [ ] Commit: `feat(transactions): add period filter and spending summary`
+- [x] Period change reloads the list with the new range and discards a late response from the previous period.
+- [x] Load-more and refresh after a description edit keep the range.
+- [x] An installment group with children inside and outside the period renders as one complete group.
+- [x] Panel shows the "Spent so far" label in the current period and "Spent" in a past one; comparison text for more/less/same; empty, loading and error states with their exact copy; Retry calls revalidate.
+- [x] Keyboard: period prev/next/menu reachable by Tab, operable by Enter/Space, visible focus ring.
+- [x] All time initial state; current-period Next disabled; no reversed-range requests; elapsed/full comparisons; cutoff/month midnight rollover; comparison failure and foreign-only/income-only states.
+- [x] Run `npx vitest run`, then `npx tsc --noEmit`.
+- [x] Commit: `feat(transactions): add period filter and spending summary`
 
 ---
 
@@ -376,23 +378,23 @@ Most likely failure modes no single test naturally hits, and where each one gets
 - Save failure keeps the dialog open with "The limit couldn't be saved. Try again."
 
 **Tests**
-- [ ] Each decision-table row renders the right content.
-- [ ] Over-limit shows the destructive-token text, and recording more expenses is still possible (no code path reads the limit on submit; assert the transaction modal has no limit dependency).
-- [ ] Validation for 0, negative, 3 decimals and an empty amount.
-- [ ] Save, Remove (with confirm), Cancel/Escape focus return, save failure message.
-- [ ] Run `npx vitest run`, then `npx tsc --noEmit`.
-- [ ] Commit: `feat(transactions): add optional spending limit`
+- [x] Each decision-table row renders the right content.
+- [x] Over-limit shows the destructive-token text, and recording more expenses is still possible (no code path reads the limit on submit; assert the transaction modal has no limit dependency).
+- [x] Validation for 0, negative, 3 decimals and an empty amount.
+- [x] Save, Remove (with confirm), Cancel/Escape focus return, save failure message.
+- [x] Run `npx vitest run`, then `npx tsc --noEmit`.
+- [x] Commit: `feat(transactions): add optional spending limit`
 
 ---
 
 ### Task 8: Full verification and QA evidence
 
-- [ ] `npm test` (node tests + full Vitest). Expected: all pass.
-- [ ] `npm run test:db`, sequentially, against the disposable DB. Expected: all pass, including the existing suites (proves no regression in debt/goal flows).
-- [ ] `npx tsc --noEmit` and `npm run build`. Expected: exit 0.
-- [ ] Manual click-through (antislop R-35), recorded element by element in a report under `docs/codex-review/`: period prev/next/menu, All time, summary Retry, Set/Edit/Remove limit, dialog Escape. Check light and dark themes at 320, 375, 768 and 1280 px, with screenshots in the same folder pattern as `docs/codex-review/pending-rollout/screenshots/`.
-- [ ] Contrast check on the over-limit text and the progress bar in both themes, using the `antislop-human` contrast checker.
-- [ ] Cross-check: the Dashboard's "This month" Expenses equals the Transactions summary "Spent so far" for the same account.
+- [x] `npm test` (node tests + full Vitest). Expected: all pass.
+- [x] `npm run test:db`, sequentially, against the disposable DB. Expected: all pass, including the existing suites (checks the covered debt/goal regression scenarios).
+- [x] `npx tsc --noEmit` and `npm run build`. Expected: exit 0.
+- [x] Manual click-through (antislop R-35), recorded element by element in a report under `docs/codex-review/`: period prev/next/menu, All time, summary Retry, Set/Edit/Remove limit, dialog Escape. Check light and dark themes at 320, 375, 768 and 1280 px, with screenshots in the same folder pattern as `docs/codex-review/pending-rollout/screenshots/`.
+- [x] Contrast check on the over-limit text and the progress bar in both themes, using the `antislop-human` contrast checker.
+- [x] Cross-check: the Dashboard's "This month" Expenses equals the Transactions summary "Spent so far" for the same account.
 - [ ] **Release gate (from Q2, corrected Oct 15):** production installation through `202610090001_transaction_metadata.sql` was user-reported as successful. Before deploying, do a read-only, catalog-level check that live functions, grants and tables match the ordered migrations (function existence, `EXECUTE` grants, and the debt/metadata dispatcher branches). Then apply `202610140001_spending_summary.sql` and `202610140002_spending_limits.sql` in that order from `supabase/migrations/` (never via `schema.sql`), and run the same catalog check for the two new objects. Deploy the frontend only after both succeed and this task's QA passes. Record the check results and applied order in the QA report. Nothing in this plan applies SQL to production on its own; the user (root) does it. Physical Safari/PWA acceptance stays on the rollout track and isn't part of this gate.
 
 ---
@@ -415,4 +417,3 @@ Most likely failure modes no single test naturally hits, and where each one gets
 | UI | `npx vitest run` | States, copy, keyboard, limit table |
 | Types/build | `npx tsc --noEmit`, `npm run build` | Compiles |
 | Manual | Click-through report + screenshots | Real behavior, mobile, both themes |
-
