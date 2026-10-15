@@ -1,6 +1,5 @@
 "use client";
 
-import { parseISO } from "date-fns";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -12,7 +11,7 @@ export function PeriodBar({ period, today, onChange }: { period: SpendingPeriod 
   function choose(value: string) {
     if (value === "all") { onChange(null); return; }
     if (!["month", "first_half", "second_half"].includes(value)) return;
-    let chosen = periodContaining(period ? parseISO(period.start) : today, value as PeriodKind);
+    let chosen = periodContaining(today, value as PeriodKind);
     if (chosen.start > date) chosen = periodContaining(new Date(today.getFullYear(), today.getMonth() - 1, 1), value as PeriodKind);
     onChange(chosen);
   }

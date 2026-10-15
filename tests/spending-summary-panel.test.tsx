@@ -104,3 +104,16 @@ test("midnight rollover keeps selection and updates whether next period is reach
   await user.click(screen.getByRole("button", { name: "Next period" }));
   expect(change).toHaveBeenLastCalledWith({ kind: "month", start: "2026-11-01", end: "2026-11-30" });
 });
+
+test.each([
+  ["Month", { kind: "month", start: "2026-10-01", end: "2026-10-31" }],
+  ["1st–15th", { kind: "first_half", start: "2026-10-01", end: "2026-10-15" }],
+  ["16th–end", { kind: "second_half", start: "2026-09-16", end: "2026-09-30" }],
+])("choosing %s from historical September opens its latest available current period", async (name, expected) => {
+  const change = vi.fn();
+  render(<PeriodBar period={{ kind: "month", start: "2026-09-01", end: "2026-09-30" }} today={today} onChange={change} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Choose period" }));
+  await user.click(screen.getByRole("menuitemradio", { name }));
+  expect(change).toHaveBeenLastCalledWith(expected);
+});
