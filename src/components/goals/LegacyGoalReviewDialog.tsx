@@ -58,14 +58,14 @@ export function LegacyGoalReviewDialog({ goalId, open, onOpenChange }: { goalId:
 
   const wallets = useMemo(() => (financeSnapshot?.wallets ?? []).flatMap(wallet => {
     const account = metadata.data?.find(item => item.id === wallet.accountId);
-    return account?.is_active && account.currency === "PHP" && account.type !== "credit_card" ? [{ ...wallet, name: account.name }] : [];
+    return account?.is_active && account.type !== "credit_card" ? [{ ...wallet, name: account.name }] : [];
   }), [financeSnapshot, metadata.data]);
   const eligibleHistory = useMemo(() => history.filter(transaction => {
     const source = metadata.data?.find(account => account.id === transaction.account_id);
-    if (!source?.is_active || source.currency !== "PHP" || source.type === "credit_card" || !Number.isFinite(Number(transaction.amount)) || Number(transaction.amount) <= 0) return false;
+    if (!source?.is_active || source.type === "credit_card" || !Number.isFinite(Number(transaction.amount)) || Number(transaction.amount) <= 0) return false;
     if (transaction.type === "expense") return !transaction.transfer_to_account_id;
     const destination = metadata.data?.find(account => account.id === transaction.transfer_to_account_id);
-    return goal?.category === "debt" && transaction.type === "transfer" && destination?.is_active && destination.type === "credit_card" && destination.currency === "PHP";
+    return goal?.category === "debt" && transaction.type === "transfer" && destination?.is_active && destination.type === "credit_card";
   }), [history, metadata.data, goal?.category]);
   const loadError = Boolean(isError || metadata.error || historyError);
   const loading = isLoading || metadata.isLoading || historyLoading;

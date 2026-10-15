@@ -55,7 +55,7 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction, listFilt
     </div>
     <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border/30 pt-4 text-sm"><p>Income {money(cents(data.income))}</p><p>Net {money(cents(data.net))}</p></div>
     {rows.length > 0 && <ul aria-label="Spending by category" className="space-y-2 border-t border-border/30 pt-4">{rows.map(row => <li key={row.name} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm"><span className="min-w-0 break-words">{row.name}</span><span className="tabular-nums">{money(row.amount)} <span className="text-muted-foreground">({spent > BigInt(0) ? `${Number((row.amount * BigInt(1000) + spent / BigInt(2)) / spent) / 10}%` : "0%"})</span></span></li>)}</ul>}
-    {data.excludedCurrencyTransactionCount > 0 && <p className="text-sm text-muted-foreground">{data.excludedCurrencyTransactionCount} transactions in other currencies aren&apos;t included.</p>}
+
     <div className="border-t border-border/30 pt-3 text-xs text-muted-foreground">
       <p>Totals: {rangeLabel(period.start, spentToDateEnd(period, today))}</p>
       <details className="mt-1">

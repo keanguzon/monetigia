@@ -433,16 +433,10 @@ export default function AccountsWorkspace({ debtOnly = false }: { debtOnly?: boo
   }, [accounts, accountsQuery.data]);
 
   const debtSnapshotResult = useMemo(() => {
-    if (!debt.snapshot) return { snapshot: undefined, unsupported: [] as any[], error: null as unknown };
+    if (!debt.snapshot) return { snapshot: undefined, error: null as unknown };
     const metadata = new Map(summaryAccounts.map(account => [account.id, account]));
-    const missing = debt.snapshot.accounts.some(account => !metadata.get(account.accountId)?.currency);
-    const unsupported = debt.snapshot.accounts.flatMap(account => {
-      const wallet = metadata.get(account.accountId);
-      return wallet?.currency && wallet.currency !== "PHP" ? [{ ...account, name: wallet.name, currency: wallet.currency }] : [];
-    });
-    const supportedIds = new Set(debt.snapshot.accounts.filter(account => metadata.get(account.accountId)?.currency === "PHP").map(account => account.accountId));
-    return { snapshot: { accounts: debt.snapshot.accounts.filter(account => supportedIds.has(account.accountId)), rows: debt.snapshot.rows.filter(row => supportedIds.has(row.accountId)) }, unsupported,
-      error: missing ? new Error("Debt currency metadata is unavailable") : null };
+    const missing = debt.snapshot.accounts.some(account => !metadata.has(account.accountId));
+    return { snapshot: debt.snapshot, error: missing ? new Error("Debt wallet details are unavailable") : null };
   }, [debt.snapshot, summaryAccounts]);
   const walletSummaryResult = useMemo(() => {
     if (!goals.financeSnapshot) return { summary: null, error: null as unknown };
@@ -848,8 +842,7 @@ export default function AccountsWorkspace({ debtOnly = false }: { debtOnly?: boo
 
         </>}
         {/* ─── PayLater & Credit Schedule (No outer card, hairline statement ledger) ─── */}
-        {Boolean(debtSnapshotResult.error) && <p role="alert" className="text-sm text-red-700 dark:text-red-300">Debt currency metadata is unavailable. The PHP debt total cannot be confirmed.</p>}
-        {debtSnapshotResult.unsupported.map(account => <p key={account.accountId} role="alert" className="break-words text-sm text-red-700 dark:text-red-300">{account.name} ({account.currency}) is excluded from PHP debt totals. Its debt requires separate review; PHP payments and due-date adoption are unavailable.</p>)}
+        {Boolean(debtSnapshotResult.error) && <p role="alert" className="text-sm text-red-700 dark:text-red-300">Debt wallet details are unavailable.</p>}
         {pendingCorrection && <div data-no-press-motion="" role="alert" className="space-y-2 text-sm text-red-700 dark:text-red-300">
           <p>This debt correction is unconfirmed. Retry the original saved request before starting another correction.</p>
           {debtCommand.error && <p>{debtCommand.error}</p>}
@@ -859,9 +852,9 @@ export default function AccountsWorkspace({ debtOnly = false }: { debtOnly?: boo
           <p>A debt correction saved, but the debt views could not refresh. Refresh them before starting another correction.</p>
           <Button variant="outline" className="min-h-11" disabled={refreshingCorrectionViews} onClick={() => { void refreshCorrectionViews().catch(() => undefined); }}>{refreshingCorrectionViews ? "Refreshing views…" : "Refresh views"}</Button>
         </div>}
-        <DebtScheduleSection preview={!debtOnly} wallets={summaryAccounts} snapshot={debtSnapshotResult.snapshot} isLoading={debtSummaryLoading} error={debtSummaryError || exactDebtResult.error} onPayDebt={handlePayDebt} onCorrectionSaved={refreshCorrectionViews} canReviewLegacy={accountId => summaryAccounts.some(account => account.id === accountId && account.currency === "PHP" && account.is_active === true)} onReviewLegacy={accountId => {
+        <DebtScheduleSection preview={!debtOnly} wallets={summaryAccounts} snapshot={debtSnapshotResult.snapshot} isLoading={debtSummaryLoading} error={debtSummaryError || exactDebtResult.error} onPayDebt={handlePayDebt} onCorrectionSaved={refreshCorrectionViews} canReviewLegacy={accountId => summaryAccounts.some(account => account.id === accountId && account.is_active === true)} onReviewLegacy={accountId => {
           const wallet = summaryAccounts.find(account => account.id === accountId);
-          if (wallet?.currency === "PHP" && wallet.is_active === true) setReviewAccountId(accountId);
+          if (wallet?.is_active === true) setReviewAccountId(accountId);
         }} />
         {pendingAdoption && <div role="status" className="space-y-2 border-t border-border pt-4"><p className="text-sm">A due-date save is unconfirmed. Recover its original request before starting another review.</p><Button variant="outline" className="min-h-11" onClick={() => setReviewAccountId(pendingAdoption.accountId)}>Recover due-date save</Button></div>}
         <LegacyDebtReviewDialog isOpen={reviewAccountId !== null} onClose={() => setReviewAccountId(null)} account={debtSnapshotResult.snapshot?.accounts.find(account => account.accountId === reviewAccountId) ?? null} />      </div >

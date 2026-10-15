@@ -50,7 +50,7 @@ export function GoalFundsDialog({ goalId, mode, open, onOpenChange }: GoalFundsD
         : goal?.walletReservations.find(item => item.accountId === wallet.accountId)?.amount ?? "0.00";
       if (toMinorUnits(eligibleAmount) <= 0) return [];
       const metadata = walletMetadata.data?.find(item => item.id === wallet.accountId);
-      if (!metadata || !metadata.is_active || metadata.currency !== "PHP" || metadata.type === "credit_card") return [];
+      if (!metadata || !metadata.is_active || metadata.type === "credit_card") return [];
       return [{ ...wallet, eligibleAmount, name: metadata?.name ?? "Wallet" }];
     });
   }, [financeSnapshot, goal?.walletReservations, mode, walletMetadata.data]);

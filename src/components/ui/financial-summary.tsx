@@ -11,7 +11,6 @@ type WalletSummaryAccount = {
   balance: number | string | null;
   type?: string | null;
   include_in_networth?: boolean | null;
-  currency?: string | null;
   is_active?: boolean | null;
 };
 
@@ -47,7 +46,7 @@ export function summarizeWalletFunds(accounts: WalletSummaryAccount[], wallets: 
     if (account.type === "credit_card" || account.include_in_networth === false) continue;
 
     const funds = balances.get(account.id);
-    if (!funds && account.currency === "PHP" && account.is_active === true) {
+    if (!funds && account.is_active === true) {
       throw new Error("An eligible wallet is missing from the finance snapshot");
     }
 

@@ -37,7 +37,7 @@ const month = { kind: "month" as const, start: "2026-10-01", end: "2026-10-31" }
 const today = new Date(2026, 9, 15);
 let owner = "owner-a";
 const session = (id: string) => ({ user: { id }, access_token: `${id}-token` });
-const payload = (start = "2026-10-01", end = "2026-10-15", spent = "12.34") => ({ start, end, spent, expenses: spent, debtPayments: "0.00", income: "1.00", net: "-11.34", categories: [{ categoryId: null, name: "Uncategorized", amount: spent }], transactionCount: 2, excludedCurrencyTransactionCount: 1 });
+const payload = (start = "2026-10-01", end = "2026-10-15", spent = "12.34") => ({ start, end, spent, expenses: spent, debtPayments: "0.00", income: "1.00", net: "-11.34", categories: [{ categoryId: null, name: "Uncategorized", amount: spent }], transactionCount: 2, });
 const wrapper = ({ children }: { children: React.ReactNode }) => <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0, revalidateOnFocus: false }}>{children}</SWRConfig>;
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 function auth(id: string | null) { owner = id ?? ""; state.listeners.forEach(callback => callback(id ? "SIGNED_IN" : "SIGNED_OUT", id ? session(id) : null)); }

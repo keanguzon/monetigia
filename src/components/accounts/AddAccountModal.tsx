@@ -95,7 +95,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
       setErrors({});
       if (!userId) { setError("Sign in to add a wallet."); return; }
       busy.current = true; setLoading(true);
-      try { await creation.create({ account: { name: walletName, type: "credit_card", currency: "PHP", color: sanitizeColor(custom ? color : selected!.color), icon: custom ? null : selected!.icon || null, is_savings: false, interest_rate: 0, include_in_networth: includeNetworth, display_order: 0 }, openingDebts: validation.openingDebts }); }
+      try { await creation.create({ account: { name: walletName, type: "credit_card", color: sanitizeColor(custom ? color : selected!.color), icon: custom ? null : selected!.icon || null, is_savings: false, interest_rate: 0, include_in_networth: includeNetworth, display_order: 0 }, openingDebts: validation.openingDebts }); }
       finally { busy.current = false; setLoading(false); }
       return;
     }
@@ -107,7 +107,7 @@ export default function AddAccountModal({ isOpen, onClose, existingAccounts }: A
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.id) { setError("Sign in to add a wallet."); return; }
-      const account: Database["public"]["Tables"]["accounts"]["Insert"] = { user_id: user.id, name: walletName, type: custom ? type : selected!.type, balance: amount, currency: "PHP", color: sanitizeColor(custom ? color : selected!.color), icon: custom ? "" : selected!.icon, is_savings: !!savings, interest_rate: savings ? rate : 0, include_in_networth: includeNetworth };
+      const account: Database["public"]["Tables"]["accounts"]["Insert"] = { user_id: user.id, name: walletName, type: custom ? type : selected!.type, balance: amount, color: sanitizeColor(custom ? color : selected!.color), icon: custom ? "" : selected!.icon, is_savings: !!savings, interest_rate: savings ? rate : 0, include_in_networth: includeNetworth };
       const { error: insertError } = await supabase.from("accounts").insert([account]);
       if (insertError) { setError(insertError.message); return; }
       toast({ title: "Account added", description: "Your account was created successfully." });

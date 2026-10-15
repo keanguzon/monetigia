@@ -78,10 +78,9 @@ type SummaryFixture = {
   end: string;
   spent: string;
   income: string;
-  excludedCurrencyTransactionCount?: number;
 };
 
-function summary({ start, end, spent, income, excludedCurrencyTransactionCount = 0 }: SummaryFixture) {
+function summary({ start, end, spent, income }: SummaryFixture) {
   return {
     start,
     end,
@@ -92,7 +91,6 @@ function summary({ start, end, spent, income, excludedCurrencyTransactionCount =
     net: "0.00",
     categories: [],
     transactionCount: 2,
-    excludedCurrencyTransactionCount,
   };
 }
 
@@ -145,8 +143,7 @@ it("uses one owner-pinned spending summary for current and previous Dashboard to
     monthlyExpenses: 12.34,
     lastMonthIncome: 100.01,
     lastMonthExpenses: 12.34,
-    excludedCurrencyTransactionCount: 0,
-  }));
+    }));
 
   expect(state.rpc).toHaveBeenCalledTimes(2);
   expect(state.rpc.mock.calls.map((call) => call[1])).toEqual(expect.arrayContaining([
@@ -252,15 +249,15 @@ it.each([
   ["This month", "200.01", "123.45", 2],
   ["Last 7 days", "45.67", "23.45", 1],
   ["Last 30 days", "987.65", "678.90", 3],
-])("shows the RPC's Income, Expenses, and scoped currency note for %s", async (range, income, expenses, excludedCount) => {
+])("shows the RPC's PHP Income and Expenses for %s", async (range, income, expenses) => {
   state.rpc.mockImplementation(async (_name: string, args: { p_start: string; p_end: string }) => {
-    const current = args.p_start === "2026-10-01" || args.p_start === "2026-10-09" || args.p_start === "2026-09-16";
+
     const values = args.p_start === "2026-10-09"
-      ? { income: "45.67", spent: "23.45", excludedCurrencyTransactionCount: 1 }
+      ? { income: "45.67", spent: "23.45", }
       : args.p_start === "2026-09-16"
-        ? { income: "987.65", spent: "678.90", excludedCurrencyTransactionCount: 3 }
-        : { income: "200.01", spent: "123.45", excludedCurrencyTransactionCount: 2 };
-    return { data: summary({ start: args.p_start, end: args.p_end, ...values, excludedCurrencyTransactionCount: current ? values.excludedCurrencyTransactionCount : 0 }), error: null };
+        ? { income: "987.65", spent: "678.90", }
+        : { income: "200.01", spent: "123.45", };
+    return { data: summary({ start: args.p_start, end: args.p_end, ...values }), error: null };
   });
   render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0, shouldRetryOnError: false, revalidateOnFocus: false }}><DashboardPage /></SWRConfig>);
 
@@ -275,10 +272,7 @@ it.each([
     expect(screen.queryByText("Expenses", { exact: true })).not.toBeNull();
     expect(screen.queryByText(`₱${income}`)).not.toBeNull();
     expect(screen.queryByText(`₱${expenses}`)).not.toBeNull();
-    const note = screen.queryByRole("note")?.textContent ?? "";
-    expect(note).toContain(`exclude ${excludedCount} transaction${excludedCount === 1 ? "" : "s"}`);
-    expect(note).toContain("Income and Expenses");
-    expect(note).toContain("Total Balance");
+    expect(screen.queryByRole("note")).toBeNull();
   });
   const incomeCard = screen.getByText("Income", { exact: true }).closest("div.min-w-0");
   const expenseCard = screen.getByText("Expenses", { exact: true }).closest("div.min-w-0");

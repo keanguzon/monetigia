@@ -73,8 +73,7 @@ vi.mock("@/lib/supabase/client", () => ({
             net: isOctober ? "1400.00" : "0.00",
             categories: isOctober ? [{ categoryId: null, name: "Uncategorized", amount: "1000.00" }] : [],
             transactionCount: isOctober ? 3 : 0,
-            excludedCurrencyTransactionCount: 0,
-          },
+            },
           error: null,
         });
         return { setHeader: () => response, then: response.then.bind(response) };
@@ -157,9 +156,9 @@ function snapshot(mainReserved: string, excludedReserved = "0.00") {
 
 function makeAccounts() {
   return [
-    { id: fixture.cashId, user_id: fixture.userId, name: "GoTyme", type: "bank", currency: "PHP", is_active: true, balance: 30000, include_in_networth: true, display_order: 0 },
-    { id: fixture.excludedId, user_id: fixture.userId, name: "Excluded wallet", type: "cash", currency: "PHP", is_active: true, balance: 120000, include_in_networth: false, display_order: 1 },
-    { id: fixture.creditId, user_id: fixture.userId, name: "PayLater", type: "credit_card", currency: "PHP", is_active: true, balance: 8000, include_in_networth: true, display_order: 2 },
+    { id: fixture.cashId, user_id: fixture.userId, name: "GoTyme", type: "bank", is_active: true, balance: 30000, include_in_networth: true, display_order: 0 },
+    { id: fixture.excludedId, user_id: fixture.userId, name: "Excluded wallet", type: "cash", is_active: true, balance: 120000, include_in_networth: false, display_order: 1 },
+    { id: fixture.creditId, user_id: fixture.userId, name: "PayLater", type: "credit_card", is_active: true, balance: 8000, include_in_networth: true, display_order: 2 },
   ];
 }
 

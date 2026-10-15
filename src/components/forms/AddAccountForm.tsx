@@ -85,7 +85,7 @@ export default function AddAccountForm() {
       setErrors({});
       if (!userId) { setSaveError("Sign in to add a wallet."); return; }
       busy.current = true; setIsLoading(true);
-      try { await creation.create({ account: { name: name.trim(), type: "credit_card", currency: "PHP", color, icon: icon || null, is_savings: false, interest_rate: 0, include_in_networth: false, display_order: 0 }, openingDebts: validation.openingDebts }); }
+      try { await creation.create({ account: { name: name.trim(), type: "credit_card", color, icon: icon || null, is_savings: false, interest_rate: 0, include_in_networth: false, display_order: 0 }, openingDebts: validation.openingDebts }); }
       finally { busy.current = false; setIsLoading(false); }
       return;
     }
@@ -106,7 +106,6 @@ export default function AddAccountForm() {
         name,
         type,
         balance: Number(balance || 0),
-        currency: "PHP",
         color,
         icon: icon || null,
       });

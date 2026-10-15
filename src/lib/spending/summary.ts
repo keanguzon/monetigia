@@ -12,7 +12,6 @@ const summarySchema = z.object({
   net: SignedMoneySchema.transform(value => fromMinorUnits(toMinorUnits(value))),
   categories: z.array(z.object({ categoryId: z.string().uuid().nullable(), name: z.string(), amount: money })),
   transactionCount: z.number().int().nonnegative().safe(),
-  excludedCurrencyTransactionCount: z.number().int().nonnegative().safe(),
 });
 export type SpendingSummary = z.infer<typeof summarySchema>;
 

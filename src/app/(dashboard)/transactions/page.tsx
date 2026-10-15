@@ -513,7 +513,7 @@ export default function TransactionsPage() {
 
         <TransactionFilterChips query={history.query} dateSelection={dateSelection} options={history.options} onChange={(query, date) => { setAppliedQuery(query); setDateSelection(date); }} onClearAll={clearFilters} />
         <div className="space-y-2">
-          {amountMode && Boolean(history.excludedCurrencyEntryCount) && <p className="text-xs text-muted-foreground">{history.excludedCurrencyEntryCount} non-PHP entries excluded</p>}
+
           {amountMode && Boolean(history.invalidAmountEntryCount) && <p className="text-xs text-muted-foreground">{history.invalidAmountEntryCount} unavailable amounts excluded</p>}
           {!isLoading && !loadError && history.totalMatchingEntries !== null && <div className="flex flex-col gap-1 px-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>Showing {historyEntries.length} of {history.totalMatchingEntries} matches</span>
@@ -525,7 +525,7 @@ export default function TransactionsPage() {
                 {historyEntries.map((entry) => {
                   if (entry.kind === "installment_group") {
                     const debtState = !ownerReady || debt.isLoading || debt.error ? null : completeCreditGroup(entry, debt.snapshot);
-                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} matchingRowIds={entry.matchingRowIds} recordedAmount={entry.recordedAmount} currency={entry.currency} transactionDate={entry.transactionDate} showRecordedAmount={amountMode} writesEnabled={ownerReady} periodRange={history.query.start && history.query.end ? { start: history.query.start, end: history.query.end } : null} onSelectTransaction={selectTransaction} onRequestDelete={requestDelete} onRequestEditDescription={requestEditDescription} onSaved={refreshCorrectionViews} />;
+                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} matchingRowIds={entry.matchingRowIds} recordedAmount={entry.recordedAmount} transactionDate={entry.transactionDate} showRecordedAmount={amountMode} writesEnabled={ownerReady} periodRange={history.query.start && history.query.end ? { start: history.query.start, end: history.query.end } : null} onSelectTransaction={selectTransaction} onRequestDelete={requestDelete} onRequestEditDescription={requestEditDescription} onSaved={refreshCorrectionViews} />;
                   }
 
                   const transaction = entry.transaction;
@@ -564,7 +564,7 @@ export default function TransactionsPage() {
                         <span className={`whitespace-nowrap text-sm font-semibold tabular-nums sm:text-base ${
                           transaction.type === "income" ? "text-green-700 dark:text-primary" : transaction.type === "expense" ? "text-red-700 dark:text-red-400" : "text-blue-700 dark:text-blue-400"
                         }`}>
-                          {entry.recordedAmount === null ? "Unavailable" : `${transaction.type === "income" ? "+" : transaction.type === "expense" ? "−" : ""}${formatHistoryMoney(entry.recordedAmount, entry.currency)}`}
+                          {entry.recordedAmount === null ? "Unavailable" : `${transaction.type === "income" ? "+" : transaction.type === "expense" ? "−" : ""}${formatHistoryMoney(entry.recordedAmount)}`}
                         </span>
                         <div className="flex shrink-0 items-center gap-1">
                           <button type="button" aria-label={`Edit transaction for ${description}`} data-tooltip="Edit transaction" disabled={!ownerReady} onClick={() => requestOrdinaryEdit(transaction)} className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
@@ -620,7 +620,7 @@ export default function TransactionsPage() {
           <Dialog.Content data-no-press-motion="" onEscapeKeyDown={event => { if (isDeleting) event.preventDefault(); }} onPointerDownOutside={event => { if (isDeleting) event.preventDefault(); }} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl bg-card text-card-foreground p-6 shadow-xl">
             <Dialog.Title className="text-xl font-semibold mb-2">{deleteConfirmIsInstallment ? "Delete this installment?" : "Delete transaction?"}</Dialog.Title>
             <Dialog.Description className="text-sm text-muted-foreground mb-6">{deleteConfirmIsInstallment ? "This deletes only this installment and reverses its wallet effects. The other installments in this schedule will remain, and the remaining scheduled amount will update." : "This removes the transaction and reverses its wallet balances and goal effects. The deletion may be refused if the money or carried reservation has already been used."}</Dialog.Description>
-            {deleteConfirm && <p className="mb-6 text-sm">{deleteConfirm.description || "Transaction"} · {formatHistoryMoney(deleteConfirm.amount, historyEntries.find(entry => entry.kind === "transaction" ? entry.transaction.id === deleteConfirm.id : entry.children.some(row => row.id === deleteConfirm.id))?.currency)}</p>}
+            {deleteConfirm && <p className="mb-6 text-sm">{deleteConfirm.description || "Transaction"} · {formatHistoryMoney(deleteConfirm.amount)}</p>}
             <div className="flex gap-3">
               <button type="button" disabled={isDeleting} onClick={() => setDeleteConfirm(null)} className="min-h-11 flex-1 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Cancel</button>
               <button type="button" onClick={() => { void deleteTransaction(deleteConfirm); }} disabled={isDeleting || !!deletion.pendingTransactionId && deletion.pendingTransactionId !== deleteConfirm?.id} className="min-h-11 flex-1 px-4 bg-red-700 text-white dark:bg-red-400 dark:text-slate-950 rounded-lg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">{isDeleting ? "Deleting..." : deleteConfirmIsInstallment ? "Delete installment" : "Delete"}</button>

@@ -89,7 +89,6 @@ export function useDashboardStats(
       monthlyExpenses: toMinorUnits(current.spent) / 100,
       lastMonthIncome: toMinorUnits(previous.income) / 100,
       lastMonthExpenses: toMinorUnits(previous.spent) / 100,
-      excludedCurrencyTransactionCount: current.excludedCurrencyTransactionCount,
     };
   }, { keepPreviousData: false });
   const visible = owner.status === "authenticated" && owner.isCurrent();

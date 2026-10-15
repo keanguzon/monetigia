@@ -20,7 +20,7 @@ const goalId = "20000000-0000-4000-8000-000000000002", accountId = "30000000-000
 beforeEach(() => {
   vi.clearAllMocks(); state.readError = null;
   state.goal = { id: goalId, name: "Laptop", review_state: "needs_review", status: "active", archived_at: null, category: "tech", target_amount: 5000, reserved: "0.00", spent: "0.00", walletReservations: [], progressPercent: 0, legacyTaggedAmount: "2000.00", financeAmounts: { target: "5000.00", progress: "0.00", allocationPerCycle: "0.00" } };
-  state.accounts = [{ id: accountId, name: "GCash", type: "e_wallet", currency: "PHP", is_active: true }, { id: "card", name: "Card", type: "credit_card", currency: "PHP", is_active: true }];
+  state.accounts = [{ id: accountId, name: "GCash", type: "e_wallet", is_active: true }, { id: "card", name: "Card", type: "credit_card", is_active: true }];
   state.wallets = [{ accountId, actual: "3000.00", reserved: "0.00", available: "3000.00" }];
   state.history = [{ id: "40000000-0000-4000-8000-000000000004", account_id: accountId, type: "expense", amount: 2000, description: "Laptop purchase", date: "2026-10-01", transfer_to_account_id: null }, { id: "credit", account_id: "card", type: "expense", amount: 2000, description: "Installment purchase", date: "2026-10-01" }, { id: "transfer", account_id: accountId, type: "transfer", amount: 2000, description: "Cash transfer", transfer_to_account_id: accountId, date: "2026-10-01" }];
   state.apply.mockResolvedValue({ refreshError: null }); state.refresh.mockResolvedValue(undefined);

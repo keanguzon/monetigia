@@ -227,12 +227,6 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {(stats?.excludedCurrencyTransactionCount ?? 0) > 0 && (
-        <p role="note" className="text-xs text-muted-foreground">
-          Income and Expenses for this period exclude {stats?.excludedCurrencyTransactionCount} transaction{stats?.excludedCurrencyTransactionCount === 1 ? "" : "s"} recorded in currencies other than PHP. Total Balance reflects account balances.
-        </p>
-      )}
-
       </div>
       {/* Recent Transactions: Clean Open Hairline Register (No outer card) */}
       <div className="space-y-3">

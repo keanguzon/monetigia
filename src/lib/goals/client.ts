@@ -82,7 +82,7 @@ export class SupersededGoalFinanceRequestError extends Error {
   }
 }
 
-export type GoalWalletMetadata = { id: string; name: string; type: string; currency: string; is_active: boolean };
+export type GoalWalletMetadata = { id: string; name: string; type: string; is_active: boolean };
 export type GoalHistoryEntry = Omit<AllocationEvent, "kind"> & {
   kind: AllocationEvent["kind"] | "transaction_reversal";
   accountName: string;
@@ -104,16 +104,16 @@ function normalizeDatabaseDecimal(value: unknown): string {
 export async function fetchGoalWalletMetadata(userId: string): Promise<GoalWalletMetadata[]> {
   const { data, error } = await (createClient() as any)
     .from("accounts")
-    .select("id,name,type,currency,is_active")
+    .select("id,name,type,is_active")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("display_order", { ascending: true });
   if (error) throw error;
   if (!Array.isArray(data) || data.some(row => typeof row?.id !== "string" || typeof row?.name !== "string" ||
-    typeof row?.type !== "string" || typeof row?.currency !== "string" || typeof row?.is_active !== "boolean")) {
+    typeof row?.type !== "string" || typeof row?.is_active !== "boolean")) {
     throw new Error("Wallet details could not be read.");
   }
-  return data.map(({ id, name, type, currency, is_active }) => ({ id, name, type, currency, is_active }));
+  return data.map(({ id, name, type, is_active }) => ({ id, name, type, is_active }));
 }
 
 export async function fetchGoalHistory(userId: string, goalId: string): Promise<GoalHistoryEntry[]> {
@@ -135,7 +135,7 @@ export async function fetchGoalHistory(userId: string, goalId: string): Promise<
   const operationIds = Array.from(new Set(events.map(event => event.operation_id)));
   const [accountResult, sourceOperationResult] = await Promise.all([
     accountIds.length === 0 ? Promise.resolve({ data: [], error: null }) : db.from("accounts")
-      .select("id,name,type,currency,is_active")
+      .select("id,name,type,is_active")
       .eq("user_id", userId)
       .in("id", accountIds),
     operationIds.length === 0 ? Promise.resolve({ data: [], error: null }) : db.from("financial_operations")

@@ -46,7 +46,6 @@ export interface Database {
           name: string;
           type: "cash" | "bank" | "credit_card" | "e_wallet" | "investment";
           balance: number;
-          currency: string;
           color: string | null;
           icon: string | null;
           is_active: boolean;
@@ -63,7 +62,6 @@ export interface Database {
           name: string;
           type: "cash" | "bank" | "credit_card" | "e_wallet" | "investment";
           balance?: number;
-          currency?: string;
           color?: string | null;
           icon?: string | null;
           is_active?: boolean;
@@ -80,7 +78,6 @@ export interface Database {
           name?: string;
           type?: "cash" | "bank" | "credit_card" | "e_wallet" | "investment";
           balance?: number;
-          currency?: string;
           color?: string | null;
           icon?: string | null;
           is_active?: boolean;
@@ -419,7 +416,6 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          currency: string;
           theme: "light" | "dark" | "system";
           language: string;
           notifications_enabled: boolean;
@@ -429,7 +425,6 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          currency?: string;
           theme?: "light" | "dark" | "system";
           language?: string;
           notifications_enabled?: boolean;
@@ -439,7 +434,6 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          currency?: string;
           theme?: "light" | "dark" | "system";
           language?: string;
           notifications_enabled?: boolean;

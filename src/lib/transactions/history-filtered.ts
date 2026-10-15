@@ -18,18 +18,17 @@ const rowSchema = z.object({
 const entrySchema = z.object({
   key: z.string(), kind: z.enum(["transaction", "installment_group"]), groupId: uuid.nullable(),
   rows: z.array(rowSchema).min(1), matchingRowIds: z.array(uuid).min(1), recordedAmount: exactAmount.nullable(),
-  currency: z.string().min(1).nullable(), transactionDate: civilDate, createdAt: timestamp, sortId: uuid,
+  transactionDate: civilDate, createdAt: timestamp, sortId: uuid,
 }).strict();
 const count = z.number().int().nonnegative().safe();
 const pageSchema = z.object({
   version: z.literal(1), entries: z.array(entrySchema).max(HISTORY_QUERY_PAGE_SIZE), nextOffset: count.nullable(),
-  totalMatchingEntries: count, excludedCurrencyEntryCount: count, invalidAmountEntryCount: count,
+  totalMatchingEntries: count, invalidAmountEntryCount: count,
 }).strict();
 
 export type FilteredHistoryMetadata = {
   matchingRowIds: string[];
   recordedAmount: string | null;
-  currency: string | null;
   transactionDate: string | null;
   createdAt: string;
   sortId: string;
@@ -39,7 +38,6 @@ export type FilteredHistoryPage = {
   entries: FilteredHistoryEntry[];
   nextOffset: number | null;
   totalMatchingEntries: number;
-  excludedCurrencyEntryCount: number;
   invalidAmountEntryCount: number;
 };
 
@@ -75,7 +73,7 @@ export function parseFilteredHistoryPage(value: unknown, userId: string, input: 
   const expectedSize = Math.min(HISTORY_QUERY_PAGE_SIZE, Math.max(0, page.totalMatchingEntries - query.offset));
   if (page.entries.length !== expectedSize || page.nextOffset !== (page.totalMatchingEntries > query.offset + HISTORY_QUERY_PAGE_SIZE ? query.offset + HISTORY_QUERY_PAGE_SIZE : null)) invalid();
   const amountMode = query.sort.startsWith("amount_") || query.minAmount !== null || query.maxAmount !== null;
-  if (!amountMode && (page.excludedCurrencyEntryCount !== 0 || page.invalidAmountEntryCount !== 0)) invalid();
+  if (!amountMode && page.invalidAmountEntryCount !== 0) invalid();
   const keys = new Set<string>();
   const ids = new Set<string>();
   const entries = page.entries.map(envelope => {
@@ -96,7 +94,7 @@ export function parseFilteredHistoryPage(value: unknown, userId: string, input: 
       ? BigInt(row.amount.split(".")[0]) * BigInt(100) + BigInt((row.amount.split(".")[1] ?? "").padEnd(2, "0")) : null);
     const recordedCents = envelope.recordedAmount === null ? null : BigInt(envelope.recordedAmount.replace(".", ""));
     if (cents.some(value => value === null) ? recordedCents !== null : recordedCents !== cents.reduce<bigint>((sum, value) => sum + value!, BigInt(0))) invalid();
-    if (amountMode && (envelope.currency !== "PHP" || envelope.recordedAmount === null || envelope.rows.some(row => !/^\d+(?:\.\d{1,2})?$/.test(row.amount)))) invalid();
+    if (amountMode && (envelope.recordedAmount === null || envelope.rows.some(row => !/^\d+(?:\.\d{1,2})?$/.test(row.amount)))) invalid();
     // The existing card model uses an empty date for unavailable legacy civil dates.
     const rows: TransactionHistoryRow[] = envelope.rows.map(row => ({ ...row, date: row.date ?? "", descriptionProof: null }));
     const entry = groupTransactions(rows)[0];
@@ -108,11 +106,11 @@ export function parseFilteredHistoryPage(value: unknown, userId: string, input: 
       entry.addedAt = envelope.createdAt;
       if (envelope.recordedAmount === null) entry.remainingAmount = null;
     }
-    return { ...entry, matchingRowIds: envelope.matchingRowIds, recordedAmount: envelope.recordedAmount, currency: envelope.currency,
+    return { ...entry, matchingRowIds: envelope.matchingRowIds, recordedAmount: envelope.recordedAmount,
       transactionDate: envelope.transactionDate, createdAt: envelope.createdAt, sortId: envelope.sortId } as FilteredHistoryEntry;
   });
   return { entries, nextOffset: page.nextOffset, totalMatchingEntries: page.totalMatchingEntries,
-    excludedCurrencyEntryCount: page.excludedCurrencyEntryCount, invalidAmountEntryCount: page.invalidAmountEntryCount };
+    invalidAmountEntryCount: page.invalidAmountEntryCount };
 }
 
 type HistoryRpcClient = { rpc: (name: "transaction_history_page", args: { p_query: HistoryQuery }) => { setHeader: (name: string, value: string) => PromiseLike<{ data: unknown; error: unknown }> } };
@@ -123,16 +121,16 @@ export async function loadFilteredHistoryPage(client: HistoryRpcClient, userId: 
   return parseFilteredHistoryPage(data, userId, query);
 }
 
-export type HistoryWalletOption = { id: string; name: string; type: string; currency: string; isActive: boolean };
+export type HistoryWalletOption = { id: string; name: string; type: string; isActive: boolean };
 export type HistoryCategoryOption = { id: string; name: string; type: "income" | "expense"; color: string | null };
 export type HistoryFilterOptions = { wallets: HistoryWalletOption[]; categories: HistoryCategoryOption[] };
-const walletSchema = z.object({ id: uuid, user_id: uuid, name: z.string(), type: z.string(), currency: z.string(), is_active: z.boolean() }).strict();
+const walletSchema = z.object({ id: uuid, user_id: uuid, name: z.string(), type: z.string(), is_active: z.boolean() }).strict();
 const categorySchema = z.object({ id: uuid, user_id: uuid.nullable(), name: z.string(), type: z.enum(["income", "expense"]), color: z.string().nullable(), is_default: z.boolean() }).strict();
 
 export async function loadHistoryFilterOptions(client: any, userId: string, accessToken: string): Promise<HistoryFilterOptions> {
   uuid.parse(userId);
   const [wallets, categories] = await Promise.all([
-    client.from("accounts").select("id,user_id,name,type,currency,is_active").eq("user_id", userId).order("name")
+    client.from("accounts").select("id,user_id,name,type,is_active").eq("user_id", userId).order("name")
       .setHeader("Authorization", `Bearer ${accessToken}`),
     client.from("categories").select("id,user_id,name,type,color,is_default").or(`user_id.eq.${userId},and(user_id.is.null,is_default.eq.true)`).order("name")
       .setHeader("Authorization", `Bearer ${accessToken}`),
@@ -143,6 +141,6 @@ export async function loadHistoryFilterOptions(client: any, userId: string, acce
   const categoryRows = z.array(categorySchema).parse(categories.data);
   if (walletRows.some(row => row.user_id !== userId) || categoryRows.some(row => row.user_id !== userId && !(row.user_id === null && row.is_default))) invalid();
   if (new Set(walletRows.map(row => row.id)).size !== walletRows.length || new Set(categoryRows.map(row => row.id)).size !== categoryRows.length) invalid();
-  return { wallets: walletRows.map(row => ({ id: row.id, name: row.name, type: row.type, currency: row.currency, isActive: row.is_active })),
+  return { wallets: walletRows.map(row => ({ id: row.id, name: row.name, type: row.type, isActive: row.is_active })),
     categories: categoryRows.map(row => ({ id: row.id, name: row.name, type: row.type, color: row.color })) };
 }

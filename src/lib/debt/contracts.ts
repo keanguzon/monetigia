@@ -48,7 +48,7 @@ export const OpeningDebtDraftSchema: z.ZodType<OpeningDebtDraft> = z.object({
 export type DebtAccountCreateInput = {
   requestId: string;
   account: {
-    name: string; type: "credit_card"; currency: "PHP";
+    name: string; type: "credit_card";
     color: string | null; icon: string | null;
     is_savings: false; interest_rate: 0;
     include_in_networth: boolean; display_order: number;
@@ -60,7 +60,7 @@ export type DebtAccountCreateResult = { accountId: string; debtItemIds: string[]
 export const DebtAccountCreateInputSchema: z.ZodType<DebtAccountCreateInput> = z.object({
   requestId: z.string().uuid(),
   account: z.object({
-    name, type: z.literal("credit_card"), currency: z.literal("PHP"),
+    name, type: z.literal("credit_card"),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable(),
     icon: z.string().regex(/^[a-zA-Z0-9_-]+\.(png|jpe?g|webp|gif|svg)$/i).nullable(),
     is_savings: z.literal(false), interest_rate: z.literal(0),
@@ -131,7 +131,7 @@ export const AdoptOpeningDebtCommandSchema = z.object({
   kind: z.literal("adopt_opening_debt"), accountId: z.string().uuid(), fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
   items: z.array(OpeningDebtDraftSchema).min(1).max(MAX_OPENING_DEBT_ITEMS).superRefine((items, context) => {
     const validation = DebtAccountCreateInputSchema.safeParse({ requestId: "00000000-0000-4000-8000-000000000000",
-      account: { name: "Validation", type: "credit_card", currency: "PHP", color: null, icon: null, is_savings: false, interest_rate: 0, include_in_networth: true, display_order: 0 }, openingDebts: items });
+      account: { name: "Validation", type: "credit_card", color: null, icon: null, is_savings: false, interest_rate: 0, include_in_networth: true, display_order: 0 }, openingDebts: items });
     if (!validation.success) for (const issue of validation.error.issues) context.addIssue({ ...issue, path: issue.path.slice(1) });
   }),
 }).strict();

@@ -5,8 +5,8 @@ import { defaultHistoryQuery } from "@/lib/transactions/history-query";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const owner = id(99);
 const row = (n: number, groupId: string | null = null) => ({ id: id(n), user_id: owner, account_id: id(90), category_id: null, goal_id: null, transfer_to_account_id: null, type: "expense", amount: "1.00", description: "Purchase", date: "2026-01-01", created_at: "2026-01-01T00:00:00+00:00", history_date: "2026-01-01", installment_group_id: groupId, purchase_date: null, account: { id: id(90), name: "Cash", type: "cash" }, category: null, transfer_to_account: null });
-const entry = (n: number) => ({ key: `transaction:${id(n)}`, kind: "transaction", groupId: null, rows: [row(n)], matchingRowIds: [id(n)], recordedAmount: "1.00", currency: "PHP", transactionDate: "2026-01-01", createdAt: "2026-01-01T00:00:00+00:00", sortId: id(n) });
-const page = (entries: unknown[] = [entry(1)]) => ({ version: 1, entries, nextOffset: null, totalMatchingEntries: entries.length, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 });
+const entry = (n: number) => ({ key: `transaction:${id(n)}`, kind: "transaction", groupId: null, rows: [row(n)], matchingRowIds: [id(n)], recordedAmount: "1.00", transactionDate: "2026-01-01", createdAt: "2026-01-01T00:00:00+00:00", sortId: id(n) });
+const page = (entries: unknown[] = [entry(1)]) => ({ version: 1, entries, nextOffset: null, totalMatchingEntries: entries.length, invalidAmountEntryCount: 0 });
 const groupEntry = () => ({ ...entry(2), key: `installment:${id(80)}`, kind: "installment_group", groupId: id(80),
   rows: [row(1, id(80)), { ...row(2, id(80)), created_at: "2026-01-02T00:00:00+00:00" }],
   recordedAmount: "2.00", createdAt: "2026-01-02T00:00:00+00:00" });
@@ -43,7 +43,7 @@ describe("filtered history adapter", () => {
     const client = { from: (table: string) => {
       const call = { table, eq: [] as any[], or: "", header: [] as string[] }; reads.push(call);
       const query: any = { select: () => query, eq: (...args: any[]) => { call.eq.push(args); return query; }, or: (value: string) => { call.or = value; return query; }, order: () => query,
-        setHeader: (...args: string[]) => { call.header = args; return Promise.resolve({ data: table === "accounts" ? [{ id: id(90), user_id: owner, name: "Archived", type: "cash", currency: "PHP", is_active: false }] : [{ id: id(80), user_id: null, name: "Default", type: "expense", is_default: true, color: null }], error: null }); } };
+        setHeader: (...args: string[]) => { call.header = args; return Promise.resolve({ data: table === "accounts" ? [{ id: id(90), user_id: owner, name: "Archived", type: "cash", is_active: false }] : [{ id: id(80), user_id: null, name: "Default", type: "expense", is_default: true, color: null }], error: null }); } };
       return query;
     } };
     const result = await loadHistoryFilterOptions(client, owner, "token");

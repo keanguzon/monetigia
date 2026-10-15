@@ -14,7 +14,7 @@ vi.mock('@/components/ui/use-toast', () => ({ useToast: () => ({ toast: f.toast 
 vi.mock('next/image', () => ({ default: (props: any) => <img {...props} /> }));
 beforeEach(() => { Object.values(f).forEach(v => { if (typeof v === 'function' && 'mockReset' in v) v.mockReset(); }); f.userId = 'owner'; f.state = { isSaving: false, unresolved: false, saved: null, error: null, refreshError: null, pendingInput: null }; f.insert.mockResolvedValue({ error: null }); f.create.mockResolvedValue(undefined); f.refresh.mockResolvedValue(undefined); });
 afterEach(cleanup);
-const account = { name: 'SPayLater', type: 'credit_card', currency: 'PHP', color: '#10b981', icon: 'Spaylater.png', is_savings: false, interest_rate: 0, include_in_networth: false, display_order: 0 };
+const account = { name: 'SPayLater', type: 'credit_card', color: '#10b981', icon: 'Spaylater.png', is_savings: false, interest_rate: 0, include_in_networth: false, display_order: 0 };
 const pending = { account, openingDebts: [{ clientId: 'frozen', name: 'Phone', mode: 'installments', amount: '1000.00', firstDueDate: '2026-01-31', count: 3 }] };
 const modal = () => <AddAccountModal isOpen onClose={f.close} existingAccounts={[]} />;
 function submit() { fireEvent.click(screen.getByRole('button', { name: 'Create Wallet' })); }
@@ -78,7 +78,7 @@ test('switching standalone to ordinary wallet discards hidden credit debts from 
   fireEvent.change(screen.getByLabelText('Debt name'), { target: { value: 'Hidden debt' } });
   fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'cash' } });
   submit();
-  await waitFor(() => expect(f.insert).toHaveBeenCalledWith({ user_id: 'owner', name: 'My debt', type: 'cash', balance: 0, currency: 'PHP', color: '#22c55e', icon: null }));
+  await waitFor(() => expect(f.insert).toHaveBeenCalledWith({ user_id: 'owner', name: 'My debt', type: 'cash', balance: 0, color: '#22c55e', icon: null }));
   expect(f.create).not.toHaveBeenCalled();
 });
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
-const state = vi.hoisted(() => ({ owner: '', rpc: vi.fn(), account: null as any, refreshFail: false, metadata: [{ id: '20000000-0000-4000-8000-000000000002', currency: 'PHP', is_active: true, type: 'credit_card', name: 'Legacy card' }] }));
+const state = vi.hoisted(() => ({ owner: '', rpc: vi.fn(), account: null as any, refreshFail: false, metadata: [{ id: '20000000-0000-4000-8000-000000000002', is_active: true, type: 'credit_card', name: 'Legacy card' }] }));
 vi.mock('next/dynamic', () => ({ default: () => () => null }));
 vi.mock('@/components/ui/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/hooks/use-goals', () => ({ useGoals: () => ({ userId: state.owner, financeSnapshot: { goals: [], wallets: [] }, isLoading: false, isError: null, refresh: async () => {} }) }));

@@ -7,11 +7,11 @@ import { SpendingOwnerChangedError, useSpendingOwner } from "./use-spending-owne
 type ReadMode = "initial" | "more" | "refresh";
 type HistoryState = {
   key: string; entries: FilteredHistoryEntry[]; nextOffset: number | null; loadedPages: number;
-  totalMatchingEntries: number | null; excludedCurrencyEntryCount: number | null; invalidAmountEntryCount: number | null;
+  totalMatchingEntries: number | null; invalidAmountEntryCount: number | null;
   loading: ReadMode | null; error: unknown | null; failedMode: ReadMode | null;
 };
 const empty = (key: string): HistoryState => ({ key, entries: [], nextOffset: null, loadedPages: 0, totalMatchingEntries: null,
-  excludedCurrencyEntryCount: null, invalidAmountEntryCount: null, loading: null, error: null, failedMode: null });
+  invalidAmountEntryCount: null, loading: null, error: null, failedMode: null });
 type OptionsState = HistoryFilterOptions & { key: string; loading: boolean; error: unknown | null };
 
 export function useTransactionHistory(input: Partial<HistoryQuery> = {}) {
@@ -76,7 +76,7 @@ export function useTransactionHistory(input: Partial<HistoryQuery> = {}) {
       const rowIds = entries.flatMap(entry => entry.kind === "transaction" ? [entry.transaction.id] : entry.children.map(row => row.id));
       if (new Set(rowIds).size !== rowIds.length) throw new Error("History changed while loading. Refresh the list.");
       publish({ key: context.key, entries, nextOffset: last.nextOffset, loadedPages: (mode === "more" ? previous.loadedPages : 0) + pages.length,
-        totalMatchingEntries: last.totalMatchingEntries, excludedCurrencyEntryCount: last.excludedCurrencyEntryCount, invalidAmountEntryCount: last.invalidAmountEntryCount,
+        totalMatchingEntries: last.totalMatchingEntries, invalidAmountEntryCount: last.invalidAmountEntryCount,
         loading: null, error: null, failedMode: null });
     } catch (error) {
       if (valid()) { publish({ ...previous, loading: null, error, failedMode: mode }); throw error; }
@@ -123,7 +123,7 @@ export function useTransactionHistory(input: Partial<HistoryQuery> = {}) {
   return {
     userId: owner.userId, ownerStatus: owner.status, query, queryKey: key,
     entries: shown.entries, matchingRowIds: shown.entries.flatMap(entry => entry.matchingRowIds), nextOffset: shown.nextOffset,
-    totalMatchingEntries: shown.totalMatchingEntries, excludedCurrencyEntryCount: shown.excludedCurrencyEntryCount, invalidAmountEntryCount: shown.invalidAmountEntryCount,
+    totalMatchingEntries: shown.totalMatchingEntries, invalidAmountEntryCount: shown.invalidAmountEntryCount,
     isLoading: owner.isLoading || visible && (state.key !== key || shown.loading === "initial" || shown.loadedPages === 0 && shown.error === null),
     isLoadingMore: shown.loading === "more", isRefreshing: shown.loading === "refresh",
     error: owner.error ?? shown.error,

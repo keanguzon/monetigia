@@ -11,7 +11,7 @@ vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({}) }));
 vi.mock("@/lib/transactions/history-filtered", () => ({ loadFilteredHistoryPage: (...args: any[]) => mocks.read(...args), loadHistoryFilterOptions: (...args: any[]) => mocks.options(...args) }));
 const deferred = <T,>() => { let resolve!: (value: T) => void; let reject!: (reason: unknown) => void; const promise = new Promise<T>((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 function page(name = "first", nextOffset: number | null = null): FilteredHistoryPage {
-  return { entries: [{ kind: "transaction", key: name, transaction: { id: name } as any, matchingRowIds: [name], recordedAmount: "1.00", currency: "PHP", transactionDate: null, createdAt: "2026-01-01T00:00:00Z", sortId: name }], nextOffset, totalMatchingEntries: nextOffset === null ? 1 : 51, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 };
+  return { entries: [{ kind: "transaction", key: name, transaction: { id: name } as any, matchingRowIds: [name], recordedAmount: "1.00", transactionDate: null, createdAt: "2026-01-01T00:00:00Z", sortId: name }], nextOffset, totalMatchingEntries: nextOffset === null ? 1 : 51, invalidAmountEntryCount: 0 };
 }
 beforeEach(() => {
   vi.resetAllMocks();

@@ -18,13 +18,11 @@ export function formatHistoryDate(value: string | null | undefined, style: "shor
   return isHistoryCivilDate(value) ? formatDate(`${value}T12:00:00`, style) : "Unavailable";
 }
 
-export function formatHistoryMoney(value: string | number | null | undefined, currency: string | null | undefined): string {
+export function formatHistoryMoney(value: string | number | null | undefined): string {
   const text = typeof value === "number" ? String(value) : value;
   const match = typeof text === "string" ? /^(\d+)(?:\.(\d{1,2}))?$/.exec(text) : null;
   if (!match) return "Unavailable";
   const whole = BigInt(match[1]).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const fraction = (match[2] ?? "").padEnd(2, "0");
-  if (!currency || !/^[A-Z]{3}$/.test(currency)) return `${whole}.${fraction} (currency unavailable)`;
-  const parts = new Intl.NumberFormat("en-PH", { style: "currency", currency }).formatToParts(0);
-  return parts.map(part => part.type === "integer" ? whole : part.type === "fraction" ? fraction : part.value).join("");
+  return `₱${whole}.${fraction}`;
 }

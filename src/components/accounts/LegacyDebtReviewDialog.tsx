@@ -24,7 +24,7 @@ export function LegacyDebtReviewDialog({ isOpen, onClose, account }: { isOpen: b
   const targetId = pending?.accountId ?? account?.accountId;
   const current = debt.snapshot ? debt.snapshot.accounts.find(item => item.accountId === targetId) ?? null : account;
   const wallet = metadata.data?.find(item => item.id === targetId);
-  const eligible = current?.reconciliation === 'balanced' && current.undatedOutstanding !== '0.00' && wallet?.currency === 'PHP' && wallet.type === 'credit_card' && wallet.is_active === true;
+  const eligible = current?.reconciliation === 'balanced' && current.undatedOutstanding !== '0.00' && wallet?.type === 'credit_card' && wallet.is_active === true;
   const frozenDraft: ExistingDebtFieldsValue | null = pending ? { enabled: true, items: pending.items.map(item => ({ clientId: item.clientId, name: item.name, mode: item.mode, amountText: item.amount, firstDueDate: item.firstDueDate, countText: String(item.count) })) } : null;
   const visibleDraft = frozenDraft ?? draft;
   const validated = useMemo(() => validateExistingDebtFields(visibleDraft), [visibleDraft]);

@@ -16,9 +16,9 @@ const categoryOne = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const preset: Extract<HistoryDateSelection, { kind: "preset" }> = { kind: "preset", period: { kind: "month", start: "2026-10-01", end: "2026-10-31" } };
 const loadedOptions: HistoryFilterOptions = {
   wallets: [
-    { id: walletOne, name: "Daily wallet", type: "cash", currency: "PHP", isActive: true },
-    { id: walletTwo, name: "Travel wallet", type: "cash", currency: "PHP", isActive: true },
-    { id: oldWallet, name: "Archived savings", type: "bank", currency: "PHP", isActive: false },
+    { id: walletOne, name: "Daily wallet", type: "cash", isActive: true },
+    { id: walletTwo, name: "Travel wallet", type: "cash", isActive: true },
+    { id: oldWallet, name: "Archived savings", type: "bank", isActive: false },
   ],
   categories: [{ id: categoryOne, name: "Groceries", type: "expense", color: null }],
 };

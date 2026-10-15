@@ -9,9 +9,9 @@ import { FinancialCommandError, applyFinancialCommand, quoteTransaction } from "
 import type { TransactionDraft, TransactionQuote } from "@/lib/goals/contracts";
 
 const fixture = vi.hoisted(() => ({ userId: "user", authUserId: undefined as string | null | undefined, refresh: vi.fn(), history: [] as any[], accounts: [
-  { id: "cash", name: "GoTyme", type: "bank", currency: "PHP", is_active: true, balance: 30000 },
-  { id: "bank", name: "Cash", type: "cash", currency: "PHP", is_active: true, balance: 20000 },
-  { id: "credit", name: "userPayLater", type: "credit_card", currency: "PHP", is_active: true, balance: 0 },
+  { id: "cash", name: "GoTyme", type: "bank", is_active: true, balance: 30000 },
+  { id: "bank", name: "Cash", type: "cash", is_active: true, balance: 20000 },
+  { id: "credit", name: "userPayLater", type: "credit_card", is_active: true, balance: 0 },
 ], goals: [
   { id: "laptop", name: "Laptop", status: "active", review_state: "confirmed", archived_at: null, category: "Savings", walletReservations: [{ accountId: "cash", amount: "5000.00" }] },
   { id: "phone", name: "Phone", status: "active", review_state: "confirmed", archived_at: null, category: "Savings", walletReservations: [{ accountId: "cash", amount: "5000.00" }] },
@@ -377,14 +377,14 @@ test("deletion session mismatch preserves its unknown request for the original o
   expect(vi.mocked(applyFinancialCommand).mock.calls[1]).toEqual(original);
 });
 
-test("only active PHP accounts appear in the transaction wallet choices", async () => {
+test("only active accounts appear in the transaction wallet choices", async () => {
   const count = fixture.accounts.length;
-  fixture.accounts.push({ id: "inactive", name: "Closed", type: "bank", currency: "PHP", is_active: false, balance: 1000 }, { id: "usd", name: "USD wallet", type: "bank", currency: "USD", is_active: true, balance: 1000 }, { id: "unknown", name: "Unknown status", type: "bank", currency: "PHP", is_active: null, balance: 1000 } as any);
+  fixture.accounts.push({ id: "inactive", name: "Closed", type: "bank", is_active: false, balance: 1000 }, { id: "second-bank", name: "Second bank", type: "bank", is_active: true, balance: 1000 }, { id: "unknown", name: "Unknown status", type: "bank", is_active: null, balance: 1000 } as any);
   try {
     render(<AddTransactionModal isOpen onClose={() => {}} />);
     await screen.findByRole("option", { name: "GoTyme" });
     expect(screen.queryByRole("option", { name: "Closed" })).toBeNull();
-    expect(screen.queryByRole("option", { name: "USD wallet" })).toBeNull();
+    expect(screen.getByRole("option", { name: "Second bank" })).toBeTruthy();
     expect(screen.queryByRole("option", { name: "Unknown status" })).toBeNull();
   } finally { fixture.accounts.splice(count); }
 });

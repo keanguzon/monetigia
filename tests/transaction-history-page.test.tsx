@@ -332,9 +332,9 @@ beforeEach(() => {
     }
     const entries = groupTransactions(rows.map((row: any) => ({ ...row, descriptionProof: null }))).map(entry => {
       const children = entry.kind === "transaction" ? [entry.transaction] : entry.children;
-      return { ...entry, matchingRowIds: children.map(row => row.id), recordedAmount: "12.00", currency: "PHP", transactionDate: entry.kind === "transaction" ? entry.transaction.date : entry.purchaseDate ?? entry.latestDueDate, createdAt: children[0].created_at, sortId: children[0].id };
+      return { ...entry, matchingRowIds: children.map(row => row.id), recordedAmount: "12.00", transactionDate: entry.kind === "transaction" ? entry.transaction.date : entry.purchaseDate ?? entry.latestDueDate, createdAt: children[0].created_at, sortId: children[0].id };
     });
-    return { entries, nextOffset: response.data.length === 50 ? query.offset + 50 : null, totalMatchingEntries: 1105, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 };
+    return { entries, nextOffset: response.data.length === 50 ? query.offset + 50 : null, totalMatchingEntries: 1105, invalidAmountEntryCount: 0 };
   });
   debtMocks.snapshot = null;
   debtMocks.refresh = vi.fn(async () => undefined);
@@ -707,11 +707,11 @@ describe("transactions history pagination", () => {
 
 test("renders backend matches outside loaded history and exposes six sort modes", async () => {
   const { groupTransactions } = await import("@/lib/transactions/history");
-  mocks.filtered.mockResolvedValue({ entries: groupTransactions([{ ...row(1105), description: "Ancient match", type: "expense" as const }]).map(entry => ({ ...entry, matchingRowIds: ["transaction-1105"], recordedAmount: "12.00", currency: "USD", transactionDate: null, createdAt: "2026-01-01", sortId: "transaction-1105" })), nextOffset: null, totalMatchingEntries: 1, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 });
+  mocks.filtered.mockResolvedValue({ entries: groupTransactions([{ ...row(1105), description: "Ancient match", type: "expense" as const }]).map(entry => ({ ...entry, matchingRowIds: ["transaction-1105"], recordedAmount: "12.00", transactionDate: null, createdAt: "2026-01-01", sortId: "transaction-1105" })), nextOffset: null, totalMatchingEntries: 1, invalidAmountEntryCount: 0 });
   render(<TransactionsPage />);
   expect(await screen.findByText("Ancient match")).toBeTruthy();
   expect(screen.getByText("Showing 1 of 1 matches")).toBeTruthy();
-  expect(screen.getByText("−$12.00")).toBeTruthy();
+  expect(screen.getByText("−₱12.00")).toBeTruthy();
   expect(screen.getByText("Unavailable")).toBeTruthy();
   expect(screen.getByRole("combobox", { name: "Sort transactions" }).querySelectorAll("option")).toHaveLength(6);
 });
@@ -719,13 +719,13 @@ test("renders backend matches outside loaded history and exposes six sort modes"
 const authoritativeEntry = async (id: number, description: string) => {
   const { groupTransactions } = await import("@/lib/transactions/history");
   const entry = groupTransactions([{ ...row(id), description, type: "expense" as const }])[0];
-  return { ...entry, matchingRowIds: [`transaction-${id}`], recordedAmount: "12.00", currency: "PHP", transactionDate: "2026-01-01", createdAt: "2026-01-01T00:00:00Z", sortId: `transaction-${id}` };
+  return { ...entry, matchingRowIds: [`transaction-${id}`], recordedAmount: "12.00", transactionDate: "2026-01-01", createdAt: "2026-01-01T00:00:00Z", sortId: `transaction-${id}` };
 };
 
 test.each(["transaction_date_desc", "transaction_date_asc", "date_added_desc", "date_added_asc", "amount_desc", "amount_asc"])("keeps authoritative %s order across load-more", async sort => {
   const first = await authoritativeEntry(1, "Server first");
   const second = await authoritativeEntry(2, "Server second");
-  mocks.filtered.mockImplementation(async (_client, _owner, query) => ({ entries: query.offset ? [second] : [first], nextOffset: query.offset ? null : 50, totalMatchingEntries: 2, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 }));
+  mocks.filtered.mockImplementation(async (_client, _owner, query) => ({ entries: query.offset ? [second] : [first], nextOffset: query.offset ? null : 50, totalMatchingEntries: 2, invalidAmountEntryCount: 0 }));
   const user = userEvent.setup(); render(<TransactionsPage />);
   await screen.findByText("Server first");
   await user.selectOptions(screen.getByRole("combobox", { name: "Sort transactions" }), sort);
@@ -740,7 +740,7 @@ test.each(["transaction_date_desc", "transaction_date_asc", "date_added_desc", "
 
 test("custom and preset dates stay exclusive; global clear removes search and type while retaining sort", async () => {
   const first = await authoritativeEntry(1, "Date fixture");
-  mocks.filtered.mockResolvedValue({ entries: [first], nextOffset: null, totalMatchingEntries: 1, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 });
+  mocks.filtered.mockResolvedValue({ entries: [first], nextOffset: null, totalMatchingEntries: 1, invalidAmountEntryCount: 0 });
   const user = userEvent.setup(); render(<TransactionsPage />);
   await screen.findByText("Date fixture");
   await user.selectOptions(screen.getByRole("combobox", { name: "Sort transactions" }), "amount_asc");
@@ -763,7 +763,7 @@ test("custom and preset dates stay exclusive; global clear removes search and ty
 });
 
 test("history-owner mismatch closes old details and blocks financial actions", async () => {
-  mocks.filtered.mockResolvedValue({ entries: [await authoritativeEntry(1, "Owner fixture")], nextOffset: null, totalMatchingEntries: 1, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 });
+  mocks.filtered.mockResolvedValue({ entries: [await authoritativeEntry(1, "Owner fixture")], nextOffset: null, totalMatchingEntries: 1, invalidAmountEntryCount: 0 });
   const user = userEvent.setup(); const view = render(<TransactionsPage />);
   await user.click(await screen.findByRole("button", { name: "View details for Owner fixture" }));
   expect(screen.getByTestId("mock-detail-description")).toBeTruthy();
@@ -779,7 +779,7 @@ test("history-owner mismatch closes old details and blocks financial actions", a
 test("search reaches an older backend match without loading older pages", async () => {
   const recent = await authoritativeEntry(1, "Recent entry");
   const old = await authoritativeEntry(1105, "Old archive receipt");
-  mocks.filtered.mockImplementation(async (_client, _owner, query) => ({ entries: query.search ? [old] : [recent], nextOffset: query.search ? null : 50, totalMatchingEntries: query.search ? 1 : 1105, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 }));
+  mocks.filtered.mockImplementation(async (_client, _owner, query) => ({ entries: query.search ? [old] : [recent], nextOffset: query.search ? null : 50, totalMatchingEntries: query.search ? 1 : 1105, invalidAmountEntryCount: 0 }));
   const user = userEvent.setup(); render(<TransactionsPage />);
   await screen.findByText("Recent entry");
   await user.type(screen.getByRole("searchbox", { name: "Search transactions" }), "archive");
@@ -794,9 +794,9 @@ test("a metadata save removes an entry that no longer matches while preserving i
   const groupRows = [1, 2].map(index => ({ ...row(index), id: `50000000-0000-4000-8000-00000000000${index}`, account_id: "60000000-0000-4000-8000-000000000006", description: `Original purchase (Installment ${index}/2)`, installment_group_id: purchaseId, purchase_date: "2026-01-10", history_date: "2026-01-10" }));
   configureHistoryRows(groupRows);
   const { groupTransactions } = await import("@/lib/transactions/history");
-  const entry = { ...groupTransactions(groupRows.map(item => ({ ...item, type: "expense" as const, descriptionProof: null })))[0], matchingRowIds: groupRows.map(row => row.id), recordedAmount: "24.00", currency: "PHP", transactionDate: "2026-01-10", createdAt: groupRows[0].created_at, sortId: groupRows[0].id };
+  const entry = { ...groupTransactions(groupRows.map(item => ({ ...item, type: "expense" as const, descriptionProof: null })))[0], matchingRowIds: groupRows.map(row => row.id), recordedAmount: "24.00", transactionDate: "2026-01-10", createdAt: groupRows[0].created_at, sortId: groupRows[0].id };
   let renamed = false;
-  mocks.filtered.mockImplementation(async () => ({ entries: renamed ? [] : [entry], nextOffset: null, totalMatchingEntries: renamed ? 0 : 1, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 }));
+  mocks.filtered.mockImplementation(async () => ({ entries: renamed ? [] : [entry], nextOffset: null, totalMatchingEntries: renamed ? 0 : 1, invalidAmountEntryCount: 0 }));
   descriptionMocks.submit.mockImplementation(async (_command, refresh) => { renamed = true; descriptionMocks.state = { ...descriptionMocks.state, saved: { operationId: "80000000-0000-4000-8000-000000000008", transactionIds: groupRows.map(row => row.id), replayed: false } }; await refresh(); });
   const user = userEvent.setup(); render(<TransactionsPage />);
   await screen.findByRole("button", { name: "Edit description for Original purchase" });
@@ -813,7 +813,7 @@ test("a metadata save removes an entry that no longer matches while preserving i
 
 test("an old-owner correction refresh cannot create recovery state in the next account", async () => {
   const entry = await authoritativeEntry(1, "Owner recovery fixture");
-  mocks.filtered.mockResolvedValue({ entries: [entry], nextOffset: null, totalMatchingEntries: 1, excludedCurrencyEntryCount: 0, invalidAmountEntryCount: 0 });
+  mocks.filtered.mockResolvedValue({ entries: [entry], nextOffset: null, totalMatchingEntries: 1, invalidAmountEntryCount: 0 });
   let finish!: () => void;
   debtMocks.refresh = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
   debtCorrectionRecovery.refreshOwners.add("owner-1");

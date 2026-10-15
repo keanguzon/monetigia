@@ -29,9 +29,9 @@ vi.mock("@/hooks/use-data", () => ({
 }));
 vi.mock("@/lib/supabase/client", () => {
   const accounts = [
-    { id: db.cashId, name: "Cash", type: "cash", balance: 10000, currency: "PHP", is_active: true },
-    { id: db.bankId, name: "Bank", type: "bank", balance: 0, currency: "PHP", is_active: true },
-    { id: db.debtId, name: "PayLater", type: "credit_card", balance: 0, currency: "PHP", is_active: true },
+    { id: db.cashId, name: "Cash", type: "cash", balance: 10000, is_active: true },
+    { id: db.bankId, name: "Bank", type: "bank", balance: 0, is_active: true },
+    { id: db.debtId, name: "PayLater", type: "credit_card", balance: 0, is_active: true },
   ];
   const goals = [{ id: db.phoneId, name: "phone" }, { id: db.laptopId, name: "laptop" }];
   return { createClient: () => ({
@@ -124,7 +124,7 @@ beforeEach(() => {
   db.commands = [];
   db.failInsert = false;
   db.delayLoad = null;
-  db.accounts = [{ id: db.cashId, name: "Cash", type: "cash", currency: "PHP", is_active: true, include_in_networth: true, balance: 10000 }];
+  db.accounts = [{ id: db.cashId, name: "Cash", type: "cash", is_active: true, include_in_networth: true, balance: 10000 }];
 });
 afterEach(cleanup);
 

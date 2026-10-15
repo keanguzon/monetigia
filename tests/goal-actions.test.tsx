@@ -115,9 +115,9 @@ function event(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   state.finance = makeSnapshot();
   state.accounts = [
-    { id: gcashId, user_id: userId, name: "GCash", type: "e_wallet", currency: "PHP", is_active: true },
-    { id: bankId, user_id: userId, name: "GoTyme", type: "bank", currency: "PHP", is_active: true },
-    { id: payLaterId, user_id: userId, name: "SPayLater", type: "credit_card", currency: "PHP", is_active: true },
+    { id: gcashId, user_id: userId, name: "GCash", type: "e_wallet", is_active: true },
+    { id: bankId, user_id: userId, name: "GoTyme", type: "bank", is_active: true },
+    { id: payLaterId, user_id: userId, name: "SPayLater", type: "credit_card", is_active: true },
   ];
   state.events = [];
   state.operations = [];
@@ -435,7 +435,7 @@ describe("goal closure and history", () => {
 
   test("wallet metadata stays owner-scoped and includes account kinds for eligibility", async () => {
     const wallets = await fetchGoalWalletMetadata(userId);
-    expect(wallets.find(wallet => wallet.id === bankId)).toMatchObject({ name: "GoTyme", type: "bank", currency: "PHP" });
+    expect(wallets.find(wallet => wallet.id === bankId)).toMatchObject({ name: "GoTyme", type: "bank", });
     expect(wallets.find(wallet => wallet.id === payLaterId)).toMatchObject({ name: "SPayLater", type: "credit_card" });
     expect(state.readCalls).toContainEqual({ table: "accounts", method: "eq", column: "user_id", value: userId });
   });

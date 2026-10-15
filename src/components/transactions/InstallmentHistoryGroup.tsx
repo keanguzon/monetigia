@@ -19,7 +19,6 @@ type Props = {
   writesEnabled?: boolean;
   matchingRowIds?: string[];
   recordedAmount?: string | null;
-  currency?: string | null;
   transactionDate?: string | null;
   showRecordedAmount?: boolean;
   debtState: DebtState | null;
@@ -61,7 +60,7 @@ function exactRemaining(rows: DebtDueRow[]): string {
   return `${(total / BigInt(100)).toString()}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
 }
 
-export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, periodRange, writesEnabled = true, matchingRowIds, recordedAmount, currency, transactionDate, showRecordedAmount, onSelectTransaction, onRequestDelete, onRequestEditDescription, onSaved }: Props) {
+export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, periodRange, writesEnabled = true, matchingRowIds, recordedAmount, transactionDate, showRecordedAmount, onSelectTransaction, onRequestDelete, onRequestEditDescription, onSaved }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [selection, setSelection] = useState<DebtSelectionState>(emptySelection);
   const [correctionOpen, setCorrectionOpen] = useState(false);
@@ -138,8 +137,8 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
     : hasUnidentifiedExpense ? "Wallet type unavailable" : `${group.children.length} remaining ${group.children.length === 1 ? "payment" : "payments"}`;
 
   const formattedRemaining = groupRemaining === null
-    ? (protectedExpenseHistory ? "Unavailable" : group.remainingAmount === null ? "Unavailable" : formatHistoryMoney(group.remainingAmount, currency === undefined ? "PHP" : currency))
-    : groupRemaining === "Unavailable" ? groupRemaining : formatHistoryMoney(groupRemaining, "PHP");
+    ? (protectedExpenseHistory ? "Unavailable" : group.remainingAmount === null ? "Unavailable" : formatHistoryMoney(group.remainingAmount))
+    : groupRemaining === "Unavailable" ? groupRemaining : formatHistoryMoney(groupRemaining);
 
   return (
     <div className="group">
@@ -170,7 +169,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
         </button>
 
         <div className="flex flex-wrap items-center justify-between gap-3 pl-[3.25rem] sm:justify-end sm:pl-0">
-          {showRecordedAmount && <span className="text-xs text-muted-foreground tabular-nums">Recorded total {formatHistoryMoney(recordedAmount, currency)}</span>}
+          {showRecordedAmount && <span className="text-xs text-muted-foreground tabular-nums">Recorded total {formatHistoryMoney(recordedAmount)}</span>}
           <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
             {formattedRemaining === "Unavailable" ? formattedRemaining : `−${formattedRemaining}`}
           </span>
@@ -278,7 +277,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
                     </div>
                     <div className="flex items-center justify-between gap-3 pl-2 sm:justify-end sm:pl-0">
                       <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
-                        {formatHistoryMoney(child.amount, currency === undefined ? "PHP" : currency) === "Unavailable" ? "Unavailable" : `−${formatHistoryMoney(child.amount, currency === undefined ? "PHP" : currency)}`}
+                        {formatHistoryMoney(child.amount) === "Unavailable" ? "Unavailable" : `−${formatHistoryMoney(child.amount)}`}
                       </span>
                       <button
                         type="button"

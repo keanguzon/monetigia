@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { SpendingSummaryPanel } from "@/components/transactions/SpendingSummaryPanel";
 const state = vi.hoisted(() => ({ limit: null as any, error: null as any, isLoading: false, retry: vi.fn(), save: vi.fn(), remove: vi.fn(), generation: 1, userId: "a", current: true }));
 vi.mock("@/hooks/use-spending-owner", () => ({ useSpendingOwner: () => ({ userId: state.userId, generation: state.generation, status: "authenticated", isCurrent: () => state.current }) }));
-vi.mock("@/hooks/use-spending", () => ({ useSpendingLimit: () => state, useSpendingLimitCommand: () => ({ save: state.save, remove: state.remove, isSaving: false }), useSpendingSummary: () => ({ data: { spent: "120.30", income: "0.00", net: "-120.30", debtPayments: "0.00", categories: [], excludedCurrencyTransactionCount: 0 }, retry: vi.fn() }) }));
+vi.mock("@/hooks/use-spending", () => ({ useSpendingLimit: () => state, useSpendingLimitCommand: () => ({ save: state.save, remove: state.remove, isSaving: false }), useSpendingSummary: () => ({ data: { spent: "120.30", income: "0.00", net: "-120.30", debtPayments: "0.00", categories: [], }, retry: vi.fn() }) }));
 const period = { kind: "month" as const, start: "2026-10-01", end: "2026-10-31" };
 const props = { period, today: new Date(2026, 9, 15), onAddTransaction: vi.fn() };
 beforeEach(() => { Object.assign(state, { limit: null, error: null, isLoading: false, generation: 1, userId: "a", current: true }); state.save.mockReset().mockResolvedValue({ saved: { amount: "200.00", cadence: "month" }, refreshError: null }); state.remove.mockReset().mockResolvedValue({ saved: null, refreshError: null }); state.retry.mockReset(); });

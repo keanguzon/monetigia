@@ -9,7 +9,7 @@ vi.mock("@/hooks/use-spending", () => ({ useSpendingLimitCommand: () => ({ isSav
 vi.mock("@/hooks/use-spending-owner", () => ({ useSpendingOwner: () => ({ status: "resolving", userId: null, generation: 0, isCurrent: () => false }) }));
 const today = new Date(2026, 9, 15);
 const period = { kind: "month" as const, start: "2026-10-01", end: "2026-10-31" };
-const data = { start: period.start, end: "2026-10-15", spent: "120.30", expenses: "100.20", debtPayments: "20.10", income: "200.00", net: "79.70", categories: [{ categoryId: null, name: "Food", amount: "100.20" }], transactionCount: 3, excludedCurrencyTransactionCount: 0 };
+const data = { start: period.start, end: "2026-10-15", spent: "120.30", expenses: "100.20", debtPayments: "20.10", income: "200.00", net: "79.70", categories: [{ categoryId: null, name: "Food", amount: "100.20" }], transactionCount: 3, };
 beforeEach(() => { summary.value = { data, comparison: { ...data, spent: "100.10", transactionCount: 2 }, retry: summary.retry }; summary.retry.mockReset(); });
 afterEach(cleanup);
 
@@ -40,13 +40,12 @@ test.each([["140.50", "₱20.20 less than Sep 1–15, 2026"], ["120.30", "Same a
   render(<SpendingSummaryPanel period={period} today={today} onAddTransaction={vi.fn()} />);
   expect(screen.getByText(text)).toBeTruthy();
 });
-test("retains income and exclusion notice without spending and offers add", async () => {
-  summary.value.data = { ...data, spent: "0.00", debtPayments: "0.00", categories: [], excludedCurrencyTransactionCount: 2 };
+test("retains PHP income without spending and offers add", async () => {
+  summary.value.data = { ...data, spent: "0.00", debtPayments: "0.00", categories: [], };
   const add = vi.fn();
   render(<SpendingSummaryPanel period={period} today={today} onAddTransaction={add} />);
   expect(screen.getByText("No spending recorded for October 2026.")).toBeTruthy();
   expect(screen.getByText("Income ₱200.00")).toBeTruthy();
-  expect(screen.getByText("2 transactions in other currencies aren't included.")).toBeTruthy();
   await userEvent.setup().click(screen.getByRole("button", { name: "Add Transaction" })); expect(add).toHaveBeenCalledOnce();
 });
 test("comparison failure preserves current totals and retry revalidates", async () => {
@@ -97,11 +96,10 @@ test("ranks five categories and sums the remainder exactly while retaining debt 
     "Category 7₱70.00 (25%)", "Category 6₱60.00 (21.4%)", "Category 5₱50.00 (17.9%)", "Category 4₱40.00 (14.3%)", "Category 3₱30.00 (10.7%)", "Other categories₱30.00 (10.7%)", "Debt payments₱0.10 (0%)",
   ]);
 });
-test("zero rows and foreign-only periods keep truthful empty and currency notices", () => {
-  summary.value.data = { ...data, spent: "0.00", debtPayments: "0.00", income: "0.00", net: "0.00", categories: [], transactionCount: 0, excludedCurrencyTransactionCount: 1 };
+test("zero rows keep truthful empty PHP totals", () => {
+  summary.value.data = { ...data, spent: "0.00", debtPayments: "0.00", income: "0.00", net: "0.00", categories: [], transactionCount: 0, };
   render(<SpendingSummaryPanel period={period} today={today} onAddTransaction={vi.fn()} />);
   expect(screen.getByText("No spending recorded for October 2026.")).toBeTruthy();
-  expect(screen.getByText("1 transactions in other currencies aren't included.")).toBeTruthy();
   expect(screen.getByText("Income ₱0.00")).toBeTruthy();
 });
 test("midnight rollover keeps selection and updates whether next period is reachable", async () => {

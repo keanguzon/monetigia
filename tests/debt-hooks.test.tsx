@@ -19,7 +19,7 @@ let serial = 0;
 let owner: string;
 let cache: Map<any, any>;
 let wrapper: ({ children }: { children: React.ReactNode }) => React.ReactElement;
-const input = () => ({ account: { name: "Card", type: "credit_card" as const, currency: "PHP" as const, color: null, icon: null,
+const input = () => ({ account: { name: "Card", type: "credit_card" as const, color: null, icon: null,
   is_savings: false as const, interest_rate: 0 as const, include_in_networth: true, display_order: 0 },
   openingDebts: [{ clientId: "a", name: "Original", mode: "single" as const, amount: "12.30", firstDueDate: "2026-10-08", count: 1 }] });
 const command = () => ({ kind: "adopt_opening_debt" as const, accountId, fingerprint: "a".repeat(64), items: input().openingDebts });

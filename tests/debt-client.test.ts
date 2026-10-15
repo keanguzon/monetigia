@@ -10,8 +10,7 @@ vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({
 const owner = "10000000-0000-4000-8000-000000000001";
 const accountId = "20000000-0000-4000-8000-000000000002";
 const requestId = "30000000-0000-4000-8000-000000000003";
-const input = { requestId, account: { name: "Card", type: "credit_card" as const, currency: "PHP" as const,
-  color: null, icon: null, is_savings: false as const, interest_rate: 0 as const, include_in_networth: true, display_order: 0 },
+const input = { requestId, account: { name: "Card", type: "credit_card" as const, color: null, icon: null, is_savings: false as const, interest_rate: 0 as const, include_in_networth: true, display_order: 0 },
 openingDebts: [{ clientId: "a", name: "Old debt", mode: "single" as const, amount: "12.30", firstDueDate: "2026-10-08", count: 1 }] };
 beforeEach(() => {
   state.rpc.mockReset(); state.headers = [];

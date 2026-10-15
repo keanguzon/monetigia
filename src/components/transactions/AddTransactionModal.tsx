@@ -151,7 +151,7 @@ export default function AddTransactionModal({ isOpen, onClose, defaultAccountId,
     if (!user?.id) throw new Error("Not signed in");
 
     const { data: accountsData, error: accountsError } = await sb.from("accounts").select("*").eq("user_id", user.id).order("name");
-    const accountsList = ((accountsData ?? []) as any[]).filter(a => a.is_active === true && a.currency === "PHP");
+    const accountsList = ((accountsData ?? []) as any[]).filter(a => a.is_active === true);
 
     const { data: catsData, error: categoriesError } = await sb.from("categories").select("*").order("name");
     if (!isCurrent()) return;

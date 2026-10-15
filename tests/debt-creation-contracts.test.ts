@@ -4,7 +4,7 @@ import { DebtAccountCreateInputSchema, DebtAccountCreateResultSchema, OpeningDeb
 import { MoneySchema } from "@/lib/goals/contracts";
 
 const debt = (overrides = {}) => ({ clientId: "opaque-1", name: "Laptop", mode: "installments", amount: "1000.00", firstDueDate: "2026-01-31", count: 3, ...overrides });
-const input = (openingDebts: unknown[] = [debt()], account = {}) => ({ requestId: randomUUID(), account: { name: "Credit", type: "credit_card", currency: "PHP", color: "#00aA99", icon: "gcash.png", is_savings: false, interest_rate: 0, include_in_networth: true, display_order: 0, ...account }, openingDebts });
+const input = (openingDebts: unknown[] = [debt()], account = {}) => ({ requestId: randomUUID(), account: { name: "Credit", type: "credit_card", color: "#00aA99", icon: "gcash.png", is_savings: false, interest_rate: 0, include_in_networth: true, display_order: 0, ...account }, openingDebts });
 
 describe("opening debt creation contract", () => {
   it("accepts zero debt and typed 2, 24, 600 counts and trims names", () => {

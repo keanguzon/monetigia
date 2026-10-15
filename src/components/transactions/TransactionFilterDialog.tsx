@@ -138,7 +138,7 @@ export function TransactionFilterDialog({ query, dateSelection, options, onApply
 
   const walletChoices = [
     ...options.wallets.map(option => ({ ...option, isUnavailable: false })),
-    ...draft.walletIds.filter(id => !options.wallets.some(option => option.id === id)).map(id => ({ id, name: `Unavailable wallet (${id.slice(0, 8)})`, type: "unknown", currency: "", isActive: false, isUnavailable: true })),
+    ...draft.walletIds.filter(id => !options.wallets.some(option => option.id === id)).map(id => ({ id, name: `Unavailable wallet (${id.slice(0, 8)})`, type: "unknown", isActive: false, isUnavailable: true })),
   ];
   const categoryChoices = [
     ...options.categories,

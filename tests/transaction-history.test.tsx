@@ -388,7 +388,7 @@ describe("installment history row", () => {
 
 test("bulk selection follows matching transaction IDs while outside siblings remain manually selectable", async () => {
   const user = userEvent.setup();
-  render(<InstallmentHistoryGroup group={creditGroup()} matchingRowIds={["tx-1"]} recordedAmount="900719925474099.93" currency="PHP" showRecordedAmount sortMode="amount_desc" debtState={{ account: creditAccount, rows: creditRows }} selectionResetKey="matching" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
+  render(<InstallmentHistoryGroup group={creditGroup()} matchingRowIds={["tx-1"]} recordedAmount="900719925474099.93" showRecordedAmount sortMode="amount_desc" debtState={{ account: creditAccount, rows: creditRows }} selectionResetKey="matching" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
   expect(screen.getByText("Recorded total ₱900,719,925,474,099.93")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
   expect(screen.getByText("Outside filters")).toBeTruthy();
@@ -404,7 +404,7 @@ test("bulk selection follows matching transaction IDs while outside siblings rem
 
 test("canonical unavailable dates and invalid recorded money never render guessed values", async () => {
   const group = groupTransactions(twoInstallments().map(row => ({ ...row, date: "", purchase_date: null, amount: "NaN" })))[0] as InstallmentHistoryEntry;
-  render(<InstallmentHistoryGroup group={group} transactionDate={null} recordedAmount={null} showRecordedAmount currency="PHP" sortMode="transaction_date_desc" debtState={null} selectionResetKey="unknown" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
+  render(<InstallmentHistoryGroup group={group} transactionDate={null} recordedAmount={null} showRecordedAmount sortMode="transaction_date_desc" debtState={null} selectionResetKey="unknown" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
   await userEvent.setup().click(screen.getByRole("button", { name: /show payment schedule/i }));
   expect(screen.getByText("Transaction date: Unavailable")).toBeTruthy();
   expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);

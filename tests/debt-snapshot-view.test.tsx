@@ -90,20 +90,19 @@ test("inactive residual action is disabled with a visible eligibility reason", (
   expect((screen.getByRole("button", { name: "Review due dates" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByText(/requires an active PHP wallet/)).toBeTruthy();
 });
-test("PHP page summary excludes USD with an explicit separate review notice", async () => {
-  const phpId = "20000000-0000-4000-8000-000000000001"; const usdId = "20000000-0000-4000-8000-000000000002";
-  pageState.accounts = [{ id: phpId, name: "PHP Card", type: "credit_card", currency: "PHP", is_active: false, balance: 6600 }, { id: usdId, name: "USD Card", type: "credit_card", currency: "USD", is_active: true, balance: 900 }];
+test("PHP page summary includes all wallet debts without currency metadata", async () => {
+  const phpId = "20000000-0000-4000-8000-000000000001"; const secondId = "20000000-0000-4000-8000-000000000002";
+  pageState.accounts = [{ id: phpId, name: "PHP Card", type: "credit_card", is_active: false, balance: 6600 }, { id: secondId, name: "Second Card", type: "credit_card", is_active: true, balance: 900 }];
   pageState.snapshot = { accounts: pageState.accounts.map(account => ({ accountId: account.id, totalOutstanding: account.id === phpId ? "6600.00" : "900.00", undatedOutstanding: account.id === phpId ? "5000.00" : "900.00", reconciliation: "balanced", reconciliationDelta: "0.00", fingerprint: "a".repeat(64) })), rows: [] };
   render(<SWRConfig value={{ provider: () => new Map(), revalidateOnFocus: false }}><AccountsPage /></SWRConfig>);
-  await waitFor(() => expect(screen.getByLabelText("Outstanding debt").getAttribute("data-money")).toBe("6600.00"));
-  expect(screen.getByText(/USD Card.*USD.*excluded/i)).toBeTruthy();
+  await waitFor(() => expect(screen.getByLabelText("Outstanding debt").getAttribute("data-money")).toBe("7500.00"));
 });
-test("missing currency metadata makes PHP total unavailable", async () => {
+test("missing wallet metadata makes debt total unavailable", async () => {
   pageState.accounts = [];
   pageState.snapshot = { accounts: [{ accountId: "20000000-0000-4000-8000-000000000003", totalOutstanding: "6600.00", undatedOutstanding: "5000.00", reconciliation: "balanced", reconciliationDelta: "0.00", fingerprint: "a".repeat(64) }], rows: [] };
   render(<SWRConfig value={{ provider: () => new Map(), revalidateOnFocus: false }}><AccountsPage /></SWRConfig>);
   await waitFor(() => expect(screen.getByLabelText("Outstanding debt").textContent).toBe("Unavailable"));
-  expect(screen.getByText(/currency metadata.*unavailable/i)).toBeTruthy();
+  expect(screen.getByText(/wallet details.*unavailable/i)).toBeTruthy();
 });
 test("accounts recovery banner observes the shared saved-correction identity", async () => {
   const ownerId = "10000000-0000-4000-8000-000000000001";
