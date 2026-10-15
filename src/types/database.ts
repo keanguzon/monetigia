@@ -451,6 +451,10 @@ export interface Database {
     };
     Views: {};
     Functions: {
+      transaction_history_page: {
+        Args: { p_query: Json };
+        Returns: Json;
+      };
       spending_summary: {
         Args: { p_start: string; p_end: string };
         Returns: Json;
