@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { SpendingSummaryPanel } from "@/components/transactions/SpendingSummaryPanel";
@@ -17,3 +17,25 @@ test("remove requires confirmation and escape restores focus", async () => { con
 test("confirmed save with failed refresh offers only refresh and never replays save", async () => { const user = userEvent.setup(); state.save.mockResolvedValue({ saved: { amount: "200.00", cadence: "month" }, refreshError: new Error() }); const view = render(<SpendingSummaryPanel {...props} />); await user.click(screen.getByRole("button", { name: "Set spending limit" })); await user.type(screen.getByLabelText("Limit amount (₱)"), "200"); await user.click(screen.getByRole("button", { name: "Save limit" })); state.error = new Error(); view.rerender(<SpendingSummaryPanel {...props} />); expect(screen.getByText("Your limit change was saved, but the latest limit couldn't load.")).toBeTruthy(); expect(screen.queryByRole("button", { name: "Save limit" })).toBeNull(); await user.click(screen.getByRole("button", { name: "Retry refresh" })); expect(state.save).toHaveBeenCalledOnce(); expect(state.retry).toHaveBeenCalledOnce(); });
 test("account generation change closes dialog and ignores previous receipt", async () => { const user = userEvent.setup(); let resolve!: (outcome: any) => void; state.save.mockImplementation(() => new Promise(done => { resolve = done; })); const view = render(<SpendingSummaryPanel {...props} />); await user.click(screen.getByRole("button", { name: "Set spending limit" })); await user.type(screen.getByLabelText("Limit amount (₱)"), "200"); await user.click(screen.getByRole("button", { name: "Save limit" })); state.generation++; state.userId = "b"; view.rerender(<SpendingSummaryPanel {...props} />); expect(screen.queryByRole("dialog")).toBeNull(); await user.click(screen.getByRole("button", { name: "Set spending limit" })); resolve({ saved: { amount: "200.00", cadence: "month" }, refreshError: new Error() }); await new Promise(done => setTimeout(done, 0)); expect(screen.queryByText("Your limit change was saved, but the latest limit couldn't load.")).toBeNull(); expect((screen.getByLabelText("Limit amount (₱)") as HTMLInputElement).value).toBe(""); });
 test("cutoff current match shows left and preserves adding an expense over limit", async () => { const user = userEvent.setup(); state.limit = { amount: "200.00", cadence: "cutoff" }; const view = render(<SpendingSummaryPanel {...props} period={{ kind: "first_half", start: "2026-10-01", end: "2026-10-15" }} />); expect(screen.getByText("₱79.70 left")).toBeTruthy(); state.limit.amount = "100.00"; view.rerender(<SpendingSummaryPanel {...props} period={{ kind: "first_half", start: "2026-10-01", end: "2026-10-15" }} />); expect(screen.getByText("₱20.30 over your limit")).toBeTruthy(); await user.click(screen.getByRole("button", { name: "Edit spending limit" })); expect(screen.getByRole("dialog")).toBeTruthy(); });
+
+test.each(["resolve", "reject"])("late refresh %s cannot affect reopened dialog or its pending save", async completion => {
+  const user = userEvent.setup();
+  let resolveRefresh!: () => void;
+  let rejectRefresh!: (reason: Error) => void;
+  state.retry.mockImplementationOnce(() => new Promise<void>((resolve, reject) => { resolveRefresh = resolve; rejectRefresh = reject; }));
+  state.save.mockResolvedValueOnce({ saved: { amount: "200.00", cadence: "month" }, refreshError: new Error() });
+  render(<SpendingSummaryPanel {...props} />);
+  await user.click(screen.getByRole("button", { name: "Set spending limit" }));
+  await user.type(screen.getByLabelText("Limit amount (₱)"), "200");
+  await user.click(screen.getByRole("button", { name: "Save limit" }));
+  await user.click(screen.getByRole("button", { name: "Retry refresh" }));
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  await user.click(screen.getByRole("button", { name: "Set spending limit" }));
+  await user.type(screen.getByLabelText("Limit amount (₱)"), "300");
+  state.save.mockImplementationOnce(() => new Promise(() => undefined));
+  await user.click(screen.getByRole("button", { name: "Save limit" }));
+  await act(async () => { if (completion === "resolve") resolveRefresh(); else rejectRefresh(new Error("offline")); });
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect((screen.getByRole("button", { name: "Saving…" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByLabelText("Limit amount (₱)") as HTMLInputElement).value).toBe("300");
+});
