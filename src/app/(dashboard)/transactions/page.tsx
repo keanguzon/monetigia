@@ -26,6 +26,10 @@ import {
 import InstallmentHistoryGroup from "@/components/transactions/InstallmentHistoryGroup";
 import TransactionDescriptionEditor from "@/components/transactions/TransactionDescriptionEditor";
 import { useTransactionDescription } from "@/hooks/use-transaction-description";
+import { useLocalToday } from "@/hooks/use-local-today";
+import { PeriodBar } from "@/components/transactions/PeriodBar";
+import { SpendingSummaryPanel } from "@/components/transactions/SpendingSummaryPanel";
+import { formatPeriodLabel, type SpendingPeriod } from "@/lib/spending/periods";
 import {
   HISTORY_PAGE_SIZE,
   filterHistoryEntries,
@@ -101,6 +105,8 @@ export default function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "expense" | "income" | "transfer">("all");
   const [sortMode, setSortMode] = useState<TransactionHistorySort>("date_added");
+  const [period, setPeriod] = useState<SpendingPeriod | null>(null);
+  const today = useLocalToday();
   const [refreshKey, setRefreshKey] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<TransactionHistoryRow | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionHistoryRow | null>(null);
@@ -118,6 +124,8 @@ export default function TransactionsPage() {
   const loadedHistoryPageCount = useRef(0);
   const currentOwner = useRef(goals.userId);
   const currentSort = useRef(sortMode);
+  const currentPeriod = useRef(period);
+  currentPeriod.current = period;
   currentOwner.current = goals.userId;
   currentSort.current = sortMode;
   const loadMoreLock = useRef(false);
@@ -141,8 +149,8 @@ export default function TransactionsPage() {
     setDescriptionReviewError(null);
   }, [goals.userId]);
 
-  function isCurrentHistoryRequest(generation: number, ownerId: string | null, requestedSort: TransactionHistorySort): boolean {
-    return generation === requestGeneration.current && currentOwner.current === ownerId && currentSort.current === requestedSort;
+  function isCurrentHistoryRequest(generation: number, ownerId: string | null, requestedSort: TransactionHistorySort, requestedPeriod: SpendingPeriod | null): boolean {
+    return generation === requestGeneration.current && currentOwner.current === ownerId && currentSort.current === requestedSort && currentPeriod.current === requestedPeriod;
   }
 
   function closeDescriptionEditor() {
@@ -180,10 +188,11 @@ export default function TransactionsPage() {
     const generation = ++descriptionReadGeneration.current;
     const listGeneration = requestGeneration.current;
     const requestedSort = sortMode;
+    const requestedPeriod = period;
     setDescriptionReviewError(null);
     void loadHistoryGroup(sb, ownerId, group.groupId)
       .then(rows => {
-        if (generation !== descriptionReadGeneration.current || !isCurrentHistoryRequest(listGeneration, ownerId, requestedSort)) return;
+        if (generation !== descriptionReadGeneration.current || !isCurrentHistoryRequest(listGeneration, ownerId, requestedSort, requestedPeriod)) return;
         const latestGroup = groupTransactions(rows).find(entry => entry.kind === "installment_group" && entry.groupId === group.groupId);
         if (!latestGroup || latestGroup.kind !== "installment_group") {
           setDescriptionReviewError("This installment group is no longer available in your history.");
@@ -214,7 +223,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     void loadTransactions().catch(() => {});
-  }, [refreshKey, sortMode, goals.userId]);
+  }, [refreshKey, sortMode, period, goals.userId]);
 
   useEffect(() => {
     if (!deletion.savedTransactionId) return;
@@ -235,6 +244,7 @@ export default function TransactionsPage() {
     const generation = ++requestGeneration.current;
     const ownerId = goals.userId;
     const requestedSort = sortMode;
+    const requestedPeriod = period;
     loadMoreLock.current = false;
     loadedHistoryPageCount.current = 0;
     setIsLoading(true);
@@ -247,13 +257,13 @@ export default function TransactionsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.id || user.id !== ownerId) return;
-      const page = await loadHistoryPage(sb, ownerId, requestedSort);
-      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return;
+      const page = await loadHistoryPage(sb, ownerId, requestedSort, 0, requestedPeriod ?? undefined);
+      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return;
       setTransactions(page.rows);
       setNextOffset(page.nextOffset);
       loadedHistoryPageCount.current = 1;
     } catch (error) {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) {
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) {
         console.error("Failed to load transactions", error);
         setLoadError("The transaction list could not refresh. Try again.");
         toast({
@@ -264,7 +274,7 @@ export default function TransactionsPage() {
       }
       throw new Error("The transaction list could not refresh.");
     } finally {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) setIsLoading(false);
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) setIsLoading(false);
     }
   }
 
@@ -272,6 +282,7 @@ export default function TransactionsPage() {
     if (nextOffset === null || isLoading || isLoadingMore || loadMoreLock.current) return;
     const ownerId = goals.userId;
     const requestedSort = sortMode;
+    const requestedPeriod = period;
     if (!ownerId) return;
     const offset = nextOffset;
     const generation = requestGeneration.current;
@@ -281,13 +292,13 @@ export default function TransactionsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.id || user.id !== ownerId) throw new Error("The signed-in account changed while history was loading.");
-      const page = await loadHistoryPage(sb, ownerId, requestedSort, offset);
-      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return;
+      const page = await loadHistoryPage(sb, ownerId, requestedSort, offset, requestedPeriod ?? undefined);
+      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return;
       setTransactions(current => mergeHistoryRows(current, page.rows));
       setNextOffset(page.nextOffset);
       loadedHistoryPageCount.current = Math.max(loadedHistoryPageCount.current, Math.floor(offset / HISTORY_PAGE_SIZE) + 1);
     } catch (error) {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) {
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) {
         console.error("Failed to load more transactions", error);
         setLoadMoreError("Older history could not be loaded. Your current entries are still here.");
         toast({
@@ -297,7 +308,7 @@ export default function TransactionsPage() {
         });
       }
     } finally {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) {
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) {
         loadMoreLock.current = false;
         setIsLoadingMore(false);
       }
@@ -308,6 +319,7 @@ export default function TransactionsPage() {
     const ownerId = goals.userId;
     if (!ownerId) throw new Error("Sign in to refresh transaction history.");
     const requestedSort = sortMode;
+    const requestedPeriod = period;
     const targetPageCount = Math.max(1, loadedHistoryPageCount.current);
     const selectedTransactionId = selectedTransaction?.id ?? null;
     const savedTarget = lastSelectedTransaction.current && descriptionCommand.saved?.transactionIds.includes(lastSelectedTransaction.current.id)
@@ -333,8 +345,8 @@ export default function TransactionsPage() {
       let pagesRead = 0;
       for (let pageIndex = 0; pageIndex < targetPageCount; pageIndex += 1) {
         const offset = pageIndex * HISTORY_PAGE_SIZE;
-        const page = await loadHistoryPage(sb, ownerId, requestedSort, offset);
-        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return false;
+        const page = await loadHistoryPage(sb, ownerId, requestedSort, offset, requestedPeriod ?? undefined);
+        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return false;
         refreshedRows.splice(0, refreshedRows.length, ...mergeHistoryRows(refreshedRows, page.rows));
         pagesRead += 1;
         next = page.nextOffset;
@@ -344,15 +356,15 @@ export default function TransactionsPage() {
       let refreshedDetail: TransactionHistoryRow | null | undefined;
       if (selectedTransactionId) {
         refreshedDetail = await loadHistoryTransaction(sb, ownerId, selectedTransactionId);
-        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return false;
+        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return false;
       }
       let refreshedGroup: TransactionHistoryRow[] | undefined;
       if (selectedGroupId) {
         refreshedGroup = await loadHistoryGroup(sb, ownerId, selectedGroupId);
-        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return false;
+        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return false;
       }
 
-      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort)) return false;
+      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return false;
       loadedHistoryPageCount.current = pagesRead;
       setTransactions(refreshedRows);
       setNextOffset(next);
@@ -369,13 +381,13 @@ export default function TransactionsPage() {
       setDeleteConfirm(null);
       return true;
     } catch (error) {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) {
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) {
         setLoadError("The transaction list could not refresh. Try again.");
         console.error("Failed to refresh debt transaction history", error);
       }
       throw error;
     } finally {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort)) setIsLoading(false);
+      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) setIsLoading(false);
     }
   }
 
@@ -427,6 +439,22 @@ export default function TransactionsPage() {
     setSortMode(nextSort);
   }
 
+  function handlePeriodChange(nextPeriod: SpendingPeriod | null): void {
+    if (JSON.stringify(nextPeriod) === JSON.stringify(period)) return;
+    requestGeneration.current += 1;
+    descriptionReadGeneration.current += 1;
+    currentPeriod.current = nextPeriod;
+    loadMoreLock.current = false;
+    loadedHistoryPageCount.current = 0;
+    setTransactions([]);
+    setNextOffset(null);
+    setIsLoadingMore(false);
+    setLoadError(null);
+    setLoadMoreError(null);
+    setIsLoading(true);
+    setPeriod(nextPeriod);
+  }
+
   const historyEntries = sortHistoryEntries(groupTransactions(transactions), sortMode);
 
   const filterLabel =
@@ -439,7 +467,7 @@ export default function TransactionsPage() {
           : "Transfer";
 
   const searchFilteredTransactions = filterHistoryEntries(historyEntries, searchQuery, filter);
-  const selectionResetKey = JSON.stringify([goals.userId, sortMode, filter, searchQuery]);
+  const selectionResetKey = JSON.stringify([goals.userId, sortMode, period, filter, searchQuery]);
   const correctionRefreshNeedsRecovery = historyRefreshPending || Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId));
   const pendingDescription = descriptionCommand.pendingCommand;
   const descriptionRecovery = Boolean(pendingDescription || descriptionCommand.errorCode === "STALE_QUOTE" || descriptionCommand.saved && descriptionCommand.refreshError);
@@ -569,6 +597,8 @@ export default function TransactionsPage() {
             </Button>
           </div>
 
+          <PeriodBar period={period} today={today} onChange={handlePeriodChange} />
+          <SpendingSummaryPanel period={period} today={today} onAddTransaction={() => setIsModalOpen(true)} />
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex w-full min-w-0 items-center gap-2 lg:w-auto">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 lg:flex-none lg:gap-2">
@@ -664,7 +694,7 @@ export default function TransactionsPage() {
 
         <div className="space-y-2">
           {!isLoading && !loadError && <div className="flex flex-col gap-1 px-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>Showing {searchFilteredTransactions.length} {filterLabel.toLowerCase()} {searchFilteredTransactions.length === 1 ? "entry" : "entries"} in loaded history</span>
+            <span>Showing {searchFilteredTransactions.length} {filterLabel.toLowerCase()} {searchFilteredTransactions.length === 1 ? "entry" : "entries"} in {period ? formatPeriodLabel(period) : "loaded history"}</span>
             {nextOffset !== null && <span>Older records are available below.</span>}
           </div>}
 
@@ -674,7 +704,7 @@ export default function TransactionsPage() {
                 {searchFilteredTransactions.map((entry) => {
                   if (entry.kind === "installment_group") {
                     const debtState = debt.isLoading || debt.error ? null : completeCreditGroup(entry, debt.snapshot);
-                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} onSelectTransaction={selectTransaction} onRequestDelete={requestDelete} onRequestEditDescription={requestEditDescription} onSaved={refreshCorrectionViews} />;
+                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} periodRange={period} onSelectTransaction={selectTransaction} onRequestDelete={requestDelete} onRequestEditDescription={requestEditDescription} onSaved={refreshCorrectionViews} />;
                   }
 
                   const transaction = entry.transaction;

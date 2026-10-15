@@ -309,8 +309,10 @@ export async function loadHistoryPage(
   userId: string,
   sort: TransactionHistorySort,
   offset = 0,
+  range?: { start: string; end: string },
 ): Promise<TransactionHistoryPage> {
   const query = client.from("transactions").select(HISTORY_SELECT).eq("user_id", userId);
+  if (range) query.gte("date", range.start).lte("date", range.end);
   const ordered = sort === "date_added"
     ? query.order("created_at", { ascending: false }).order("id", { ascending: false })
     : query.order("history_date", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false });

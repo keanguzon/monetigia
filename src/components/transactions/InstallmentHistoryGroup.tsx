@@ -16,6 +16,7 @@ type Props = {
   sortMode: TransactionHistorySort;
   debtState: DebtState | null;
   selectionResetKey: string;
+  periodRange?: { start: string; end: string } | null;
   onSelectTransaction: (transaction: TransactionHistoryRow) => void;
   onRequestDelete: (transaction: TransactionHistoryRow) => void;
   onRequestEditDescription?: (group: InstallmentHistoryEntry) => void;
@@ -52,7 +53,7 @@ function exactRemaining(rows: DebtDueRow[]): string {
   return `${(total / BigInt(100)).toString()}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
 }
 
-export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, onSelectTransaction, onRequestDelete, onRequestEditDescription, onSaved }: Props) {
+export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, periodRange, onSelectTransaction, onRequestDelete, onRequestEditDescription, onSaved }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [selection, setSelection] = useState<DebtSelectionState>(emptySelection);
   const [correctionOpen, setCorrectionOpen] = useState(false);
@@ -156,6 +157,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
               <span className="font-medium text-foreground/80">{group.children[0]?.account?.name || "Unknown wallet"}</span>
               {group.children[0]?.category?.name && <span>{group.children[0].category.name}</span>}
               <span>{childCountLabel}</span>
+              {periodRange && <span>Full installment schedule, not period spending</span>}
             </span>
           </span>
         </button>
@@ -259,6 +261,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
                       >
                         <span className="block break-words text-sm font-medium text-foreground">{rowLabel}</span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">Due {formatDate(child.date, "long")}</span>
+                        {periodRange && (child.date < periodRange.start || child.date > periodRange.end) && <span className="mt-0.5 block text-xs text-muted-foreground">Outside selected period</span>}
                         {debtRow && <span className="mt-0.5 block break-words text-xs text-muted-foreground">Remaining {formatCurrency(Number(debtRow.remainingAmount))} · Paid {formatCurrency(Number(debtRow.paidAmount))} · Corrected {formatCurrency(Number(debtRow.correctedAmount))}</span>}
                         {reason && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{reason}</span>}
                       </button>

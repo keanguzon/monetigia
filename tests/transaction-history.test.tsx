@@ -26,6 +26,29 @@ vi.mock("@/hooks/use-debt", () => ({
 
 afterEach(() => cleanup());
 
+test("bounds the base history page by date but completes installment siblings outside it", async () => {
+  const reads: Array<{ bounds: string[]; siblings: boolean }> = [];
+  const client = { from: () => {
+    const read = { bounds: [] as string[], siblings: false }; reads.push(read);
+    const query: any = { select: () => query, eq: () => query, order: () => query, range: () => query,
+      gte: (column: string, value: string) => { read.bounds.push(`${column}>=${value}`); return query; },
+      lte: (column: string, value: string) => { read.bounds.push(`${column}<=${value}`); return query; },
+      in: () => { read.siblings = true; return query; },
+      then: (resolve: any) => Promise.resolve({ data: read.siblings ? twoInstallments() : [twoInstallments()[0]], error: null }).then(resolve) };
+    return query;
+  } };
+  const page = await loadHistoryPage(client, "owner-1", "date_added", 0, { start: "2026-02-01", end: "2026-02-28" });
+  expect(reads).toEqual([{ bounds: ["date>=2026-02-01", "date<=2026-02-28"], siblings: false }, { bounds: [], siblings: true }]);
+  expect(page.rows.map(row => row.id)).toEqual(["tx-1", "tx-2"]);
+});
+
+test("marks sibling dates outside the selected range without mislabelling the group amount", async () => {
+  render(<InstallmentHistoryGroup group={groupTransactions(twoInstallments())[0] as InstallmentHistoryEntry} periodRange={{ start: "2026-02-01", end: "2026-02-28" }} sortMode="date_added" debtState={null} selectionResetKey="period" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
+  expect(screen.getByText("Full installment schedule, not period spending")).toBeTruthy();
+  await userEvent.setup().click(screen.getByRole("button", { name: /show payment schedule/i }));
+  expect(screen.getByText("Outside selected period")).toBeTruthy();
+});
+
 const transaction = (overrides: Partial<TransactionHistoryRow> = {}): TransactionHistoryRow => ({
   id: "tx-1",
   user_id: "owner-1",

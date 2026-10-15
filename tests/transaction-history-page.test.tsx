@@ -59,6 +59,36 @@ vi.mock("@/components/transactions/DebtCorrectionDialog", () => ({
 }));
 
 import TransactionsPage from "@/app/(dashboard)/transactions/page";
+vi.mock("@/hooks/use-local-today", () => ({ useLocalToday: () => new Date(2026, 9, 15) }));
+vi.mock("@/hooks/use-spending", () => ({ useSpendingSummary: () => ({ data: undefined, isLoading: true }) }));
+
+test("period selection reloads history, drops a late previous response and resets to all-time", async () => {
+  const reads: Array<{ start?: string; end?: string; offset: number }> = [];
+  let finish!: (value: any) => void;
+  const late = new Promise(resolve => { finish = resolve; });
+  mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-1" } } });
+  mocks.from.mockImplementation(() => {
+    const read = { offset: 0 } as typeof reads[number];
+    const query: any = { select: () => query, eq: () => query, order: () => query,
+      gte: (_: string, value: string) => { read.start = value; return query; },
+      lte: (_: string, value: string) => { read.end = value; return query; },
+      range: (offset: number) => { read.offset = offset; reads.push(read); return query; },
+      then: (resolve: any, reject: any) => read.start === "2026-10-01" ? late.then(resolve, reject) : Promise.resolve({ data: [{ ...row(1), description: read.start ? "September result" : "All history result" }], error: null }).then(resolve, reject) };
+    return query;
+  });
+  const user = userEvent.setup(); render(<TransactionsPage />);
+  expect(await screen.findByText("All history result")).toBeTruthy();
+  expect(screen.queryByRole("status", { name: "Loading spending summary" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Choose period" })); await user.click(screen.getByRole("menuitemradio", { name: "Month" }));
+  await waitFor(() => expect(reads).toContainEqual({ start: "2026-10-01", end: "2026-10-31", offset: 0 }));
+  await user.click(screen.getByRole("button", { name: "Previous period" }));
+  expect(await screen.findByText("September result")).toBeTruthy();
+  expect(screen.getByText("Showing 1 all entry in September 2026")).toBeTruthy();
+  await act(async () => { finish({ data: [{ ...row(2), description: "Stale October result" }], error: null }); await Promise.resolve(); });
+  expect(screen.queryByText("Stale October result")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Choose period" })); await user.click(screen.getByRole("menuitemradio", { name: "All time" }));
+  expect(await screen.findByText("All history result")).toBeTruthy();
+});
 
 function row(id: number) {
   return {
@@ -167,6 +197,7 @@ function configureHistoryRows(rows: HistoryTestRow[], operationOverrides?: any[]
 }
 
 function configureDescriptionRefreshPages() {
+  const dateRanges: Array<[string | undefined, string | undefined, number]> = [];
   const groupId = "40000000-0000-4000-8000-000000000004";
   const accountId = "60000000-0000-4000-8000-000000000006";
   let currentGroupRows: HistoryTestRow[] = [1, 2, 3].map(index => ({
@@ -211,6 +242,8 @@ function configureDescriptionRefreshPages() {
     let requestedGroup: unknown;
     let requestedId: unknown;
     let offset: number | null = null;
+    let startDate: string | undefined;
+    let endDate: string | undefined;
     const query: any = {
       select: () => query,
       eq: (column: string, value: unknown) => {
@@ -220,8 +253,10 @@ function configureDescriptionRefreshPages() {
         return query;
       },
       in: (_column: string, ids: string[]) => { groupIds = ids; return query; },
+      gte: (_column: string, value: string) => { startDate = value; return query; },
+      lte: (_column: string, value: string) => { endDate = value; return query; },
       order: () => query,
-      range: (start: number, end: number) => { offset = start; ranges.push([start, end]); return query; },
+      range: (start: number, end: number) => { offset = start; ranges.push([start, end]); dateRanges.push([startDate, endDate, start]); return query; },
       maybeSingle: async () => {
         if (requestedId) detailReads.push(String(requestedId));
         const rowValue = [...currentGroupRows, ...firstPageRows().slice(1), ...secondPageRows]
@@ -244,6 +279,7 @@ function configureDescriptionRefreshPages() {
     groupId,
     ranges,
     detailReads,
+    dateRanges,
     lateRows,
     resolveLatePage,
     updateDescription(description: string) {
@@ -450,6 +486,9 @@ describe("transactions history pagination", () => {
     render(<TransactionsPage />);
 
     await screen.findByRole("button", { name: "Edit description for Original purchase" });
+    await user.click(screen.getByRole("button", { name: "Choose period" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Month" }));
+    await screen.findByRole("button", { name: "Edit description for Original purchase" });
     await user.click(screen.getByRole("button", { name: "Load more" }));
     expect(await screen.findByText("Transaction 100")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Load more" }));
@@ -487,6 +526,13 @@ describe("transactions history pagination", () => {
       expectedDescription: "Original purchase",
     }), expect.any(Function));
     expect(fixture.ranges.slice(-2)).toEqual([[0, 49], [50, 99]]);
+    expect(fixture.dateRanges.slice(1)).toEqual([
+      ["2026-10-01", "2026-10-31", 0],
+      ["2026-10-01", "2026-10-31", 50],
+      ["2026-10-01", "2026-10-31", 100],
+      ["2026-10-01", "2026-10-31", 0],
+      ["2026-10-01", "2026-10-31", 50],
+    ]);
 
     await act(async () => {
       fixture.resolveLatePage({ data: fixture.lateRows, error: null });

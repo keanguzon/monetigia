@@ -120,9 +120,9 @@ export function WalletFundsBreakdown({
   );
 }
 
-export function SummarySkeleton({ columns = 3 }: { columns?: 3 | 4 }) {
+export function SummarySkeleton({ columns = 3, "aria-label": ariaLabel = "Loading summary" }: { columns?: 3 | 4; "aria-label"?: string }) {
   return (
-    <div role="status" aria-label="Loading summary" className={summaryPanelClass}>
+    <div role="status" aria-label={ariaLabel} className={summaryPanelClass}>
       <div
         className={`grid grid-cols-1 gap-6 sm:gap-8 ${
           columns === 4
