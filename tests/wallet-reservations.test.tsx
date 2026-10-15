@@ -32,6 +32,7 @@ const fixture = vi.hoisted(() => {
     transactionResponses: [] as Promise<any>[],
     transactionReads: 0,
     authResponses: [] as Promise<any>[],
+    authListeners: new Set<(event: string, session: unknown) => void>(),
     accountResponses: [] as Promise<any>[],
     debtSnapshot: null as any,
     debtResponses: [] as Promise<any>[],
@@ -53,9 +54,31 @@ vi.mock("@/lib/supabase/client", () => ({
     auth: {
       getUser: async () => fixture.authResponses.shift() ?? ({ data: { user: { id: fixture.userId } }, error: null }),
       getSession: async () => ({ data: { session: { user: { id: fixture.userId }, access_token: "token" } }, error: null }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      onAuthStateChange: (callback: (event: string, session: unknown) => void) => {
+        fixture.authListeners.add(callback);
+        return { data: { subscription: { unsubscribe: () => fixture.authListeners.delete(callback) } } };
+      },
     },
-    rpc: (name: string) => {
+    rpc: (name: string, args: { p_start: string; p_end: string }) => {
+      if (name === "spending_summary") {
+        const isOctober = args.p_start === "2026-10-01";
+        const response = Promise.resolve({
+          data: {
+            start: args.p_start,
+            end: args.p_end,
+            spent: isOctober ? "1100.00" : "0.00",
+            expenses: isOctober ? "1000.00" : "0.00",
+            debtPayments: isOctober ? "100.00" : "0.00",
+            income: isOctober ? "2500.00" : "0.00",
+            net: isOctober ? "1400.00" : "0.00",
+            categories: isOctober ? [{ categoryId: null, name: "Uncategorized", amount: "1000.00" }] : [],
+            transactionCount: isOctober ? 3 : 0,
+            excludedCurrencyTransactionCount: 0,
+          },
+          error: null,
+        });
+        return { setHeader: () => response, then: response.then.bind(response) };
+      }
       if (name !== "debt_snapshot") throw new Error(`Unexpected RPC ${name}`);
       fixture.debtReads += 1;
       const response = fixture.debtResponses.shift() ?? Promise.resolve({ data: fixture.debtSnapshot ?? makeDebtSnapshot(), error: null });
@@ -184,6 +207,7 @@ beforeEach(() => {
   fixture.transactionReads = 0;
   fixture.transactionResponses = [];
   fixture.authResponses = [];
+  fixture.authListeners.clear();
   fixture.accountResponses = [];
   fixture.debtSnapshot = null;
   fixture.debtResponses = [];
