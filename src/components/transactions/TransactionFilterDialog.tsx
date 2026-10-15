@@ -148,7 +148,7 @@ export function TransactionFilterDialog({ query, dateSelection, options, onApply
   return <Dialog.Root open={open} onOpenChange={changeOpen}>
     <Tooltip content={triggerLabel}>
       <Dialog.Trigger asChild>
-        <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" aria-label={triggerLabel} title={triggerLabel}>
+        <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" aria-label={triggerLabel}>
           <span className="relative inline-flex" aria-hidden="true">
             <Filter className="h-4 w-4" />
             {count > 0 && <span className="absolute -right-3 -top-3 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-4 text-primary-foreground">{count}</span>}
@@ -163,7 +163,7 @@ export function TransactionFilterDialog({ query, dateSelection, options, onApply
           <Dialog.Title className="text-base font-semibold">Filters</Dialog.Title>
           <Tooltip content="Close filters">
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Close filters" title="Close filters"><X className="h-4 w-4" aria-hidden="true" /></Button>
+              <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Close filters"><X className="h-4 w-4" aria-hidden="true" /></Button>
             </Dialog.Close>
           </Tooltip>
         </header>

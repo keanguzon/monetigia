@@ -33,9 +33,8 @@ export function TransactionSortControl({ sort, onChange }: TransactionSortContro
       <Tooltip content={`Sort: ${selectedLabel}`}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" className="h-11 max-w-full gap-2" aria-label={`Sort transactions: ${selectedLabel}`} title={`Sort: ${selectedLabel}`}>
-              <ArrowUpDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="max-w-[min(56vw,15rem)] truncate">{selectedLabel}</span>
+            <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" aria-label={`Sort transactions: ${selectedLabel}`}>
+              <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" collisionPadding={8} className="w-[min(20rem,calc(100vw-1rem))]">

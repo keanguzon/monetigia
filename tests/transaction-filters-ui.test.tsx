@@ -5,6 +5,7 @@ import { TransactionFilterDialog, type TransactionFilterOptionsState } from "@/c
 import { TransactionFilterChips } from "@/components/transactions/TransactionFilterChips";
 import { TransactionSortControl } from "@/components/transactions/TransactionSortControl";
 import { PeriodBar } from "@/components/transactions/PeriodBar";
+import { formatHistoryDateRange } from "@/lib/transactions/history-format";
 import { defaultHistoryQuery, type HistoryDateSelection, type HistoryQuery } from "@/lib/transactions/history-query";
 import type { HistoryFilterOptions } from "@/lib/transactions/history-filtered";
 
@@ -182,6 +183,7 @@ describe("TransactionFilterChips", () => {
     const onClearAll = vi.fn();
     const dateSelection: HistoryDateSelection = { kind: "custom", start: "2026-10-03", end: "2026-10-15" };
     render(<TransactionFilterChips query={query({ sort: "amount_desc", start: dateSelection.start, end: dateSelection.end })} dateSelection={dateSelection} options={loadedOptions} onChange={onChange} onClearAll={onClearAll} />);
+    expect(screen.getByText("Oct 3–15, 2026")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Remove date range filter" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ sort: "amount_desc", start: null, end: null }), { kind: "all" });
     await user.click(screen.getByRole("button", { name: "Clear all" }));
@@ -217,5 +219,22 @@ describe("PeriodBar custom date display", () => {
     expect(screen.getByRole("menuitemradio", { name: "Custom range" })).toBeTruthy();
     await user.click(screen.getByRole("menuitemradio", { name: "All time" }));
     expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  test("uses the shared date-range label and keeps toolbar icons accessible without native titles", () => {
+    expect(formatHistoryDateRange("2026-10-03", "2026-10-15")).toBe("Oct 3–15, 2026");
+    const view = render(<>
+      <TransactionFilterDialog query={query()} dateSelection={{ kind: "all" }} options={readyOptions} onApply={vi.fn()} onClearAll={vi.fn()} />
+      <TransactionSortControl sort="date_added_desc" onChange={vi.fn()} />
+      <PeriodBar period={null} today={new Date(2026, 9, 15)} onChange={vi.fn()} />
+      <TransactionFilterChips query={query({ walletIds: [walletOne] })} dateSelection={{ kind: "all" }} options={loadedOptions} onChange={vi.fn()} onClearAll={vi.fn()} />
+    </>);
+    const sortTrigger = screen.getByRole("button", { name: "Sort transactions: Date added: newest" });
+    expect(sortTrigger.textContent).toBe("");
+    expect(sortTrigger.className).toContain("h-11");
+    expect(sortTrigger.className).toContain("w-11");
+    expect(sortTrigger.getAttribute("aria-label")).toBe("Sort transactions: Date added: newest");
+    expect(sortTrigger.closest("[data-tooltip]")?.getAttribute("data-tooltip")).toBe("Sort: Date added: newest");
+    expect(view.container.querySelector("[title]")).toBeNull();
   });
 });
