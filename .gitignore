@@ -95,3 +95,4 @@ scripts/
 /.playwright-cli/
 !supabase/migrations/202610140001_spending_summary.sql
 !supabase/migrations/202610140002_spending_limits.sql
+!docs/superpowers/plans/2026-10-15-transaction-filters-and-sorting.md
