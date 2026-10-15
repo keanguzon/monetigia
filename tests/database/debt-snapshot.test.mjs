@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLatestMigrations, requireSuccess } from './helpers.mjs';
+import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installPrePhpMigrations, requireSuccess } from './helpers.mjs';
 
-before(installLatestMigrations);
-after(installLatestMigrations);
+before(installPrePhpMigrations);
+after(installPrePhpMigrations);
 export async function setup(t) { const f = await createFinanceFixture(); t.after(() => cleanupFinanceFixture(f)); return f; }
 export const snapshot = async f => requireSuccess(await f.owner.client.rpc('debt_snapshot'));
 export const apply = (f, command, requestId = randomUUID(), quote = null) => f.owner.client.rpc('goal_finance_apply', { p_request_id: requestId, p_command: command, p_quote: quote });

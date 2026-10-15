@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLatestMigrations, insertOperation, requireSuccess } from './helpers.mjs';
+import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installPrePhpMigrations, insertOperation, requireSuccess } from './helpers.mjs';
 
 const migration = '202610080002_existing_debt_creation.sql';
-before(installLatestMigrations);
-after(installLatestMigrations);
+before(installPrePhpMigrations);
+after(installPrePhpMigrations);
 async function setup(t) { const f = await createFinanceFixture(); t.after(() => cleanupFinanceFixture(f)); return f; }
 const account = overrides => ({ name: 'Credit', type: 'credit_card', currency: 'PHP', color: '#00aa99', icon: 'gcash.png', is_savings: false, interest_rate: 0, include_in_networth: true, display_order: 0, ...overrides });
 const debt = overrides => ({ clientId: 'laptop', name: 'Laptop', mode: 'installments', amount: '1000.00', firstDueDate: '2026-01-31', count: 3, ...overrides });
@@ -149,7 +149,7 @@ test('allocation accepts the 100-item and 6000-row boundary with exact SQL total
 });
 
 test('final chronological state pins definer search paths, owner read policies, unconstrained money and client grants', async () => {
-  await installLatestMigrations();
+  await installPrePhpMigrations();
   const { queryAdmin } = await databaseRuntime();
   const [functionInfo] = await queryAdmin(`SELECT p.prosecdef,p.proconfig,
     has_function_privilege('authenticated',p.oid,'EXECUTE') AS authenticated,

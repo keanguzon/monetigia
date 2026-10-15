@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLatestMigrations, requireSuccess } from './helpers.mjs';
+import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installPrePhpMigrations, requireSuccess } from './helpers.mjs';
 before(async () => {
     try {
         await applyMigration('202610060004_goal_transaction_operations.sql');
@@ -373,7 +373,7 @@ test('ordered transaction and lifecycle reapplication refreshes the private help
 
 test('opening-only card payments use outstanding debt while cash and debt-goal reservations still gate them', async t => {
     const f = await setup(t);
-    await installLatestMigrations();
+    await installPrePhpMigrations();
     const accountDetails = {
         name: 'Opening only', type: 'credit_card', currency: 'PHP', color: '#00aa99', icon: null,
         is_savings: false, interest_rate: 0, include_in_networth: true, display_order: 0,

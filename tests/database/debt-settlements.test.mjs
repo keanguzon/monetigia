@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
-import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLatestMigrations, requireSuccess } from './helpers.mjs';
+import { applyMigration, cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installPrePhpMigrations, requireSuccess } from './helpers.mjs';
 
 const migration = '202610080003_debt_settlements.sql';
-before(installLatestMigrations);
-after(installLatestMigrations);
+before(installPrePhpMigrations);
+after(installPrePhpMigrations);
 
 async function setup(t) {
   const fixture = await createFinanceFixture();

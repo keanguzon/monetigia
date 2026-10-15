@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLatestMigrations, requireSuccess } from './helpers.mjs';
+import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installPrePhpMigrations, requireSuccess } from './helpers.mjs';
 
-before(installLatestMigrations);
-after(installLatestMigrations);
+before(installPrePhpMigrations);
+after(installPrePhpMigrations);
 
 test('metadata edits preserve finance, reject stale/category ownership, and replay once', async t => {
   const fixture = await setup(t);

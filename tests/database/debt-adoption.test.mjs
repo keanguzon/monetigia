@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { cleanupFinanceFixture, createFinanceFixture, installLatestMigrations, requireSuccess } from './helpers.mjs';
+import { cleanupFinanceFixture, createFinanceFixture, installPrePhpMigrations, requireSuccess } from './helpers.mjs';
 
-before(installLatestMigrations); after(installLatestMigrations);
+before(installPrePhpMigrations); after(installPrePhpMigrations);
 async function setup(t) { const f = await createFinanceFixture(); t.after(() => cleanupFinanceFixture(f)); return f; }
 const snap = async f => requireSuccess(await f.owner.client.rpc('debt_snapshot'));
 const apply = (f, command, request = randomUUID(), quote = null) => f.owner.client.rpc('goal_finance_apply', { p_request_id: request, p_command: command, p_quote: quote });

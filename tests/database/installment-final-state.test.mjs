@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installLatestMigrations, requireSuccess } from './helpers.mjs';
+import { cleanupFinanceFixture, createFinanceFixture, databaseRuntime, installPrePhpMigrations, requireSuccess } from './helpers.mjs';
 
-before(installLatestMigrations);
-after(installLatestMigrations);
+before(installPrePhpMigrations);
+after(installPrePhpMigrations);
 
 test('final installed runtime authenticates creation snapshot adoption correction and archived restore', async t => {
   const f = await setup(t);
@@ -131,7 +131,7 @@ test('final migration completion releases leftovers; completed expense deletion 
 });
 
 test('final chronological state keeps debt event storage owner-readable and the account adapter private', async () => {
-  await installLatestMigrations();
+  await installPrePhpMigrations();
   const { queryAdmin } = await databaseRuntime();
   const [paymentIntegration] = await queryAdmin(`SELECT
     pg_get_functiondef('public.goal_transaction_quote(jsonb,jsonb)'::regprocedure) AS quote_definition,

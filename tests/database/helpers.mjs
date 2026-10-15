@@ -65,9 +65,17 @@ export async function applyMigration(filename) {
   await new Promise((resolveWait) => setTimeout(resolveWait, 150));
 }
 
+export async function installPrePhpMigrations() {
+  await installMigrationsThrough('202610150001');
+}
+
 export async function installLatestMigrations() {
+  await installMigrationsThrough();
+}
+
+async function installMigrationsThrough(ceiling = null) {
   const names = await readdir(new URL('../../supabase/migrations/', import.meta.url));
-  for (const name of names.filter(name => /^\d+_.*\.sql$/.test(name)).sort()) await applyMigration(name);
+  for (const name of names.filter(name => /^\d+_.*\.sql$/.test(name) && (ceiling === null || name.slice(0,12) <= ceiling)).sort()) await applyMigration(name);
 }
 
 export function requireSuccess(result, context = 'Database request') {

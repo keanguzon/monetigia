@@ -97,3 +97,5 @@ scripts/
 !supabase/migrations/202610140002_spending_limits.sql
 !supabase/migrations/202610150001_transaction_history_filters.sql
 !docs/superpowers/plans/2026-10-15-transaction-filters-and-sorting.md
+
+!supabase/migrations/202610150002_php_only_currency_retirement.sql
