@@ -217,21 +217,21 @@ export interface Database {
       spending_limits: {
         Row: {
           user_id: string;
-          amount: number;
+          amount: string | number;
           cadence: "month" | "cutoff";
           created_at: string;
           updated_at: string;
         };
         Insert: {
           user_id: string;
-          amount: number;
+          amount: string | number;
           cadence: "month" | "cutoff";
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           user_id?: string;
-          amount?: number;
+          amount?: string | number;
           cadence?: "month" | "cutoff";
           created_at?: string;
           updated_at?: string;
@@ -451,6 +451,10 @@ export interface Database {
     };
     Views: {};
     Functions: {
+      spending_summary: {
+        Args: { p_start: string; p_end: string };
+        Returns: Json;
+      };
       debt_snapshot: {
         Args: Record<string, never>;
         Returns: Json;

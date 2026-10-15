@@ -9,6 +9,8 @@ import { Plus, Tags, ArrowDownLeft, ArrowUpRight, Edit2, Trash2 } from "lucide-r
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
 import { isValidUuid } from "@/lib/utils";
+import { useSWRConfig } from "swr";
+import { refreshFinancialData } from "@/lib/refresh-financial-data";
 
 const AddCategoryModal = dynamic(() => import("@/components/categories/AddCategoryModal"), {
   ssr: false,
@@ -35,6 +37,15 @@ export default function CategoriesPage() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const { toast } = useToast();
+  const { mutate, cache } = useSWRConfig();
+
+  const refreshAfterCategoryWrite = async (userId: string) => {
+    try {
+      await refreshFinancialData(userId, mutate, cache);
+    } catch {
+      toast({ title: "Category saved, refresh failed", description: "Reload to update the spending summary. The category change was saved.", variant: "destructive" });
+    }
+  };
 
   const startEditingCategory = (categoryId: string, currentName: string) => {
     setEditingCategoryId(categoryId);
@@ -86,6 +97,7 @@ export default function CategoriesPage() {
     toast({ title: "Category renamed", description: "The category has been successfully renamed." });
     setEditingCategoryId(null);
     loadCategories();
+    await refreshAfterCategoryWrite(user.id);
   };
 
   const deleteCategory = async (categoryId: string) => {
@@ -111,6 +123,7 @@ export default function CategoriesPage() {
 
       toast({ title: "Category deleted", description: "The category has been successfully deleted." });
       loadCategories();
+      await refreshAfterCategoryWrite(user.id);
     }
   };
 
