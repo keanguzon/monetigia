@@ -21,9 +21,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAccounts, useRecentTransactions, useDashboardStats } from "@/hooks/use-data";
+import { useLocalToday } from "@/hooks/use-local-today";
+import { comparisonRange, periodContaining, spentToDateEnd, toLocalDateString } from "@/lib/spending/periods";
 
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<"last7" | "last30" | "thisMonth">("thisMonth");
+  const today = useLocalToday();
 
   const rangeLabel = useMemo(() => {
     if (dateRange === "last7") return "Last 7 days";
@@ -32,19 +35,16 @@ export default function DashboardPage() {
   }, [dateRange]);
 
   const getDateRange = (range: "last7" | "last30" | "thisMonth") => {
-    const toDateString = (date: Date) => date.toISOString().split("T")[0];
-    const today = new Date();
     const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
     if (range === "thisMonth") {
-      const currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      const previousStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const previousEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+      const period = periodContaining(today, "month");
+      const previous = comparisonRange(period, today);
       return {
-        currentStart: toDateString(currentStart),
-        currentEnd: toDateString(end),
-        previousStart: toDateString(previousStart),
-        previousEnd: toDateString(previousEnd),
+        currentStart: period.start,
+        currentEnd: spentToDateEnd(period, today),
+        previousStart: previous.start,
+        previousEnd: previous.end,
       };
     }
 
@@ -59,10 +59,10 @@ export default function DashboardPage() {
     previousStart.setDate(previousStart.getDate() - (days - 1));
 
     return {
-      currentStart: toDateString(currentStart),
-      currentEnd: toDateString(end),
-      previousStart: toDateString(previousStart),
-      previousEnd: toDateString(previousEnd),
+      currentStart: toLocalDateString(currentStart),
+      currentEnd: toLocalDateString(end),
+      previousStart: toLocalDateString(previousStart),
+      previousEnd: toLocalDateString(previousEnd),
     };
   };
 
