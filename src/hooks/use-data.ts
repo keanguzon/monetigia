@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/client";
 import type { Account, Category, Transaction } from "@/types/database";
 
 import { sortAccountsWithFallback } from "@/lib/account-order";
+import { toMinorUnits } from "@/lib/goals/summary";
+import { fetchSpendingSummary } from "@/lib/spending/summary";
+import { SpendingOwnerChangedError, useSpendingOwner } from "./use-spending-owner";
 
 const supabase = createClient();
 
@@ -69,89 +72,31 @@ export function useRecentTransactions() {
 export function useDashboardStats(
   currentStart: string, currentEnd: string, previousStart: string, previousEnd: string
 ) {
-  return useSWR(
-    `dashboardStats-${currentStart}-${currentEnd}`,
-    async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const [monthTxData, lastMonthTxData] = await Promise.all([
-        supabase
-          .from("transactions")
-          .select("type, amount, account_id, transfer_to_account_id")
-          .eq("user_id", user.id)
-          .gte("date", currentStart)
-          .lte("date", currentEnd),
-        supabase
-          .from("transactions")
-          .select("type, amount, account_id, transfer_to_account_id")
-          .eq("user_id", user.id)
-          .gte("date", previousStart)
-          .lte("date", previousEnd)
-      ]);
-
-      if (monthTxData.error) throw monthTxData.error;
-      if (lastMonthTxData.error) throw lastMonthTxData.error;
-
-      const monthTransactions = monthTxData.data || [];
-      const lastMonthTransactions = lastMonthTxData.data || [];
-
-      // We need accounts to check for credit_card types (for transfers/debt payments)
-      const { data: accountsData, error: accountsError } = await supabase
-        .from("accounts")
-        .select("id, type")
-        .eq("user_id", user.id);
-
-      if (accountsError) throw accountsError;
-      
-      const accountTypeById = new Map<string, string>();
-      (accountsData || []).forEach(a => accountTypeById.set(a.id, a.type));
-
-      const isCredit = (accountId?: string | null) => {
-        if (!accountId) return false;
-        return accountTypeById.get(accountId) === "credit_card";
-      };
-
-      const income = monthTransactions
-        .filter((t) => t.type === "income" && !isCredit(t.account_id))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const expenses = monthTransactions
-        .filter((t) => t.type === "expense" && !isCredit(t.account_id))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const debtPayments = monthTransactions
-        .filter(
-          (t) =>
-            t.type === "transfer" &&
-            !isCredit(t.account_id) &&
-            isCredit(t.transfer_to_account_id)
-        )
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const lastIncome = lastMonthTransactions
-        .filter((t) => t.type === "income" && !isCredit(t.account_id))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const lastExpenses = lastMonthTransactions
-        .filter((t) => t.type === "expense" && !isCredit(t.account_id))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const lastDebtPayments = lastMonthTransactions
-        .filter(
-          (t) =>
-            t.type === "transfer" &&
-            !isCredit(t.account_id) &&
-            isCredit(t.transfer_to_account_id)
-        )
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      return {
-        monthlyIncome: income || 0,
-        monthlyExpenses: (expenses + debtPayments) || 0,
-        lastMonthIncome: lastIncome || 0,
-        lastMonthExpenses: (lastExpenses + lastDebtPayments) || 0,
-      };
-    }
-  );
+  const owner = useSpendingOwner();
+  const key = owner.userId
+    ? ["dashboardStats", owner.userId, currentStart, currentEnd, previousStart, previousEnd] as const
+    : null;
+  const result = useSWR(key, async ([, keyOwnerId, rangeStart, rangeEnd, previousRangeStart, previousRangeEnd]) => {
+    const request = await owner.capture();
+    if (request.userId !== keyOwnerId) throw new SpendingOwnerChangedError();
+    const [current, previous] = await Promise.all([
+      fetchSpendingSummary({ start: rangeStart, end: rangeEnd }, request.accessToken),
+      fetchSpendingSummary({ start: previousRangeStart, end: previousRangeEnd }, request.accessToken),
+    ]);
+    request.assertCurrent();
+    return {
+      monthlyIncome: toMinorUnits(current.income) / 100,
+      monthlyExpenses: toMinorUnits(current.spent) / 100,
+      lastMonthIncome: toMinorUnits(previous.income) / 100,
+      lastMonthExpenses: toMinorUnits(previous.spent) / 100,
+      excludedCurrencyTransactionCount: current.excludedCurrencyTransactionCount,
+    };
+  }, { keepPreviousData: false });
+  const visible = owner.status === "authenticated" && owner.isCurrent();
+  return {
+    ...result,
+    data: visible ? result.data : undefined,
+    error: owner.error ?? (visible ? result.error : undefined),
+    isLoading: owner.isLoading || (visible && result.isLoading),
+  };
 }
