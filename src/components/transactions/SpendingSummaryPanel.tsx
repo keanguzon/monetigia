@@ -3,7 +3,8 @@
 import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { SummarySkeleton, summaryAmountClass, summaryPanelClass } from "@/components/ui/financial-summary";
-import { useSpendingSummary } from "@/hooks/use-spending";
+import { useSpendingSummary, useSpendingLimit } from "@/hooks/use-spending";
+import { SpendingLimitDialog } from "./SpendingLimitDialog";
 import { comparisonRange, formatPeriodLabel, isCurrentPeriod, spentToDateEnd, type SpendingPeriod } from "@/lib/spending/periods";
 
 const cents = (value: string) => BigInt(value.replace(".", ""));
@@ -17,6 +18,7 @@ function rangeLabel(start: string, end: string) {
 
 export function SpendingSummaryPanel({ period, today, onAddTransaction }: { period: SpendingPeriod | null; today: Date; onAddTransaction: () => void }) {
   const result = useSpendingSummary(period, today);
+  const limitResult = useSpendingLimit();
   if (!period) return null;
   if (result.isLoading) return <SummarySkeleton aria-label="Loading spending summary" />;
   if (result.error || !result.data) return <section className={summaryPanelClass} role="alert"><p>Spending totals couldn't load. Your transactions below are unaffected.</p><Button className="mt-3 min-h-11" variant="outline" onClick={() => void result.retry()}>Retry</Button></section>;
@@ -24,6 +26,10 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction }: { peri
   const spent = cents(data.spent);
   const label = formatPeriodLabel(period);
   const current = isCurrentPeriod(period, today);
+  const limit = limitResult.limit;
+  const matchingLimit = limit && (limit.cadence === "month" ? period.kind === "month" : period.kind !== "month");
+  const limitCents = limit ? cents(limit.amount) : BigInt(0);
+  const over = spent > limitCents;
   const previous = comparisonRange(period, today);
   const difference = result.comparison ? spent - cents(result.comparison.spent) : BigInt(0);
   const categories = [...data.categories].sort((a, b) => cents(a.amount) > cents(b.amount) ? -1 : cents(a.amount) < cents(b.amount) ? 1 : a.name.localeCompare(b.name));
@@ -39,6 +45,13 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction }: { peri
           : result.isComparisonLoading ? <p role="status" className="mt-1 text-sm text-muted-foreground">Loading comparison…</p> : null}
     </div>
     {spent === BigInt(0) && <div className="space-y-2"><p>No spending recorded for {label}.</p><Button className="min-h-11" onClick={onAddTransaction}>Add Transaction</Button></div>}
+    <div className="space-y-2 [--destructive:0_72%_42%] dark:[--destructive:0_84%_60%]">
+      {limitResult.isLoading ? <p role="status">Loading spending limit…</p> : limitResult.error ? <div><p role="status">Spending limit couldn't load.</p><Button variant="outline" className="min-h-11" onClick={() => void limitResult.retry().catch(() => undefined)}>Retry limit</Button></div> : limit !== undefined && <>
+        {matchingLimit && current && <div className="space-y-2"><p>{money(spent)} of {money(limitCents)} used</p><div role="progressbar" aria-label="Spending limit used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Number(spent >= limitCents ? BigInt(100) : spent * BigInt(100) / limitCents)} className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full ${over ? "bg-destructive" : "bg-primary"}`} style={{ width: `${Number(spent >= limitCents ? BigInt(100) : spent * BigInt(100) / limitCents)}%` }} /></div><p className={over ? "text-destructive" : "text-muted-foreground"}>{money(over ? spent - limitCents : limitCents - spent)} {over ? "over your limit" : "left"}</p></div>}
+        {matchingLimit && !current && <p className="text-sm text-muted-foreground">Limit applies to the current period only</p>}
+      </>}
+      <SpendingLimitDialog limit={limit} retry={limitResult.retry} available={!limitResult.isLoading && !limitResult.error && limit !== undefined} />
+    </div>
     <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border/30 pt-4 text-sm"><p>Income {money(cents(data.income))}</p><p>Net {money(cents(data.net))}</p></div>
     {rows.length > 0 && <ul aria-label="Spending by category" className="space-y-2 border-t border-border/30 pt-4">{rows.map(row => <li key={row.name} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm"><span className="min-w-0 break-words">{row.name}</span><span className="tabular-nums">{money(row.amount)} <span className="text-muted-foreground">({spent > BigInt(0) ? `${Number((row.amount * BigInt(1000) + spent / BigInt(2)) / spent) / 10}%` : "0%"})</span></span></li>)}</ul>}
     {data.excludedCurrencyTransactionCount > 0 && <p className="text-sm text-muted-foreground">{data.excludedCurrencyTransactionCount} transactions in other currencies aren't included.</p>}

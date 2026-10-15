@@ -5,7 +5,8 @@ import { SpendingSummaryPanel } from "@/components/transactions/SpendingSummaryP
 import { PeriodBar } from "@/components/transactions/PeriodBar";
 
 const summary = vi.hoisted(() => ({ value: {} as any, retry: vi.fn() }));
-vi.mock("@/hooks/use-spending", () => ({ useSpendingSummary: () => summary.value }));
+vi.mock("@/hooks/use-spending", () => ({ useSpendingLimitCommand: () => ({ isSaving: false }), useSpendingSummary: () => summary.value, useSpendingLimit: () => ({ limit: undefined, isLoading: true, error: null }) }));
+vi.mock("@/hooks/use-spending-owner", () => ({ useSpendingOwner: () => ({ status: "resolving", userId: null, generation: 0, isCurrent: () => false }) }));
 const today = new Date(2026, 9, 15);
 const period = { kind: "month" as const, start: "2026-10-01", end: "2026-10-31" };
 const data = { start: period.start, end: "2026-10-15", spent: "120.30", expenses: "100.20", debtPayments: "20.10", income: "200.00", net: "79.70", categories: [{ categoryId: null, name: "Food", amount: "100.20" }], transactionCount: 3, excludedCurrencyTransactionCount: 0 };

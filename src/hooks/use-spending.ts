@@ -60,6 +60,7 @@ export function useSpendingLimit() {
     limit: owner.status === "signed-out" ? null : owner.isCurrent() ? result.data : undefined,
     error: owner.error ?? (owner.isCurrent() ? result.error ?? null : null),
     isLoading: owner.isLoading || Boolean(owner.userId && result.isLoading),
+    retry: async () => { const value = await result.mutate(); if (value === undefined) throw new Error("The spending limit couldn't load."); return value; },
   };
 }
 
