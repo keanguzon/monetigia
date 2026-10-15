@@ -214,6 +214,30 @@ export interface Database {
         };
         Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
       };
+      spending_limits: {
+        Row: {
+          user_id: string;
+          amount: number;
+          cadence: "month" | "cutoff";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          amount: number;
+          cadence: "month" | "cutoff";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          amount?: number;
+          cadence?: "month" | "cutoff";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: { foreignKeyName: string; columns: string[]; isOneToOne?: boolean; referencedRelation: string; referencedColumns: string[]; }[];
+      };
       goals: {
         Row: {
           id: string;
@@ -466,6 +490,7 @@ export type Account = Database["public"]["Tables"]["accounts"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
 export type Budget = Database["public"]["Tables"]["budgets"]["Row"];
+export type SpendingLimit = Database["public"]["Tables"]["spending_limits"]["Row"];
 export type Goal = Database["public"]["Tables"]["goals"]["Row"];
 export type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
 export type GoalUpdate = Database["public"]["Tables"]["goals"]["Update"];

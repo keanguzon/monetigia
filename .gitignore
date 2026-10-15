@@ -94,3 +94,4 @@ scripts/
 !docs/superpowers/specs/2026-10-07-existing-debt-selection-design.md
 /.playwright-cli/
 !supabase/migrations/202610140001_spending_summary.sql
+!supabase/migrations/202610140002_spending_limits.sql
