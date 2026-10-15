@@ -45,6 +45,30 @@ export type FilteredHistoryPage = {
 
 function invalid(): never { throw new Error("The transaction history response could not be verified."); }
 
+function creationInstant(value: string): bigint {
+  const fraction = value.match(/\.(\d+)/)?.[1] ?? "";
+  if (fraction.length > 6) invalid();
+  const wholeMilliseconds = Date.parse(value.replace(/\.\d+/, ""));
+  if (!Number.isFinite(wholeMilliseconds)) invalid();
+  return BigInt(wholeMilliseconds) * BigInt(1000) + BigInt(fraction.padEnd(6, "0"));
+}
+
+function validateSortMetadata(envelope: z.infer<typeof entrySchema>): void {
+  const latest = envelope.rows.reduce((best, row) => {
+    const order = creationInstant(row.created_at) - creationInstant(best.created_at);
+    return order > BigInt(0) || order === BigInt(0) && row.id.toLowerCase() > best.id.toLowerCase() ? row : best;
+  });
+  if (envelope.sortId !== latest.id || creationInstant(envelope.createdAt) !== creationInstant(latest.created_at)) invalid();
+  const purchase = envelope.rows[0].purchase_date;
+  const consistentPurchase = envelope.kind === "installment_group" && purchase !== null && envelope.rows.every(row => row.purchase_date === purchase);
+  const dueDates = envelope.rows.map(row => row.date);
+  const fallback = dueDates.every((date): date is string => date !== null) ? dueDates.reduce((latest, date) => date > latest ? date : latest) : null;
+  const expected = consistentPurchase ? purchase : fallback;
+  // Null hydration cannot distinguish a missing purchase date from an invalid legacy date.
+  const legacyUnknown = !consistentPurchase && envelope.rows.some(row => row.purchase_date === null) && envelope.transactionDate === null;
+  if (envelope.transactionDate !== expected && !legacyUnknown) invalid();
+}
+
 export function parseFilteredHistoryPage(value: unknown, userId: string, input: HistoryQuery): FilteredHistoryPage {
   const query = normalizeHistoryQuery(input);
   const page = pageSchema.parse(value);
@@ -59,7 +83,7 @@ export function parseFilteredHistoryPage(value: unknown, userId: string, input: 
     keys.add(envelope.key);
     const childIds = new Set(envelope.rows.map(row => row.id));
     if (new Set(envelope.matchingRowIds).size !== envelope.matchingRowIds.length || envelope.matchingRowIds.some(id => !childIds.has(id))) invalid();
-    if (!envelope.rows.some(row => row.id === envelope.sortId && row.created_at === envelope.createdAt)) invalid();
+    validateSortMetadata(envelope);
     for (const row of envelope.rows) {
       if (row.user_id !== userId || ids.has(row.id) || row.installment_group_id !== envelope.groupId) invalid();
       if (row.account !== null && row.account.id !== row.account_id || row.category !== null && row.category.id !== row.category_id
