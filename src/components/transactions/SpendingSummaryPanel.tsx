@@ -38,7 +38,7 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction }: { peri
   if (rest > BigInt(0)) rows.push({ name: "Other categories", amount: rest });
   if (cents(data.debtPayments) > BigInt(0)) rows.push({ name: "Debt payments", amount: cents(data.debtPayments) });
   return <section aria-label="Spending summary" className={`${summaryPanelClass} min-w-0 space-y-4`}>
-    <div><h3 className="font-heading text-lg font-semibold">{label}</h3><p className="mt-1 text-sm text-muted-foreground">Counts expenses and card payments from your wallets. Transfers between wallets aren&apos;t counted.</p><p className="mt-1 text-xs text-muted-foreground">Search and type filters only change the list, not these totals.</p></div>
+    <div><h3 className="font-heading text-lg font-semibold">{label}</h3><p className="mt-1 text-sm text-muted-foreground">Expenses + card payments</p></div>
     <div><p className="text-sm text-muted-foreground">{current ? "Spent so far" : "Spent"}</p><p className={`${summaryAmountClass} break-words`}>{money(spent)}</p>
       {result.comparisonError ? <div className="mt-2 text-sm"><p role="status">Comparison couldn&apos;t load</p><Button variant="outline" className="mt-2 min-h-11" aria-label="Retry comparison" onClick={() => void result.retry()}>Retry</Button></div>
         : result.comparison && result.comparison.transactionCount > 0 ? <p className="mt-1 text-sm text-muted-foreground">{difference === BigInt(0) ? "Same as" : `${money(difference < BigInt(0) ? -difference : difference)} ${difference < BigInt(0) ? "less" : "more"} than`} {rangeLabel(previous.start, previous.end)}</p>
@@ -55,6 +55,17 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction }: { peri
     <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border/30 pt-4 text-sm"><p>Income {money(cents(data.income))}</p><p>Net {money(cents(data.net))}</p></div>
     {rows.length > 0 && <ul aria-label="Spending by category" className="space-y-2 border-t border-border/30 pt-4">{rows.map(row => <li key={row.name} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm"><span className="min-w-0 break-words">{row.name}</span><span className="tabular-nums">{money(row.amount)} <span className="text-muted-foreground">({spent > BigInt(0) ? `${Number((row.amount * BigInt(1000) + spent / BigInt(2)) / spent) / 10}%` : "0%"})</span></span></li>)}</ul>}
     {data.excludedCurrencyTransactionCount > 0 && <p className="text-sm text-muted-foreground">{data.excludedCurrencyTransactionCount} transactions in other currencies aren&apos;t included.</p>}
-    <p className="border-t border-border/30 pt-4 text-xs text-muted-foreground">Totals cover {rangeLabel(period.start, spentToDateEnd(period, today))}. The list covers the full selected period and may include future-dated entries and complete installment schedules outside it. Full group amounts are not period spending.</p>
+    <div className="border-t border-border/30 pt-3 text-xs text-muted-foreground">
+      <p>Totals: {rangeLabel(period.start, spentToDateEnd(period, today))}</p>
+      <details className="mt-1">
+        <summary className="min-h-11 cursor-pointer rounded-sm py-3 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">How totals work</summary>
+        <div className="space-y-2 pb-2 leading-relaxed">
+          <p>Wallet transfers are excluded.</p>
+          <p>Search and type filters only change the list.</p>
+          <p>The list covers the full period, including future-dated entries and complete installment schedules outside it.</p>
+          <p>Full group amounts are not period spending.</p>
+        </div>
+      </details>
+    </div>
   </section>;
 }

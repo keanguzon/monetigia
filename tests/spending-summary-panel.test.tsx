@@ -13,13 +13,27 @@ const data = { start: period.start, end: "2026-10-15", spent: "120.30", expenses
 beforeEach(() => { summary.value = { data, comparison: { ...data, spent: "100.10", transactionCount: 2 }, retry: summary.retry }; summary.retry.mockReset(); });
 afterEach(cleanup);
 
-test("shows elapsed comparison, exact amounts, accounting scope and full list distinction", () => {
+test("shows concise totals and keeps accounting explanations collapsed until requested", async () => {
+  const user = userEvent.setup();
   render(<SpendingSummaryPanel period={period} today={today} onAddTransaction={vi.fn()} />);
   expect(screen.getByText("Spent so far")).toBeTruthy();
   expect(screen.getByText("₱20.20 more than Sep 1–15, 2026")).toBeTruthy();
   expect(screen.getByText("Income ₱200.00")).toBeTruthy();
-  expect(screen.getByText(/Search and type filters only change the list/)).toBeTruthy();
+  expect(screen.getByText("Expenses + card payments")).toBeTruthy();
+  expect(screen.getByText("Totals: Oct 1–15, 2026")).toBeTruthy();
+  const disclosure = screen.getByText("How totals work");
+  const details = disclosure.closest("details")!;
+  expect(details.open).toBe(false);
+  await user.click(disclosure);
+  expect(details.open).toBe(true);
+  expect(screen.getByText("Wallet transfers are excluded.")).toBeTruthy();
+  expect(screen.getByText("Search and type filters only change the list.")).toBeTruthy();
   expect(screen.getByText(/future-dated entries/)).toBeTruthy();
+  expect(screen.getByText("Full group amounts are not period spending.")).toBeTruthy();
+  disclosure.focus();
+  expect(document.activeElement).toBe(disclosure);
+  await user.click(disclosure);
+  expect(details.open).toBe(false);
 });
 test.each([["140.50", "₱20.20 less than Sep 1–15, 2026"], ["120.30", "Same as Sep 1–15, 2026"]])("compares %s without rounding money", (spent, text) => {
   summary.value.comparison.spent = spent;
