@@ -5,13 +5,9 @@ import InstallmentHistoryGroup from "@/components/transactions/InstallmentHistor
 import TransactionDetailModal from "@/components/transactions/TransactionDetailModal";
 import type { DebtAccountSnapshot, DebtDueRow } from "@/lib/debt/contracts";
 import {
-  filterHistoryEntries,
   groupTransactions,
   loadHistoryGroup,
-  loadHistoryPage,
   loadHistoryTransaction,
-  mergeHistoryRows,
-  sortHistoryEntries,
   type InstallmentHistoryEntry,
   type TransactionHistoryRow,
 } from "@/lib/transactions/history";
@@ -25,22 +21,6 @@ vi.mock("@/hooks/use-debt", () => ({
 }));
 
 afterEach(() => cleanup());
-
-test("bounds the base history page by date but completes installment siblings outside it", async () => {
-  const reads: Array<{ bounds: string[]; siblings: boolean }> = [];
-  const client = { from: () => {
-    const read = { bounds: [] as string[], siblings: false }; reads.push(read);
-    const query: any = { select: () => query, eq: () => query, order: () => query, range: () => query,
-      gte: (column: string, value: string) => { read.bounds.push(`${column}>=${value}`); return query; },
-      lte: (column: string, value: string) => { read.bounds.push(`${column}<=${value}`); return query; },
-      in: () => { read.siblings = true; return query; },
-      then: (resolve: any) => Promise.resolve({ data: read.siblings ? twoInstallments() : [twoInstallments()[0]], error: null }).then(resolve) };
-    return query;
-  } };
-  const page = await loadHistoryPage(client, "owner-1", "date_added", 0, { start: "2026-02-01", end: "2026-02-28" });
-  expect(reads).toEqual([{ bounds: ["date>=2026-02-01", "date<=2026-02-28"], siblings: false }, { bounds: [], siblings: true }]);
-  expect(page.rows.map(row => row.id)).toEqual(["tx-1", "tx-2"]);
-});
 
 test("marks sibling dates outside the selected range without mislabelling the group amount", async () => {
   render(<InstallmentHistoryGroup group={groupTransactions(twoInstallments())[0] as InstallmentHistoryEntry} periodRange={{ start: "2026-02-01", end: "2026-02-28" }} sortMode="date_added" debtState={null} selectionResetKey="period" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
@@ -169,118 +149,6 @@ describe("transaction history grouping", () => {
     expect(blankBase.kind === "installment_group" && blankBase.descriptionState).toBe("consistent");
     expect(blankBase.kind === "installment_group" && blankBase.baseDescription).toBeNull();
   });
-
-  test("sorts purchase groups by purchase date and ordinary rows by transaction date", () => {
-    const rows = [
-      transaction({ id: "older-purchase", purchase_date: "2025-12-20", created_at: "2026-03-01T00:00:00Z" }),
-      transaction({ id: "newer-purchase", installment_group_id: "purchase-new", purchase_date: "2026-02-20", created_at: "2026-01-01T00:00:00Z" }),
-      transaction({ id: "ordinary", installment_group_id: null, purchase_date: null, date: "2026-01-15", created_at: "2026-02-01T00:00:00Z" }),
-    ];
-    const entries = groupTransactions(rows);
-
-    expect(sortHistoryEntries(entries, "transaction_date").map(entry => entry.key)).toEqual([
-      "installment:purchase-new",
-      "transaction:ordinary",
-      "installment:purchase-1",
-    ]);
-    expect(sortHistoryEntries(entries, "date_added").map(entry => entry.key)).toEqual([
-      "installment:purchase-1",
-      "transaction:ordinary",
-      "installment:purchase-new",
-    ]);
-  });
-
-  test("uses a group's first due date when a legacy purchase date is unknown", () => {
-    const legacyGroup = groupTransactions([
-      transaction({ id: "legacy-installment", installment_group_id: "legacy-group", purchase_date: null, date: "2024-04-15" }),
-    ])[0];
-    expect(legacyGroup.kind).toBe("installment_group");
-    if (legacyGroup.kind !== "installment_group") throw new Error("Expected a legacy installment group");
-    expect(legacyGroup.purchaseDate).toBeNull();
-    expect(sortHistoryEntries([legacyGroup], "transaction_date")[0].key).toBe("installment:legacy-group");
-  });
-
-  test("ranks a hydrated legacy group by its latest due date on later history pages", async () => {
-    const purchaseId = "legacy-purchase";
-    const legacyChildren = [
-      transaction({ id: "legacy-aug", installment_group_id: purchaseId, purchase_date: null, date: "2026-08-10", created_at: "2026-07-01T00:00:00Z" }),
-      transaction({ id: "legacy-sep", installment_group_id: purchaseId, purchase_date: null, date: "2026-09-10", created_at: "2026-07-01T00:00:00Z" }),
-      transaction({ id: "legacy-oct", installment_group_id: purchaseId, purchase_date: null, date: "2026-10-10", created_at: "2026-07-01T00:00:00Z" }),
-    ];
-    const laterPageRows = [
-      legacyChildren[2],
-      transaction({ id: "ordinary-oct-15", installment_group_id: null, purchase_date: null, date: "2026-10-15" }),
-      transaction({ id: "ordinary-oct-05", installment_group_id: null, purchase_date: null, date: "2026-10-05" }),
-    ];
-    const client = {
-      from() {
-        const call: { filters: Array<[string, unknown]> } = { filters: [] };
-        const query: any = {
-          select: () => query,
-          eq: (column: string, value: unknown) => { call.filters.push([column, value]); return query; },
-          in: (column: string, value: unknown) => { call.filters.push([column, value]); return query; },
-          order: () => query,
-          range: () => query,
-          then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
-            const isSiblingRead = call.filters.some(([column]) => column === "installment_group_id");
-            return Promise.resolve({ data: isSiblingRead ? legacyChildren : laterPageRows, error: null }).then(resolve, reject);
-          },
-        };
-        return query;
-      },
-    };
-
-    const page = await loadHistoryPage(client, "owner-1", "transaction_date", 50);
-    const entries = sortHistoryEntries(groupTransactions(page.rows), "transaction_date");
-    const legacyGroup = entries.find(entry => entry.kind === "installment_group");
-
-    expect(entries.map(entry => entry.key)).toEqual([
-      "transaction:ordinary-oct-15",
-      "installment:legacy-purchase",
-      "transaction:ordinary-oct-05",
-    ]);
-    expect(legacyGroup?.kind === "installment_group" && legacyGroup.purchaseDate).toBeNull();
-    expect(legacyGroup?.kind === "installment_group" && legacyGroup.firstDueDate).toBe("2026-08-10");
-    expect(legacyGroup?.kind === "installment_group" && legacyGroup.latestDueDate).toBe("2026-10-10");
-  });
-
-  test("uses transaction id as a stable tie break", () => {
-    const entries = groupTransactions([
-      transaction({ id: "a", installment_group_id: null, purchase_date: null, date: "2026-01-01", created_at: "2026-02-01T00:00:00Z" }),
-      transaction({ id: "z", installment_group_id: null, purchase_date: null, date: "2026-01-01", created_at: "2026-02-01T00:00:00Z" }),
-    ]);
-    expect(sortHistoryEntries(entries, "transaction_date").map(entry => entry.key)).toEqual(["transaction:z", "transaction:a"]);
-  });
-
-  test("uses the server-ordered installment row id to break group ties", () => {
-    const entries = groupTransactions([
-      transaction({ id: "a-group-row", installment_group_id: "purchase-a", created_at: "2026-02-01T00:00:00Z" }),
-      transaction({ id: "z-group-row", installment_group_id: "purchase-a", created_at: "2026-02-01T00:00:00Z" }),
-      transaction({ id: "m-ordinary-row", installment_group_id: null, purchase_date: null, date: "2026-01-10", created_at: "2026-02-01T00:00:00Z" }),
-    ]);
-
-    expect(sortHistoryEntries(entries, "date_added").map(entry => entry.key)).toEqual([
-      "installment:purchase-a",
-      "transaction:m-ordinary-row",
-    ]);
-    expect(sortHistoryEntries(entries, "transaction_date").map(entry => entry.key)).toEqual([
-      "installment:purchase-a",
-      "transaction:m-ordinary-row",
-    ]);
-  });
-
-  test("a search match on any child keeps the full group visible", () => {
-    const entries = groupTransactions([
-      ...twoInstallments(),
-      transaction({ id: "unrelated", installment_group_id: "purchase-2", purchase_date: "2026-01-20", description: "Desk (Installment 1/2)" }),
-    ]);
-
-    const matches = filterHistoryEntries(entries, "2/2");
-    expect(matches).toHaveLength(1);
-    expect(matches[0].kind).toBe("installment_group");
-    if (matches[0].kind !== "installment_group") throw new Error("Expected the matching purchase group");
-    expect(matches[0].children.map(child => child.id)).toEqual(["tx-1", "tx-2"]);
-  });
 });
 
 describe("history query window", () => {
@@ -357,126 +225,6 @@ describe("history query window", () => {
     expect(group.kind === "installment_group" && group.descriptionState).toBe("needs_review");
     expect(group.kind === "installment_group" && group.baseDescription).toBeNull();
   });
-
-  test("hydrates every selected group's siblings with an owner-scoped query", async () => {
-    const selected = transaction({ id: "selected", installment_group_id: "purchase-1" });
-    const siblings = [selected, transaction({ id: "outside-window-1", date: "2026-03-10" }), transaction({ id: "outside-window-2", date: "2026-04-10" })];
-    const calls: Array<{ table: string; filters: Array<[string, unknown]>; orders: string[]; range?: [number, number] }> = [];
-
-    const client = {
-      from(table: string) {
-        const call = { table, filters: [] as Array<[string, unknown]>, orders: [] as string[], range: undefined as [number, number] | undefined };
-        calls.push(call);
-        const query: any = {
-          select: () => query,
-          eq: (column: string, value: unknown) => { call.filters.push([column, value]); return query; },
-          in: (column: string, value: unknown) => { call.filters.push([column, value]); return query; },
-          order: (column: string) => { call.orders.push(column); return query; },
-          range: (start: number, end: number) => { call.range = [start, end]; return query; },
-          then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
-            const data = call.filters.some(([column]) => column === "installment_group_id") ? siblings : [selected];
-            return Promise.resolve({ data, error: null }).then(resolve, reject);
-          },
-        };
-        return query;
-      },
-    };
-
-    const page = await loadHistoryPage(client, "owner-1", "date_added");
-
-    expect(page.rows.map(row => row.id)).toEqual(["selected", "outside-window-1", "outside-window-2"]);
-    expect(calls[0].range).toEqual([0, 49]);
-    expect(calls[1].filters).toContainEqual(["user_id", "owner-1"]);
-    expect(calls[1].filters).toContainEqual(["installment_group_id", ["purchase-1"]]);
-    expect(calls[1].range).toBeUndefined();
-  });
-
-  test("uses the stored history date for transaction-date window selection", async () => {
-    const calls: Array<{ orders: Array<[string, unknown]>; range?: [number, number] }> = [];
-    const client = {
-      from() {
-        const call = { orders: [] as Array<[string, unknown]>, range: undefined as [number, number] | undefined };
-        calls.push(call);
-        const query: any = {
-          select: () => query,
-          eq: () => query,
-          in: () => query,
-          order: (column: string, options: unknown) => { call.orders.push([column, options]); return query; },
-          range: (start: number, end: number) => { call.range = [start, end]; return query; },
-          then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve, reject),
-        };
-        return query;
-      },
-    };
-
-    await loadHistoryPage(client, "owner-1", "transaction_date");
-
-    expect(calls[0].orders.map(([column]) => column)).toEqual(["history_date", "created_at", "id"]);
-    expect(calls[0].range).toEqual([0, 49]);
-  });
-
-  test("loads the next bounded page and returns a cursor only when a full page exists", async () => {
-    const rows = Array.from({ length: 50 }, (_, index) => transaction({ id: `page-2-${index}`, installment_group_id: null, purchase_date: null }));
-    let pageRange: [number, number] | undefined;
-    const client = {
-      from() {
-        const query: any = {
-          select: () => query,
-          eq: () => query,
-          in: () => query,
-          order: () => query,
-          range: (start: number, end: number) => { pageRange = [start, end]; return query; },
-          then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(resolve, reject),
-        };
-        return query;
-      },
-    };
-
-    const page = await loadHistoryPage(client, "owner-1", "date_added", 50);
-
-    expect(pageRange).toEqual([50, 99]);
-    expect(page.nextOffset).toBe(100);
-  });
-
-  test("preserves the first copy of a transaction when adjacent pages overlap", () => {
-    const original = transaction({ id: "same", description: "Original row" });
-    const duplicate = transaction({ id: "same", description: "Duplicate row" });
-    const later = transaction({ id: "later", installment_group_id: null, purchase_date: null });
-
-    expect(mergeHistoryRows([original], [duplicate, later]).map(row => row.description)).toEqual([
-      "Original row",
-      "Coffee maker (Installment 1/2)",
-    ]);
-  });
-
-  test("keeps the same page cursor available after an error so the request can be retried", async () => {
-    let attempts = 0;
-    let requestedRange: [number, number] | undefined;
-    const client = {
-      from() {
-        const query: any = {
-          select: () => query,
-          eq: () => query,
-          in: () => query,
-          order: () => query,
-          range: (start: number, end: number) => { requestedRange = [start, end]; return query; },
-          then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
-            attempts += 1;
-            const response = attempts === 1 ? { data: null, error: new Error("temporary read failure") } : { data: [transaction({ id: "retried" })], error: null };
-            return Promise.resolve(response).then(resolve, reject);
-          },
-        };
-        return query;
-      },
-    };
-
-    await expect(loadHistoryPage(client, "owner-1", "date_added", 50)).rejects.toThrow("temporary read failure");
-    const retry = await loadHistoryPage(client, "owner-1", "date_added", 50);
-
-    expect(requestedRange).toEqual([50, 99]);
-    expect(retry.rows.map(row => row.id)).toEqual(["retried"]);
-    expect(retry.nextOffset).toBeNull();
-  });
 });
 
 describe("installment history row", () => {
@@ -487,12 +235,12 @@ describe("installment history row", () => {
     const onSelectTransaction = vi.fn();
     render(<InstallmentHistoryGroup group={entry} sortMode="transaction_date" debtState={null} selectionResetKey="test" onRequestDelete={onRequestDelete} onSelectTransaction={onSelectTransaction} />);
     expect(screen.queryByText("Sorted by latest due date")).toBeNull();
-    expect(screen.queryByText("Purchase date: Not recorded")).toBeNull();
+    expect(screen.queryByText("Purchase date: Unavailable")).toBeNull();
 
     const header = screen.getByRole("button", { name: /show payment schedule/i });
     await user.click(screen.getByText("Coffee maker"));
     expect(header.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("Purchase date: Not recorded")).toBeTruthy();
+    expect(screen.getByText("Purchase date: Unavailable")).toBeTruthy();
     expect(screen.getByText("Sorted by latest due date")).toBeTruthy();
     expect(screen.getByText("Installment 1 of 2")).toBeTruthy();
 
@@ -520,23 +268,15 @@ describe("installment history row", () => {
     expect(onSelectTransaction).toHaveBeenCalledWith(expect.objectContaining({ id: "tx-2", date: "2026-03-10" }));
   });
 
-  test("collapses and recalculates the remaining amount when a child disappears", async () => {
+  test("refresh retains the expanded schedule and updates surviving children", async () => {
     const user = userEvent.setup();
-    const originalGroup = groupTransactions(twoInstallments())[0] as InstallmentHistoryEntry;
-    const { rerender } = render(<InstallmentHistoryGroup group={originalGroup} sortMode="date_added" debtState={null} selectionResetKey="test" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
+    const props = { sortMode: "date_added" as const, debtState: null, selectionResetKey: "test", onRequestDelete: vi.fn(), onSelectTransaction: vi.fn() };
+    const { rerender } = render(<InstallmentHistoryGroup {...props} group={groupTransactions(twoInstallments())[0] as InstallmentHistoryEntry} />);
     await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
-    expect(screen.getByText("−₱0.30")).toBeTruthy();
-
-    const remainingGroup = groupTransactions(twoInstallments().slice(1))[0] as InstallmentHistoryEntry;
-    rerender(<InstallmentHistoryGroup group={remainingGroup} sortMode="date_added" debtState={null} selectionResetKey="test" onRequestDelete={vi.fn()} onSelectTransaction={vi.fn()} />);
-
-    expect(screen.getByRole("button", { name: /show payment schedule/i }).getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getByRole("button", { name: /show payment schedule/i }).parentElement?.querySelector("span.tabular-nums")?.textContent).toBe("−₱0.20");
-    expect(screen.queryByRole("button", { name: /view installment 2 details/i })).toBeNull();
-    const header = screen.getByRole("button", { name: /show payment schedule/i });
-    const schedule = document.getElementById(header.getAttribute("aria-controls") ?? "");
-    expect(schedule?.getAttribute("aria-hidden")).toBe("true");
-    expect(schedule?.hasAttribute("inert")).toBe(true);
+    rerender(<InstallmentHistoryGroup {...props} group={groupTransactions(twoInstallments().slice(1))[0] as InstallmentHistoryEntry} />);
+    expect(screen.getByRole("button", { name: /hide payment schedule/i }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: /view installment 2 details/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /view installment 1 details/i })).toBeNull();
   });
 
   test("credit history uses complete snapshot ordinals and focused-list shortcuts", async () => {
@@ -644,4 +384,56 @@ describe("installment history row", () => {
     fireEvent.click(deleteButton);
     expect(onRequestDelete).not.toHaveBeenCalled();
   });
+});
+
+test("bulk selection follows matching transaction IDs while outside siblings remain manually selectable", async () => {
+  const user = userEvent.setup();
+  render(<InstallmentHistoryGroup group={creditGroup()} matchingRowIds={["tx-1"]} recordedAmount="900719925474099.93" currency="PHP" showRecordedAmount sortMode="amount_desc" debtState={{ account: creditAccount, rows: creditRows }} selectionResetKey="matching" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
+  expect(screen.getByText("Recorded total ₱900,719,925,474,099.93")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
+  expect(screen.getByText("Outside filters")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Select" }));
+  await user.click(screen.getByRole("button", { name: "Select all" }));
+  expect((screen.getByRole("checkbox", { name: "Select installment 1" }) as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByRole("checkbox", { name: "Select installment 2" }) as HTMLInputElement).checked).toBe(false);
+  await user.click(screen.getByRole("checkbox", { name: "Select installment 2" }));
+  expect(screen.getByText("2 selected")).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("list", { name: /Installments for/ }), { key: "a", ctrlKey: true });
+  expect(screen.getByText("1 selected")).toBeTruthy();
+});
+
+test("canonical unavailable dates and invalid recorded money never render guessed values", async () => {
+  const group = groupTransactions(twoInstallments().map(row => ({ ...row, date: "", purchase_date: null, amount: "NaN" })))[0] as InstallmentHistoryEntry;
+  render(<InstallmentHistoryGroup group={group} transactionDate={null} recordedAmount={null} showRecordedAmount currency="PHP" sortMode="transaction_date_desc" debtState={null} selectionResetKey="unknown" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
+  await userEvent.setup().click(screen.getByRole("button", { name: /show payment schedule/i }));
+  expect(screen.getByText("Transaction date: Unavailable")).toBeTruthy();
+  expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+  expect(document.body.textContent).not.toMatch(/Invalid Date|NaN|1970/);
+});
+
+test("refresh prunes missing debt rows and preserves explicitly selected outside siblings", async () => {
+  const props = { matchingRowIds: ["tx-1"], sortMode: "date_added_desc" as const, selectionResetKey: "stable", onSelectTransaction: vi.fn(), onRequestDelete: vi.fn() };
+  const user = userEvent.setup();
+  const view = render(<InstallmentHistoryGroup {...props} group={creditGroup()} debtState={{ account: creditAccount, rows: creditRows }} />);
+  await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
+  await user.click(screen.getByRole("button", { name: "Select" }));
+  await user.click(screen.getByRole("button", { name: "Select all" }));
+  await user.click(screen.getByRole("checkbox", { name: "Select installment 2" }));
+  const group = { ...creditGroup(), children: creditGroup().children.slice(1) };
+  view.rerender(<InstallmentHistoryGroup {...props} matchingRowIds={["tx-2"]} group={group} debtState={{ account: creditAccount, rows: creditRows.slice(1) }} />);
+  expect(screen.getByRole("button", { name: /hide payment schedule/i })).toBeTruthy();
+  expect((screen.getByRole("checkbox", { name: "Select installment 2" }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByText("1 selected")).toBeTruthy();
+});
+
+test("paid matching rows do not block explicit selection of an unpaid outside sibling", async () => {
+  const user = userEvent.setup();
+  const rows = creditRows.map((row, index) => index === 0 ? { ...row, paidAmount: "0.10", remainingAmount: "0.00" } : row);
+  render(<InstallmentHistoryGroup group={creditGroup()} matchingRowIds={["tx-1"]} sortMode="date_added_desc" debtState={{ account: creditAccount, rows }} selectionResetKey="paid-match" onSelectTransaction={vi.fn()} onRequestDelete={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: /show payment schedule/i }));
+  expect((screen.getByRole("button", { name: "Select" }) as HTMLButtonElement).disabled).toBe(false);
+  await user.click(screen.getByRole("button", { name: "Select" }));
+  expect((screen.getByRole("button", { name: "Select all" }) as HTMLButtonElement).disabled).toBe(true);
+  await user.click(screen.getByRole("checkbox", { name: "Select installment 2" }));
+  expect(screen.getByText("1 selected")).toBeTruthy();
 });

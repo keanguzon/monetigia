@@ -131,3 +131,9 @@ test.each([
   await user.click(screen.getByRole("menuitemradio", { name }));
   expect(change).toHaveBeenLastCalledWith(expected);
 });
+
+test("list-only filters add one concise hint while preserving preset totals", () => {
+  render(<SpendingSummaryPanel period={period} today={today} listFiltersActive onAddTransaction={vi.fn()} />);
+  expect(screen.getByText("List filters only")).toBeTruthy();
+  expect(screen.getByText("₱120.30")).toBeTruthy();
+});

@@ -7,6 +7,7 @@ type InstallmentSelectionProps = {
   active: boolean;
   selectedCount: number;
   eligibleCount: number;
+  selectAllCount?: number;
   disabled: boolean;
   onActivate: () => void;
   onExit: () => void;
@@ -16,6 +17,7 @@ type InstallmentSelectionProps = {
 };
 
 export function InstallmentSelection(props: InstallmentSelectionProps) {
+  const selectAllCount = props.selectAllCount ?? props.eligibleCount;
   return (
     <div role="group" aria-label="Installment selection" className="flex flex-wrap items-center gap-2">
       {!props.active ? (
@@ -27,7 +29,7 @@ export function InstallmentSelection(props: InstallmentSelectionProps) {
           <Button variant="outline" className="h-11 w-11 shrink-0 p-0" aria-label="Done selecting" data-tooltip="Done selecting" disabled={props.disabled} onClick={props.onExit}>
             <Check className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <Button variant="outline" className="h-11 w-11 shrink-0 p-0" aria-label="Select all" data-tooltip="Select all" disabled={props.disabled || props.eligibleCount === 0 || props.eligibleCount > 600} onClick={props.onSelectAll}>
+          <Button variant="outline" className="h-11 w-11 shrink-0 p-0" aria-label="Select all" data-tooltip="Select all" disabled={props.disabled || selectAllCount === 0 || selectAllCount > 600} onClick={props.onSelectAll}>
             <ListChecks className="h-4 w-4" aria-hidden="true" />
           </Button>
           <Button variant="outline" className="h-11 w-11 shrink-0 p-0" aria-label="Deselect all" data-tooltip="Deselect all" disabled={props.disabled || props.selectedCount === 0} onClick={props.onDeselectAll}>

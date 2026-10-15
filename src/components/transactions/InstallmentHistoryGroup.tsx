@@ -6,6 +6,8 @@ import { InstallmentSelection } from "@/components/transactions/InstallmentSelec
 import { DebtCorrectionDialog } from "@/components/transactions/DebtCorrectionDialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { installmentPosition, type InstallmentHistoryEntry, type TransactionHistoryRow, type TransactionHistorySort } from "@/lib/transactions/history";
+import type { HistorySort } from "@/lib/transactions/history-query";
+import { formatHistoryMoney, formatHistoryDate } from "@/lib/transactions/history-format";
 import type { DebtAccountSnapshot, DebtDueRow } from "@/lib/debt/contracts";
 import { reconcileDebtSelection, toggleDebtSelection, type DebtSelectionState } from "@/lib/debt/selection";
 
@@ -13,7 +15,13 @@ type DebtState = { account: DebtAccountSnapshot; rows: DebtDueRow[] };
 
 type Props = {
   group: InstallmentHistoryEntry;
-  sortMode: TransactionHistorySort;
+  sortMode: TransactionHistorySort | HistorySort;
+  writesEnabled?: boolean;
+  matchingRowIds?: string[];
+  recordedAmount?: string | null;
+  currency?: string | null;
+  transactionDate?: string | null;
+  showRecordedAmount?: boolean;
   debtState: DebtState | null;
   selectionResetKey: string;
   periodRange?: { start: string; end: string } | null;
@@ -53,7 +61,7 @@ function exactRemaining(rows: DebtDueRow[]): string {
   return `${(total / BigInt(100)).toString()}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
 }
 
-export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, periodRange, onSelectTransaction, onRequestDelete, onRequestEditDescription, onSaved }: Props) {
+export default function InstallmentHistoryGroup({ group, sortMode, debtState, selectionResetKey, periodRange, writesEnabled = true, matchingRowIds, recordedAmount, currency, transactionDate, showRecordedAmount, onSelectTransaction, onRequestDelete, onRequestEditDescription, onSaved }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [selection, setSelection] = useState<DebtSelectionState>(emptySelection);
   const [correctionOpen, setCorrectionOpen] = useState(false);
@@ -69,27 +77,25 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
   const rowsByTransaction = snapshotRows ?? new Map<string, DebtDueRow>();
   const orderedEligibleRows = group.children.flatMap(child => {
     const debtRow = rowsByTransaction.get(child.id);
-    return debtRow && debtState?.account.reconciliation === "balanced" && debtRow.remainingAmount !== "0.00" ? [debtRow] : [];
+    return debtRow && writesEnabled && debtState?.account.reconciliation === "balanced" && debtRow.remainingAmount !== "0.00" ? [debtRow] : [];
   }).sort((left, right) => left.ordinal - right.ordinal);
   const renderedChildren = hasCreditPurchase && snapshotRows
     ? [...group.children].sort((left, right) => (rowsByTransaction.get(left.id)?.ordinal ?? Number.MAX_SAFE_INTEGER) - (rowsByTransaction.get(right.id)?.ordinal ?? Number.MAX_SAFE_INTEGER))
     : group.children;
   const eligibleIds = orderedEligibleRows.map(row => row.id);
+  const matchingIds = new Set(matchingRowIds ?? group.children.map(row => row.id));
+  const bulkEligibleIds = orderedEligibleRows.filter(row => row.transactionId && matchingIds.has(row.transactionId)).map(row => row.id);
   const eligibleSignature = eligibleIds.join("\u001f");
   const groupRemaining = snapshotRows ? exactRemaining(Array.from(snapshotRows.values())) : null;
 
   useEffect(() => {
     setSelection(emptySelection);
+    setCorrectionOpen(false);
     setExpanded(false);
   }, [selectionResetKey]);
 
   useEffect(() => {
-    setExpanded(false);
-    setSelection(emptySelection);
-  }, [group.children.length]);
-
-  useEffect(() => {
-    setSelection(current => reconcileDebtSelection(current, eligibleIds));
+    setSelection(current => reconcileDebtSelection(current, eligibleSignature ? eligibleSignature.split("\u001f") : []));
   }, [eligibleSignature]);
 
   function toggleExpanded() {
@@ -109,9 +115,9 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
       setSelection(emptySelection);
       return;
     }
-    if ((event.ctrlKey || event.metaKey) && key === "a" && eligibleIds.length > 0 && eligibleIds.length <= 600) {
+    if ((event.ctrlKey || event.metaKey) && key === "a" && bulkEligibleIds.length > 0 && bulkEligibleIds.length <= 600) {
       event.preventDefault();
-      setSelection({ active: true, selectedIds: [...eligibleIds], anchorId: eligibleIds[eligibleIds.length - 1] ?? null });
+      setSelection({ active: true, selectedIds: [...bulkEligibleIds], anchorId: bulkEligibleIds[bulkEligibleIds.length - 1] ?? null });
       return;
     }
     if (event.key === "Delete" && selection.active && selection.selectedIds.some(id => eligibleIds.includes(id))) {
@@ -121,7 +127,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
   }
 
   function requestCorrection() {
-    if (snapshotRows && debtState?.account.reconciliation === "balanced" && selection.selectedIds.some(id => eligibleIds.includes(id))) {
+    if (writesEnabled && snapshotRows && debtState?.account.reconciliation === "balanced" && selection.selectedIds.some(id => eligibleIds.includes(id))) {
       setCorrectionOpen(true);
     }
   }
@@ -132,8 +138,8 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
     : hasUnidentifiedExpense ? "Wallet type unavailable" : `${group.children.length} remaining ${group.children.length === 1 ? "payment" : "payments"}`;
 
   const formattedRemaining = groupRemaining === null
-    ? (protectedExpenseHistory ? "Unavailable" : group.remainingAmount === null ? "Unavailable" : formatCurrency(group.remainingAmount))
-    : groupRemaining === "Unavailable" ? groupRemaining : formatCurrency(Number(groupRemaining));
+    ? (protectedExpenseHistory ? "Unavailable" : group.remainingAmount === null ? "Unavailable" : formatHistoryMoney(group.remainingAmount, currency === undefined ? "PHP" : currency))
+    : groupRemaining === "Unavailable" ? groupRemaining : formatHistoryMoney(groupRemaining, "PHP");
 
   return (
     <div className="group">
@@ -157,12 +163,14 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
               <span className="font-medium text-foreground/80">{group.children[0]?.account?.name || "Unknown wallet"}</span>
               {group.children[0]?.category?.name && <span>{group.children[0].category.name}</span>}
               <span>{childCountLabel}</span>
-              {periodRange && <span>Full installment schedule, not period spending</span>}
+              {matchingRowIds && matchingRowIds.length < group.children.length && <span>{matchingRowIds.length} of {group.children.length} match</span>}
+              {periodRange && !matchingRowIds && <span>Full installment schedule, not period spending</span>}
             </span>
           </span>
         </button>
 
-        <div className="flex items-center justify-between gap-3 pl-[3.25rem] sm:justify-end sm:pl-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 pl-[3.25rem] sm:justify-end sm:pl-0">
+          {showRecordedAmount && <span className="text-xs text-muted-foreground tabular-nums">Recorded total {formatHistoryMoney(recordedAmount, currency)}</span>}
           <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
             {formattedRemaining === "Unavailable" ? formattedRemaining : `−${formattedRemaining}`}
           </span>
@@ -170,7 +178,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
             <button
               type="button"
               aria-label={`Edit description for ${groupLabel}`}
-              disabled={group.descriptionState === "needs_review"}
+              disabled={!writesEnabled || group.descriptionState === "needs_review" && group.descriptionProofState !== "needs_review"}
               onClick={() => onRequestEditDescription(group)}
               className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
@@ -189,7 +197,7 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
           </button>
         </div>
       </div>
-      {group.descriptionState === "needs_review" && <p role="status" className="px-3 pb-2 text-sm text-amber-800 dark:text-amber-200 sm:px-5">This installment description needs review before the group can be edited.</p>}
+      {group.descriptionState === "needs_review" && group.descriptionProofState !== "needs_review" && <p role="status" className="px-3 pb-2 text-sm text-amber-800 dark:text-amber-200 sm:px-5">This installment description needs review before the group can be edited.</p>}
 
       <div
         id={scheduleId}
@@ -200,19 +208,21 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
         <div className="min-h-0 overflow-hidden">
           <div className={`bg-muted/10 px-3 sm:pl-[4.5rem] sm:pr-5 ${expanded ? "border-t border-border/40 py-2" : "border-t-0 py-0"}`}>
             {expanded && <div className="mb-3 text-xs text-muted-foreground">
-              <p>Purchase date: {group.purchaseDate ? formatDate(group.purchaseDate) : "Not recorded"}</p>
+              <p>Purchase date: {formatHistoryDate(group.purchaseDate)}</p>
+              {transactionDate !== undefined && <p>Transaction date: {formatHistoryDate(transactionDate)}</p>}
               {!group.purchaseDate && group.firstDueDate && <p className="mt-0.5">First due {formatDate(group.firstDueDate)}</p>}
-              {!group.purchaseDate && sortMode === "transaction_date" && <p className="mt-0.5">Sorted by latest due date</p>}
+              {!group.purchaseDate && transactionDate !== null && (sortMode === "transaction_date" || sortMode.startsWith("transaction_date_")) && <p className="mt-0.5">Sorted by latest due date</p>}
             </div>}
             {expanded && hasCreditPurchase && snapshotRows && debtState?.account.reconciliation === "balanced" && <div className="mb-2">
               <InstallmentSelection
                 active={selection.active}
                 selectedCount={selection.selectedIds.length}
                 eligibleCount={eligibleIds.length}
-                disabled={eligibleIds.length > 600}
+                selectAllCount={bulkEligibleIds.length}
+                disabled={false}
                 onActivate={() => setSelection({ active: true, selectedIds: [], anchorId: null })}
                 onExit={() => setSelection(emptySelection)}
-                onSelectAll={() => setSelection({ active: true, selectedIds: [...eligibleIds], anchorId: eligibleIds[eligibleIds.length - 1] ?? null })}
+                onSelectAll={() => setSelection({ active: true, selectedIds: [...bulkEligibleIds], anchorId: bulkEligibleIds[bulkEligibleIds.length - 1] ?? null })}
                 onDeselectAll={() => setSelection(current => ({ ...current, selectedIds: [], anchorId: null }))}
                 onRequestCorrection={requestCorrection}
               />
@@ -260,21 +270,21 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
                         className="min-h-11 min-w-0 flex-1 rounded-md px-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       >
                         <span className="block break-words text-sm font-medium text-foreground">{rowLabel}</span>
-                        <span className="mt-0.5 block text-xs text-muted-foreground">Due {formatDate(child.date, "long")}</span>
-                        {periodRange && (child.date < periodRange.start || child.date > periodRange.end) && <span className="mt-0.5 block text-xs text-muted-foreground">Outside selected period</span>}
+                        <span className="mt-0.5 block text-xs text-muted-foreground">Due {formatHistoryDate(child.date, "long")}</span>
+                        {matchingRowIds ? !matchingIds.has(child.id) && <span className="mt-0.5 block text-xs text-muted-foreground">Outside filters</span> : periodRange && (child.date < periodRange.start || child.date > periodRange.end) && <span className="mt-0.5 block text-xs text-muted-foreground">Outside selected period</span>}
                         {debtRow && <span className="mt-0.5 block break-words text-xs text-muted-foreground">Remaining {formatCurrency(Number(debtRow.remainingAmount))} · Paid {formatCurrency(Number(debtRow.paidAmount))} · Corrected {formatCurrency(Number(debtRow.correctedAmount))}</span>}
                         {reason && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{reason}</span>}
                       </button>
                     </div>
                     <div className="flex items-center justify-between gap-3 pl-2 sm:justify-end sm:pl-0">
                       <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
-                        −{formatCurrency(Number(child.amount))}
+                        {formatHistoryMoney(child.amount, currency === undefined ? "PHP" : currency) === "Unavailable" ? "Unavailable" : `−${formatHistoryMoney(child.amount, currency === undefined ? "PHP" : currency)}`}
                       </span>
                       <button
                         type="button"
                         aria-label={creditRow ? `Delete installment ${debtRow?.ordinal ?? "unavailable"}` : `Delete installment ${position?.number}`}
                         data-tooltip={reason ?? undefined}
-                        disabled={creditRow && !eligible}
+                        disabled={!writesEnabled || creditRow && !eligible}
                         onClick={() => onRequestDelete(child)}
                         className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       >
@@ -297,7 +307,6 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
         groupName={groupLabel}
         selectedIds={selection.selectedIds}
         onSaved={async () => {
-          setSelection(emptySelection);
           await onSaved?.();
         }}
       />}

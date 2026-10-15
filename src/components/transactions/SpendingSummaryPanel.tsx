@@ -16,7 +16,7 @@ function rangeLabel(start: string, end: string) {
   return `${format(parseISO(start), "MMM d")}–${format(parseISO(end), start.slice(0, 7) === end.slice(0, 7) ? "d, yyyy" : "MMM d, yyyy")}`;
 }
 
-export function SpendingSummaryPanel({ period, today, onAddTransaction }: { period: SpendingPeriod | null; today: Date; onAddTransaction: () => void }) {
+export function SpendingSummaryPanel({ period, today, onAddTransaction, listFiltersActive = false }: { listFiltersActive?: boolean; period: SpendingPeriod | null; today: Date; onAddTransaction: () => void }) {
   const result = useSpendingSummary(period, today);
   const limitResult = useSpendingLimit();
   if (!period) return null;
@@ -38,6 +38,7 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction }: { peri
   if (rest > BigInt(0)) rows.push({ name: "Other categories", amount: rest });
   if (cents(data.debtPayments) > BigInt(0)) rows.push({ name: "Debt payments", amount: cents(data.debtPayments) });
   return <section aria-label="Spending summary" className={`${summaryPanelClass} min-w-0 space-y-4`}>
+    {listFiltersActive && <p className="text-xs text-muted-foreground">List filters only</p>}
     <div><h3 className="font-heading text-lg font-semibold">{label}</h3><p className="mt-1 text-sm text-muted-foreground">Expenses + card payments</p></div>
     <div><p className="text-sm text-muted-foreground">{current ? "Spent so far" : "Spent"}</p><p className={`${summaryAmountClass} break-words`}>{money(spent)}</p>
       {result.comparisonError ? <div className="mt-2 text-sm"><p role="status">Comparison couldn&apos;t load</p><Button variant="outline" className="mt-2 min-h-11" aria-label="Retry comparison" onClick={() => void result.retry()}>Retry</Button></div>

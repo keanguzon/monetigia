@@ -6,8 +6,8 @@ import { useTransactionDelete } from "@/hooks/use-transaction-submit";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate, isValidUuid } from "@/lib/utils";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search, ListFilter, Pencil, X } from "lucide-react";
+import { isValidUuid } from "@/lib/utils";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, Search, Pencil, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -16,33 +16,27 @@ import { debtCorrectionRecovery } from "@/components/accounts/DebtHistoryGroup";
 import { useGoals } from "@/hooks/use-goals";
 import { useDebt, useDebtCommand } from "@/hooks/use-debt";
 import type { DebtAccountSnapshot, DebtDueRow, DebtSnapshot } from "@/lib/debt/contracts";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import InstallmentHistoryGroup from "@/components/transactions/InstallmentHistoryGroup";
 import TransactionDescriptionEditor from "@/components/transactions/TransactionDescriptionEditor";
 import { useTransactionDescription } from "@/hooks/use-transaction-description";
 import { useLocalToday } from "@/hooks/use-local-today";
 import { PeriodBar } from "@/components/transactions/PeriodBar";
 import { SpendingSummaryPanel } from "@/components/transactions/SpendingSummaryPanel";
-import { formatPeriodLabel, type SpendingPeriod } from "@/lib/spending/periods";
+import { type SpendingPeriod } from "@/lib/spending/periods";
 import {
-  HISTORY_PAGE_SIZE,
-  filterHistoryEntries,
   groupTransactions,
   loadHistoryGroup,
-  loadHistoryPage,
   loadHistoryTransaction,
-  mergeHistoryRows,
-  sortHistoryEntries,
   type InstallmentHistoryEntry,
   type TransactionHistoryRow,
-  type TransactionHistorySort,
 } from "@/lib/transactions/history";
+
+import { useTransactionHistory } from "@/hooks/use-transaction-history";
+import { TransactionFilterDialog } from "@/components/transactions/TransactionFilterDialog";
+import { TransactionFilterChips } from "@/components/transactions/TransactionFilterChips";
+import { TransactionSortControl } from "@/components/transactions/TransactionSortControl";
+import { defaultHistoryQuery, historyDateBounds, type HistoryDateSelection, type HistoryFilters } from "@/lib/transactions/history-query";
+import { formatHistoryDate, formatHistoryMoney } from "@/lib/transactions/history-format";
 
 const AddTransactionModal = dynamic(() => import("@/components/transactions/AddTransactionModal"), {
   ssr: false,
@@ -100,20 +94,24 @@ export default function TransactionsPage() {
   const descriptionCommand = useTransactionDescription(goals.userId, refreshDescriptionHistory);
   const pendingCorrection = debtCommand.pendingCommand?.kind === "correct_debt_rows" ? debtCommand.pendingCommand : null;
   const pendingAdoption = debtCommand.pendingCommand?.kind === "adopt_opening_debt" ? debtCommand.pendingCommand : null;
-  const [transactions, setTransactions] = useState<TransactionHistoryRow[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "expense" | "income" | "transfer">("all");
-  const [sortMode, setSortMode] = useState<TransactionHistorySort>("date_added");
-  const [period, setPeriod] = useState<SpendingPeriod | null>(null);
+  const [appliedQuery, setAppliedQuery] = useState(defaultHistoryQuery);
+  const [dateSelection, setDateSelection] = useState<HistoryDateSelection>({ kind: "all" });
+  const history = useTransactionHistory({ ...appliedQuery, ...historyDateBounds(dateSelection) });
+  const period = dateSelection.kind === "preset" ? dateSelection.period : null;
+  const sortMode = appliedQuery.sort;
+  const filter = appliedQuery.type;
+  const searchQuery = appliedQuery.search;
+  const historyEntries = history.entries;
+  const { isLoading, isLoadingMore, nextOffset } = history;
+  const loadError = history.error ? historyEntries.length ? "History couldn't refresh." : "History couldn't load." : null;
+  const ownerReady = Boolean(goals.userId && goals.userId === history.userId && history.ownerStatus === "authenticated");
+  const selectionResetKey = history.queryKey;
+  const listFiltersActive = Boolean(filter !== "all" || searchQuery.trim() || appliedQuery.walletIds.length || appliedQuery.categoryIds.length || appliedQuery.includeUncategorized || appliedQuery.minAmount !== null || appliedQuery.maxAmount !== null);
+  const amountMode = sortMode.startsWith("amount_") || appliedQuery.minAmount !== null || appliedQuery.maxAmount !== null;
   const today = useLocalToday();
-  const [refreshKey, setRefreshKey] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<TransactionHistoryRow | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionHistoryRow | null>(null);
-  const [nextOffset, setNextOffset] = useState<number | null>(null);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [savedDeleteKind, setSavedDeleteKind] = useState<"transaction" | "installment">("transaction");
   const [correctionTarget, setCorrectionTarget] = useState<CorrectionTarget | null>(null);
   const [descriptionEditor, setDescriptionEditor] = useState<DescriptionEditorSession | null>(null);
@@ -121,14 +119,12 @@ export default function TransactionsPage() {
   const [historyRefreshPending, setHistoryRefreshPending] = useState(() => Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId)));
   const [refreshingDebtViews, setRefreshingDebtViews] = useState(false);
   const requestGeneration = useRef(0);
-  const loadedHistoryPageCount = useRef(0);
   const currentOwner = useRef(goals.userId);
-  const currentSort = useRef(sortMode);
-  const currentPeriod = useRef(period);
-  currentPeriod.current = period;
   currentOwner.current = goals.userId;
-  currentSort.current = sortMode;
-  const loadMoreLock = useRef(false);
+  const currentQueryKey = useRef(history.queryKey);
+  currentQueryKey.current = history.queryKey;
+  const currentHistoryOwner = useRef(history.userId);
+  currentHistoryOwner.current = history.userId;
   const retryingCorrection = useRef(false);
   const descriptionReadGeneration = useRef(0);
   const descriptionEditorSequence = useRef(0);
@@ -137,7 +133,6 @@ export default function TransactionsPage() {
   const previousOwner = useRef(goals.userId);
   const deletion = useTransactionDelete(loadTransactions);
   const isDeleting = deletion.isDeleting;
-  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (previousOwner.current === goals.userId) return;
@@ -147,10 +142,17 @@ export default function TransactionsPage() {
     lastSelectedTransaction.current = null;
     setDescriptionEditor(null);
     setDescriptionReviewError(null);
+    setSelectedTransaction(null);
+    setDeleteConfirm(null);
+    setCorrectionTarget(null);
+    setIsModalOpen(false);
+    retryingCorrection.current = false;
+    setHistoryRefreshPending(Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId)));
+    setRefreshingDebtViews(false);
   }, [goals.userId]);
 
-  function isCurrentHistoryRequest(generation: number, ownerId: string | null, requestedSort: TransactionHistorySort, requestedPeriod: SpendingPeriod | null): boolean {
-    return generation === requestGeneration.current && currentOwner.current === ownerId && currentSort.current === requestedSort && currentPeriod.current === requestedPeriod;
+  function isCurrentHistoryRequest(generation: number, ownerId: string | null, queryKey: string): boolean {
+    return generation === requestGeneration.current && currentOwner.current === ownerId && currentHistoryOwner.current === ownerId && currentQueryKey.current === queryKey;
   }
 
   function closeDescriptionEditor() {
@@ -170,7 +172,7 @@ export default function TransactionsPage() {
   }
 
   function requestOrdinaryEdit(transaction: TransactionHistoryRow) {
-    if (descriptionCommand.pendingCommand || descriptionCommand.isSaving || descriptionCommand.refreshError) return;
+    if (!ownerReady || descriptionCommand.pendingCommand || descriptionCommand.isSaving || descriptionCommand.refreshError) return;
     if (document.activeElement instanceof HTMLElement) descriptionEditorFocus.current = document.activeElement;
     setDescriptionEditor({ key: ++descriptionEditorSequence.current, target: { transactionId: transaction.id, groupId: null }, currentDescription: transaction.description, transaction });
   }
@@ -181,18 +183,17 @@ export default function TransactionsPage() {
       setDescriptionReviewError("Sign in again before editing this installment description.");
       return;
     }
-    if (descriptionCommand.pendingCommand || descriptionCommand.isSaving || descriptionCommand.refreshError) return;
+    if (!ownerReady || descriptionCommand.pendingCommand || descriptionCommand.isSaving || descriptionCommand.refreshError) return;
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       descriptionEditorFocus.current = document.activeElement;
     }
     const generation = ++descriptionReadGeneration.current;
     const listGeneration = requestGeneration.current;
-    const requestedSort = sortMode;
-    const requestedPeriod = period;
+    const requestedQueryKey = history.queryKey;
     setDescriptionReviewError(null);
     void loadHistoryGroup(sb, ownerId, group.groupId)
       .then(rows => {
-        if (generation !== descriptionReadGeneration.current || !isCurrentHistoryRequest(listGeneration, ownerId, requestedSort, requestedPeriod)) return;
+        if (generation !== descriptionReadGeneration.current || !isCurrentHistoryRequest(listGeneration, ownerId, requestedQueryKey)) return;
         const latestGroup = groupTransactions(rows).find(entry => entry.kind === "installment_group" && entry.groupId === group.groupId);
         if (!latestGroup || latestGroup.kind !== "installment_group") {
           setDescriptionReviewError("This installment group is no longer available in your history.");
@@ -222,16 +223,11 @@ export default function TransactionsPage() {
   }, [goals.userId, pendingCorrection]);
 
   useEffect(() => {
-    void loadTransactions().catch(() => {});
-  }, [refreshKey, sortMode, period, goals.userId]);
-
-  useEffect(() => {
-    if (!deletion.savedTransactionId) return;
-    setDeleteConfirm(null);
-    setTransactions(current => current.filter(transaction => transaction.id !== deletion.savedTransactionId));
+    if (deletion.savedTransactionId) setDeleteConfirm(null);
   }, [deletion.savedTransactionId]);
 
   const deleteTransaction = async (transaction: TransactionHistoryRow | null) => {
+    if (!ownerReady) return;
     if (!transaction?.id || !isValidUuid(transaction.id)) {
       toast({ title: "Cannot delete transaction", description: "This transaction could not be identified.", variant: "destructive" });
       return;
@@ -240,87 +236,14 @@ export default function TransactionsPage() {
     await deletion.remove(transaction.id);
   };
 
-  async function loadTransactions() {
-    const generation = ++requestGeneration.current;
-    const ownerId = goals.userId;
-    const requestedSort = sortMode;
-    const requestedPeriod = period;
-    loadMoreLock.current = false;
-    loadedHistoryPageCount.current = 0;
-    setIsLoading(true);
-    setIsLoadingMore(false);
-    setLoadError(null);
-    setLoadMoreError(null);
-    setNextOffset(null);
-    setTransactions([]);
+  async function loadTransactions() { await history.refresh(); }
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id || user.id !== ownerId) return;
-      const page = await loadHistoryPage(sb, ownerId, requestedSort, 0, requestedPeriod ?? undefined);
-      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return;
-      setTransactions(page.rows);
-      setNextOffset(page.nextOffset);
-      loadedHistoryPageCount.current = 1;
-    } catch (error) {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) {
-        console.error("Failed to load transactions", error);
-        setLoadError("The transaction list could not refresh. Try again.");
-        toast({
-          title: "Failed to load transactions",
-          description: "The transaction list could not refresh. Try again.",
-          variant: "destructive",
-        });
-      }
-      throw new Error("The transaction list could not refresh.");
-    } finally {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) setIsLoading(false);
-    }
-  }
-
-  async function loadMoreTransactions() {
-    if (nextOffset === null || isLoading || isLoadingMore || loadMoreLock.current) return;
-    const ownerId = goals.userId;
-    const requestedSort = sortMode;
-    const requestedPeriod = period;
-    if (!ownerId) return;
-    const offset = nextOffset;
-    const generation = requestGeneration.current;
-    loadMoreLock.current = true;
-    setIsLoadingMore(true);
-    setLoadMoreError(null);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id || user.id !== ownerId) throw new Error("The signed-in account changed while history was loading.");
-      const page = await loadHistoryPage(sb, ownerId, requestedSort, offset, requestedPeriod ?? undefined);
-      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return;
-      setTransactions(current => mergeHistoryRows(current, page.rows));
-      setNextOffset(page.nextOffset);
-      loadedHistoryPageCount.current = Math.max(loadedHistoryPageCount.current, Math.floor(offset / HISTORY_PAGE_SIZE) + 1);
-    } catch (error) {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) {
-        console.error("Failed to load more transactions", error);
-        setLoadMoreError("Older history could not be loaded. Your current entries are still here.");
-        toast({
-          title: "Failed to load more transactions",
-          description: "Older history could not be loaded. Try again.",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) {
-        loadMoreLock.current = false;
-        setIsLoadingMore(false);
-      }
-    }
-  }
+  async function loadMoreTransactions() { await history.loadMore().catch(() => undefined); }
 
   async function refreshLoadedHistory(): Promise<boolean> {
     const ownerId = goals.userId;
-    if (!ownerId) throw new Error("Sign in to refresh transaction history.");
-    const requestedSort = sortMode;
-    const requestedPeriod = period;
-    const targetPageCount = Math.max(1, loadedHistoryPageCount.current);
+    if (!ownerReady || !ownerId) throw new Error("Sign in to refresh transaction history.");
+    const requestedQueryKey = history.queryKey;
     const selectedTransactionId = selectedTransaction?.id ?? null;
     const savedTarget = lastSelectedTransaction.current && descriptionCommand.saved?.transactionIds.includes(lastSelectedTransaction.current.id)
       ? lastSelectedTransaction.current
@@ -331,43 +254,22 @@ export default function TransactionsPage() {
       ?? savedTarget?.installment_group_id
       ?? null;
     const generation = ++requestGeneration.current;
-    loadMoreLock.current = false;
-    setIsLoading(true);
-    setIsLoadingMore(false);
-    setLoadError(null);
-    setLoadMoreError(null);
-
+    if (!isCurrentHistoryRequest(generation, ownerId, requestedQueryKey)) throw new Error("Account changed before history refresh.");
+    await history.refresh();
+    if (!isCurrentHistoryRequest(generation, ownerId, requestedQueryKey)) return false;
     try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || user?.id !== ownerId) throw new Error("The signed-in account changed while history was refreshing.");
-      const refreshedRows: TransactionHistoryRow[] = [];
-      let next: number | null = null;
-      let pagesRead = 0;
-      for (let pageIndex = 0; pageIndex < targetPageCount; pageIndex += 1) {
-        const offset = pageIndex * HISTORY_PAGE_SIZE;
-        const page = await loadHistoryPage(sb, ownerId, requestedSort, offset, requestedPeriod ?? undefined);
-        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return false;
-        refreshedRows.splice(0, refreshedRows.length, ...mergeHistoryRows(refreshedRows, page.rows));
-        pagesRead += 1;
-        next = page.nextOffset;
-        if (next === null) break;
-      }
-
       let refreshedDetail: TransactionHistoryRow | null | undefined;
       if (selectedTransactionId) {
         refreshedDetail = await loadHistoryTransaction(sb, ownerId, selectedTransactionId);
-        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return false;
+        if (!isCurrentHistoryRequest(generation, ownerId, requestedQueryKey)) return false;
       }
       let refreshedGroup: TransactionHistoryRow[] | undefined;
       if (selectedGroupId) {
         refreshedGroup = await loadHistoryGroup(sb, ownerId, selectedGroupId);
-        if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return false;
+        if (!isCurrentHistoryRequest(generation, ownerId, requestedQueryKey)) return false;
       }
 
-      if (!isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) return false;
-      loadedHistoryPageCount.current = pagesRead;
-      setTransactions(refreshedRows);
-      setNextOffset(next);
+      if (!isCurrentHistoryRequest(generation, ownerId, requestedQueryKey)) return false;
       if (selectedTransactionId) {
         lastSelectedTransaction.current = refreshedDetail ?? null;
         setSelectedTransaction(current => current?.id === selectedTransactionId ? refreshedDetail ?? null : current);
@@ -381,13 +283,10 @@ export default function TransactionsPage() {
       setDeleteConfirm(null);
       return true;
     } catch (error) {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) {
-        setLoadError("The transaction list could not refresh. Try again.");
+      if (isCurrentHistoryRequest(generation, ownerId, requestedQueryKey)) {
         console.error("Failed to refresh debt transaction history", error);
       }
       throw error;
-    } finally {
-      if (isCurrentHistoryRequest(generation, ownerId, requestedSort, requestedPeriod)) setIsLoading(false);
     }
   }
 
@@ -398,7 +297,7 @@ export default function TransactionsPage() {
 
   async function refreshCorrectionViews() {
     const ownerId = goals.userId;
-    if (!ownerId) throw new Error("Sign in to refresh debt views.");
+    if (!ownerReady || !ownerId || currentOwner.current !== ownerId || currentHistoryOwner.current !== ownerId) throw new Error("Sign in to refresh debt views.");
     debtCorrectionRecovery.pendingOwners.add(ownerId);
     debtCorrectionRecovery.refreshOwners.add(ownerId);
     setHistoryRefreshPending(true);
@@ -412,10 +311,10 @@ export default function TransactionsPage() {
       setHistoryRefreshPending(false);
       if (!debtCommand.pendingCommand && !debtCommand.isSaving && !debtCommand.refreshError) debtCommand.reset();
     } catch (error) {
-      setHistoryRefreshPending(true);
+      if (currentOwner.current === ownerId && currentHistoryOwner.current === ownerId) setHistoryRefreshPending(true);
       throw error;
     } finally {
-      setRefreshingDebtViews(false);
+      if (currentOwner.current === ownerId && currentHistoryOwner.current === ownerId) setRefreshingDebtViews(false);
     }
   }
 
@@ -423,51 +322,22 @@ export default function TransactionsPage() {
     if (!retryingCorrection.current || debtCommand.isSaving) return;
     retryingCorrection.current = false;
     if (!pendingCorrection && debtCommand.saved) void refreshCorrectionViews().catch(() => undefined);
-  }, [pendingCorrection, debtCommand.isSaving, debtCommand.saved]);
-
-  function handleSortChange(nextSort: TransactionHistorySort): void {
-    if (nextSort === sortMode) return;
-    requestGeneration.current += 1;
-    loadMoreLock.current = false;
-    loadedHistoryPageCount.current = 0;
-    setTransactions([]);
-    setNextOffset(null);
-    setIsLoadingMore(false);
-    setLoadError(null);
-    setLoadMoreError(null);
-    setIsLoading(true);
-    setSortMode(nextSort);
-  }
+  });
 
   function handlePeriodChange(nextPeriod: SpendingPeriod | null): void {
-    if (JSON.stringify(nextPeriod) === JSON.stringify(period)) return;
-    requestGeneration.current += 1;
-    descriptionReadGeneration.current += 1;
-    currentPeriod.current = nextPeriod;
-    loadMoreLock.current = false;
-    loadedHistoryPageCount.current = 0;
-    setTransactions([]);
-    setNextOffset(null);
-    setIsLoadingMore(false);
-    setLoadError(null);
-    setLoadMoreError(null);
-    setIsLoading(true);
-    setPeriod(nextPeriod);
+    setDateSelection(nextPeriod ? { kind: "preset", period: nextPeriod } : { kind: "all" });
   }
 
-  const historyEntries = sortHistoryEntries(groupTransactions(transactions), sortMode);
+  function applyFilters(filters: HistoryFilters, nextDate: HistoryDateSelection) {
+    setAppliedQuery(current => ({ ...current, ...filters, offset: 0 }));
+    setDateSelection(nextDate);
+  }
 
-  const filterLabel =
-    filter === "all"
-      ? "All"
-      : filter === "expense"
-        ? "Expense"
-        : filter === "income"
-          ? "Income"
-          : "Transfer";
+  function clearFilters() {
+    setAppliedQuery(current => ({ ...defaultHistoryQuery(), sort: current.sort }));
+    setDateSelection({ kind: "all" });
+  }
 
-  const searchFilteredTransactions = filterHistoryEntries(historyEntries, searchQuery, filter);
-  const selectionResetKey = JSON.stringify([goals.userId, sortMode, period, filter, searchQuery]);
   const correctionRefreshNeedsRecovery = historyRefreshPending || Boolean(goals.userId && debtCorrectionRecovery.refreshOwners.has(goals.userId));
   const pendingDescription = descriptionCommand.pendingCommand;
   const descriptionRecovery = Boolean(pendingDescription || descriptionCommand.errorCode === "STALE_QUOTE" || descriptionCommand.saved && descriptionCommand.refreshError);
@@ -479,6 +349,7 @@ export default function TransactionsPage() {
   const showPageDescriptionEditor = Boolean(descriptionEditor || descriptionRecovery && !detailOwnsDescriptionRecovery);
 
   function correctionRoute(transaction: TransactionHistoryRow): CorrectionRoute {
+    if (!ownerReady) return { kind: "blocked", reason: "Account details are refreshing." };
     if (transaction.type !== "expense") return { kind: "ordinary" };
     const accountType = historyAccountType(transaction);
     if (accountType === null) return { kind: "blocked", reason: "The wallet type for this expense is unavailable. Refresh wallet details before deleting it." };
@@ -543,7 +414,7 @@ export default function TransactionsPage() {
   })() : null;
 
   function retryPendingCorrection() {
-    if (!pendingCorrection || debtCommand.isSaving || retryingCorrection.current) return;
+    if (!ownerReady || !pendingCorrection || debtCommand.isSaving || retryingCorrection.current) return;
     retryingCorrection.current = true;
     void debtCommand.retry();
   }
@@ -552,17 +423,17 @@ export default function TransactionsPage() {
 
   return (
     <>
-      {pendingCorrection && <div data-no-press-motion="" role="alert" className="mb-4 space-y-2 text-sm text-red-700 dark:text-red-300">
+      {ownerReady && pendingCorrection && <div data-no-press-motion="" role="alert" className="mb-4 space-y-2 text-sm text-red-700 dark:text-red-300">
         <p>This debt correction is unconfirmed. Retry the original saved request before starting another correction.</p>
         {debtCommand.error && <p>{debtCommand.error}</p>}
         <Button variant="outline" className="min-h-11" disabled={debtCommand.isSaving} onClick={retryPendingCorrection}>{debtCommand.isSaving ? "Retrying correction…" : "Retry same correction"}</Button>
       </div>}
-      {correctionRefreshNeedsRecovery && <div data-no-press-motion="" role="alert" className="mb-4 space-y-2 text-sm text-red-700 dark:text-red-300">
+      {ownerReady && correctionRefreshNeedsRecovery && <div data-no-press-motion="" role="alert" className="mb-4 space-y-2 text-sm text-red-700 dark:text-red-300">
         <p>A debt correction saved, but some views could not refresh. Refresh the debt schedule and transaction history before continuing.</p>
         <Button variant="outline" className="min-h-11" disabled={refreshingDebtViews} onClick={() => { void refreshCorrectionViews().catch(() => undefined); }}>{refreshingDebtViews ? "Refreshing views…" : "Refresh views"}</Button>
       </div>}
-      {descriptionReviewError && <p data-no-press-motion="" role="alert" className="mb-4 text-sm text-amber-800 dark:text-amber-200">{descriptionReviewError}</p>}
-      {showPageDescriptionEditor && <Dialog.Root open onOpenChange={open => { if (!open && !descriptionCommand.pendingCommand && !descriptionCommand.refreshError) closeDescriptionEditor(); }}>
+      {ownerReady && descriptionReviewError && <p data-no-press-motion="" role="alert" className="mb-4 text-sm text-amber-800 dark:text-amber-200">{descriptionReviewError}</p>}
+      {ownerReady && showPageDescriptionEditor && <Dialog.Root open onOpenChange={open => { if (!open && !descriptionCommand.pendingCommand && !descriptionCommand.refreshError) closeDescriptionEditor(); }}>
         <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" /><Dialog.Content data-mobile-nav-blocking="" aria-describedby={undefined} onEscapeKeyDown={event => { if (descriptionCommand.pendingCommand || descriptionCommand.refreshError) event.preventDefault(); }} onPointerDownOutside={event => { if (descriptionCommand.pendingCommand || descriptionCommand.refreshError) event.preventDefault(); }} className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-card p-5 text-card-foreground shadow-xl">
         <div className="mb-4 flex items-center justify-between"><Dialog.Title className="text-xl font-semibold">Edit transaction</Dialog.Title><button type="button" aria-label="Close edit transaction" disabled={Boolean(descriptionCommand.pendingCommand || descriptionCommand.refreshError)} onClick={closeDescriptionEditor} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"><X className="h-5 w-5" /></button></div>
         <TransactionDescriptionEditor
@@ -576,9 +447,9 @@ export default function TransactionsPage() {
           onSaved={closeDescriptionEditor}
         />
       </Dialog.Content></Dialog.Portal></Dialog.Root>}
-      {deletion.error && <div data-no-press-motion="" role="alert" className="mb-4 text-sm text-red-700 dark:text-red-300 space-y-2"><p>{deletion.error}</p>{deletion.pendingTransactionId && <button type="button" disabled={isDeleting} onClick={() => { void deletion.remove(deletion.pendingTransactionId!); }} className="min-h-11 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same deletion</button>}</div>}
-      {deletion.savedTransactionId && <p role="status" className="mb-4 text-sm">{savedDeleteKind === "installment" ? deletion.refreshError ? "Installment deleted, but some views could not refresh. Refresh the page to check the remaining schedule." : "Installment deleted. Its siblings remain and the remaining scheduled amount has been updated." : deletion.refreshError ? "Transaction deleted. Some views could not refresh. Refresh the page; do not delete it again." : "Transaction deleted and wallet balances updated."}</p>}
-      {loadError && <div data-no-press-motion="" role="alert" className="mb-4 flex flex-col items-start gap-2 text-sm text-red-700 dark:text-red-300"><p>{loadError}</p><button type="button" onClick={() => { void loadTransactions().catch(() => {}); }} className="min-h-11 rounded-lg border px-4 focus-visible:ring-2 focus-visible:ring-primary">Retry loading transactions</button></div>}
+      {ownerReady && deletion.error && <div data-no-press-motion="" role="alert" className="mb-4 text-sm text-red-700 dark:text-red-300 space-y-2"><p>{deletion.error}</p>{deletion.pendingTransactionId && <button type="button" disabled={isDeleting} onClick={() => { void deletion.remove(deletion.pendingTransactionId!); }} className="min-h-11 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Retry same deletion</button>}</div>}
+      {ownerReady && deletion.savedTransactionId && <p role="status" className="mb-4 text-sm">{savedDeleteKind === "installment" ? deletion.refreshError ? "Installment deleted, but some views could not refresh. Refresh the page to check the remaining schedule." : "Installment deleted. Its siblings remain and the remaining scheduled amount has been updated." : deletion.refreshError ? "Transaction deleted. Some views could not refresh. Refresh the page; do not delete it again." : "Transaction deleted and wallet balances updated."}</p>}
+      {loadError && <div data-no-press-motion="" role="alert" className="mb-4 flex flex-col items-start gap-2 text-sm text-red-700 dark:text-red-300"><p>{historyEntries.length && nextOffset !== null ? "Older history could not be loaded. Try again." : loadError}</p><button type="button" aria-label={historyEntries.length && nextOffset !== null ? "Retry loading more" : "Retry loading transactions"} onClick={() => { void history.retry().catch(() => {}); }} className="min-h-11 rounded-lg border px-4 focus-visible:ring-2 focus-visible:ring-primary">Retry</button></div>}
       <div data-no-press-motion="" className="space-y-6">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -589,6 +460,7 @@ export default function TransactionsPage() {
               </p>
             </div>
             <Button
+              disabled={!ownerReady}
               onClick={() => setIsModalOpen(true)}
               className="h-11 text-sm font-semibold gap-1.5 w-full sm:w-auto text-primary-foreground"
             >
@@ -597,8 +469,8 @@ export default function TransactionsPage() {
             </Button>
           </div>
 
-          <PeriodBar period={period} today={today} onChange={handlePeriodChange} />
-          <SpendingSummaryPanel period={period} today={today} onAddTransaction={() => setIsModalOpen(true)} />
+          <PeriodBar period={period} today={today} customDateRange={dateSelection.kind === "custom" ? dateSelection : null} onChange={handlePeriodChange} />
+          {dateSelection.kind !== "custom" && <SpendingSummaryPanel period={period} today={today} listFiltersActive={listFiltersActive} onAddTransaction={() => setIsModalOpen(true)} />}
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex w-full min-w-0 items-center gap-2 lg:w-auto">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 lg:flex-none lg:gap-2">
@@ -606,7 +478,7 @@ export default function TransactionsPage() {
                   <button
                     key={type}
                     type="button"
-                    onClick={() => setFilter(type)}
+                    onClick={() => setAppliedQuery(current => ({ ...current, type }))}
                     className={`min-h-11 min-w-11 px-1 rounded-lg text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:px-3 lg:text-sm ${
                       filter === type
                         ? "bg-primary text-primary-foreground"
@@ -618,47 +490,11 @@ export default function TransactionsPage() {
                 ))}
               </div>
 
-              <div className="ml-auto shrink-0 lg:hidden">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label="Sort transactions"
-                      className="h-11 w-11 min-h-11 min-w-11 shrink-0 bg-card/60 p-0 hover:!transform-none hover:!shadow-none motion-reduce:transition-none"
-                    >
-                      <ListFilter className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    side="bottom"
-                    align="end"
-                    sideOffset={4}
-                    collisionPadding={8}
-                    className="w-[min(18rem,calc(100vw-2rem))] min-w-0 max-w-[calc(100vw-2rem)] bg-popover motion-reduce:animate-none motion-reduce:transition-none"
-                  >
-                    <DropdownMenuRadioGroup
-                      value={sortMode}
-                      onValueChange={value => {
-                        if (value === "date_added" || value === "transaction_date") {
-                          handleSortChange(value);
-                        }
-                      }}
-                    >
-                      <DropdownMenuRadioItem value="date_added" className="min-h-11 items-start py-2">
-                        <span className="min-w-0 flex-1 whitespace-normal break-words">Date added (newest first)</span>
-                      </DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="transaction_date" className="min-h-11 items-start py-2">
-                        <span className="min-w-0 flex-1 whitespace-normal break-words">Transaction date (newest first)</span>
-                      </DropdownMenuRadioItem>
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              <TransactionFilterDialog query={history.query} dateSelection={dateSelection} options={history.options} onApply={applyFilters} onClearAll={clearFilters} />
+              <TransactionSortControl sort={sortMode} onChange={sort => setAppliedQuery(current => ({ ...current, sort }))} />
             </div>
 
-            <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(12rem,1fr)_auto] lg:w-[min(100%,34rem)]">
+            <div className="grid grid-cols-1 gap-2 lg:flex-1 lg:max-w-xs">
               <div className="relative min-w-0">
                 <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <Input
@@ -666,45 +502,30 @@ export default function TransactionsPage() {
                   aria-label="Search transactions"
                   placeholder="Search transactions..."
                   className="min-h-11 bg-card/60 pl-10 text-sm"
+                  maxLength={120}
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => setAppliedQuery(current => ({ ...current, search: e.target.value }))}
                 />
-              </div>
-              <div className="hidden lg:block">
-                <label htmlFor="transaction-sort" className="sr-only">Sort transactions</label>
-                <select
-                  id="transaction-sort"
-                  aria-label="Sort transactions"
-                  value={sortMode}
-                  onChange={event => {
-                    const nextSort = event.target.value;
-                    if (nextSort === "date_added" || nextSort === "transaction_date") {
-                      handleSortChange(nextSort);
-                    }
-                  }}
-                  className="min-h-11 w-full rounded-md border border-input bg-card/60 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:w-auto"
-                >
-                  <option value="date_added">Date added (newest first)</option>
-                  <option value="transaction_date">Transaction date (newest first)</option>
-                </select>
               </div>
             </div>
           </div>
         </div>
 
+        <TransactionFilterChips query={history.query} dateSelection={dateSelection} options={history.options} onChange={(query, date) => { setAppliedQuery(query); setDateSelection(date); }} onClearAll={clearFilters} />
         <div className="space-y-2">
-          {!isLoading && !loadError && <div className="flex flex-col gap-1 px-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>Showing {searchFilteredTransactions.length} {filterLabel.toLowerCase()} {searchFilteredTransactions.length === 1 ? "entry" : "entries"} in {period ? formatPeriodLabel(period) : "loaded history"}</span>
-            {nextOffset !== null && <span>Older records are available below.</span>}
+          {amountMode && Boolean(history.excludedCurrencyEntryCount) && <p className="text-xs text-muted-foreground">{history.excludedCurrencyEntryCount} non-PHP entries excluded</p>}
+          {amountMode && Boolean(history.invalidAmountEntryCount) && <p className="text-xs text-muted-foreground">{history.invalidAmountEntryCount} unavailable amounts excluded</p>}
+          {!isLoading && !loadError && history.totalMatchingEntries !== null && <div className="flex flex-col gap-1 px-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Showing {historyEntries.length} of {history.totalMatchingEntries} matches</span>
           </div>}
 
           <div className="overflow-hidden rounded-xl border border-border/50 bg-card/60">
-            {!isLoading && !loadError && searchFilteredTransactions.length > 0 ? (
+            {!isLoading && historyEntries.length > 0 ? (
               <div className="divide-y divide-border/30">
-                {searchFilteredTransactions.map((entry) => {
+                {historyEntries.map((entry) => {
                   if (entry.kind === "installment_group") {
-                    const debtState = debt.isLoading || debt.error ? null : completeCreditGroup(entry, debt.snapshot);
-                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} periodRange={period} onSelectTransaction={selectTransaction} onRequestDelete={requestDelete} onRequestEditDescription={requestEditDescription} onSaved={refreshCorrectionViews} />;
+                    const debtState = !ownerReady || debt.isLoading || debt.error ? null : completeCreditGroup(entry, debt.snapshot);
+                    return <InstallmentHistoryGroup key={entry.key} group={entry} sortMode={sortMode} debtState={debtState} selectionResetKey={selectionResetKey} matchingRowIds={entry.matchingRowIds} recordedAmount={entry.recordedAmount} currency={entry.currency} transactionDate={entry.transactionDate} showRecordedAmount={amountMode} writesEnabled={ownerReady} periodRange={history.query.start && history.query.end ? { start: history.query.start, end: history.query.end } : null} onSelectTransaction={selectTransaction} onRequestDelete={requestDelete} onRequestEditDescription={requestEditDescription} onSaved={refreshCorrectionViews} />;
                   }
 
                   const transaction = entry.transaction;
@@ -734,7 +555,7 @@ export default function TransactionsPage() {
                             <span className="font-medium text-foreground/80">{transaction.account?.name || "Unknown wallet"}</span>
                             {transaction.category?.name && <span>{transaction.category.name}</span>}
                             {transaction.type === "transfer" && <span>Transfer</span>}
-                            <span>{formatDate(transaction.date)}</span>
+                            <span>{formatHistoryDate(entry.transactionDate)}</span>
                           </span>
                         </span>
                       </button>
@@ -743,9 +564,9 @@ export default function TransactionsPage() {
                         <span className={`whitespace-nowrap text-sm font-semibold tabular-nums sm:text-base ${
                           transaction.type === "income" ? "text-green-700 dark:text-primary" : transaction.type === "expense" ? "text-red-700 dark:text-red-400" : "text-blue-700 dark:text-blue-400"
                         }`}>
-                          {transaction.type === "income" ? "+" : transaction.type === "expense" ? "−" : ""}{formatCurrency(Number(transaction.amount))}
+                          {entry.recordedAmount === null ? "Unavailable" : `${transaction.type === "income" ? "+" : transaction.type === "expense" ? "−" : ""}${formatHistoryMoney(entry.recordedAmount, entry.currency)}`}
                         </span>
-                        <button type="button" aria-label={`Edit transaction for ${description}`} onClick={() => requestOrdinaryEdit(transaction)} className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button type="button" aria-label={`Edit transaction for ${description}`} disabled={!ownerReady} onClick={() => requestOrdinaryEdit(transaction)} className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
                         <button
                           type="button"
                           onClick={() => requestDelete(transaction)}
@@ -769,9 +590,9 @@ export default function TransactionsPage() {
                 <ArrowLeftRight className="h-8 w-8 text-muted-foreground/40 mb-2" />
                 <p className="text-sm font-semibold text-foreground">No transactions found</p>
                 <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-                  {searchQuery.trim() && nextOffset !== null ? "Search covers loaded history. Load more to include older records." : "Try adjusting your filter or search query."}
+                  Try adjusting your filters.
                 </p>
-                <Button size="sm" onClick={() => setIsModalOpen(true)} className="h-11 text-sm font-semibold gap-1.5 text-primary-foreground">
+                <Button size="sm" disabled={!ownerReady} onClick={() => setIsModalOpen(true)} className="h-11 text-sm font-semibold gap-1.5 text-primary-foreground">
                   <Plus className="h-4 w-4" />
                   Add Transaction
                 </Button>
@@ -781,31 +602,23 @@ export default function TransactionsPage() {
             )}
           </div>
 
-          {searchQuery.trim() && nextOffset !== null && <p className="text-xs text-muted-foreground">Search covers loaded history. Load more to search older records.</p>}
           {nextOffset !== null && !isLoading && (
             <div className="flex flex-col items-center gap-2 pt-2">
-              {loadMoreError ? (
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <p role="alert" className="text-sm text-red-700 dark:text-red-300">{loadMoreError}</p>
-                  <button type="button" onClick={() => { void loadMoreTransactions(); }} className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Retry loading more</button>
-                </div>
-              ) : (
-                <button type="button" disabled={isLoadingMore} onClick={() => { void loadMoreTransactions(); }} className="min-h-11 min-w-36 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                  {isLoadingMore ? "Loading more..." : "Load more"}
-                </button>
-              )}
+              {!history.error && <button type="button" disabled={isLoadingMore} onClick={() => { void loadMoreTransactions(); }} className="min-h-11 min-w-36 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                {isLoadingMore ? "Loading more..." : "Load more"}
+              </button>}
             </div>
           )}
         </div>
       </div>
 
-      <Dialog.Root open={!!deleteConfirm} onOpenChange={open => { if (!open && !isDeleting) setDeleteConfirm(null); }}>
+      <Dialog.Root open={ownerReady && !!deleteConfirm} onOpenChange={open => { if (!open && !isDeleting) setDeleteConfirm(null); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
           <Dialog.Content data-no-press-motion="" onEscapeKeyDown={event => { if (isDeleting) event.preventDefault(); }} onPointerDownOutside={event => { if (isDeleting) event.preventDefault(); }} className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl bg-card text-card-foreground p-6 shadow-xl">
             <Dialog.Title className="text-xl font-semibold mb-2">{deleteConfirmIsInstallment ? "Delete this installment?" : "Delete transaction?"}</Dialog.Title>
             <Dialog.Description className="text-sm text-muted-foreground mb-6">{deleteConfirmIsInstallment ? "This deletes only this installment and reverses its wallet effects. The other installments in this schedule will remain, and the remaining scheduled amount will update." : "This removes the transaction and reverses its wallet balances and goal effects. The deletion may be refused if the money or carried reservation has already been used."}</Dialog.Description>
-            {deleteConfirm && <p className="mb-6 text-sm">{deleteConfirm.description || "Transaction"} · {formatCurrency(Number(deleteConfirm.amount))}</p>}
+            {deleteConfirm && <p className="mb-6 text-sm">{deleteConfirm.description || "Transaction"} · {formatHistoryMoney(deleteConfirm.amount, historyEntries.find(entry => entry.kind === "transaction" ? entry.transaction.id === deleteConfirm.id : entry.children.some(row => row.id === deleteConfirm.id))?.currency)}</p>}
             <div className="flex gap-3">
               <button type="button" disabled={isDeleting} onClick={() => setDeleteConfirm(null)} className="min-h-11 flex-1 px-4 border rounded-lg focus-visible:ring-2 focus-visible:ring-primary">Cancel</button>
               <button type="button" onClick={() => { void deleteTransaction(deleteConfirm); }} disabled={isDeleting || !!deletion.pendingTransactionId && deletion.pendingTransactionId !== deleteConfirm?.id} className="min-h-11 flex-1 px-4 bg-red-700 text-white dark:bg-red-400 dark:text-slate-950 rounded-lg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary">{isDeleting ? "Deleting..." : deleteConfirmIsInstallment ? "Delete installment" : "Delete"}</button>
@@ -816,26 +629,24 @@ export default function TransactionsPage() {
 
       {/* Add Transaction Modal */}
       <AddTransactionModal
-        isOpen={isModalOpen}
+        isOpen={ownerReady && isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          requestGeneration.current += 1;
-          loadMoreLock.current = false;
-          setRefreshKey(prev => prev + 1);
+          void history.refresh().catch(() => undefined);
         }}
       />
 
       {/* Transaction Detail Preview Modal */}
       <TransactionDetailModal
-        isOpen={!!selectedTransaction}
-        transaction={selectedTransaction}
+        isOpen={ownerReady && !!selectedTransaction}
+        transaction={ownerReady ? selectedTransaction : null}
         onClose={() => setSelectedTransaction(null)}
         onRequestDelete={requestDelete}
         deleteDisabledReason={deleteDisabledReason}
         onDescriptionSaved={refreshDescriptionHistory}
       />
       <DebtCorrectionDialog
-        open={correctionTarget !== null}
+        open={ownerReady && correctionTarget !== null}
         onClose={() => setCorrectionTarget(null)}
         accountId={correctionTarget?.accountId ?? ""}
         groupId={correctionTarget?.groupId ?? ""}
