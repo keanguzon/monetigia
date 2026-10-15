@@ -21,7 +21,7 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction }: { peri
   const limitResult = useSpendingLimit();
   if (!period) return null;
   if (result.isLoading) return <SummarySkeleton aria-label="Loading spending summary" />;
-  if (result.error || !result.data) return <section className={summaryPanelClass} role="alert"><p>Spending totals couldn't load. Your transactions below are unaffected.</p><Button className="mt-3 min-h-11" variant="outline" onClick={() => void result.retry()}>Retry</Button></section>;
+  if (result.error || !result.data) return <section className={summaryPanelClass} role="alert"><p>Spending totals couldn&apos;t load. Your transactions below are unaffected.</p><Button className="mt-3 min-h-11" variant="outline" onClick={() => void result.retry()}>Retry</Button></section>;
   const data = result.data;
   const spent = cents(data.spent);
   const label = formatPeriodLabel(period);
@@ -38,15 +38,15 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction }: { peri
   if (rest > BigInt(0)) rows.push({ name: "Other categories", amount: rest });
   if (cents(data.debtPayments) > BigInt(0)) rows.push({ name: "Debt payments", amount: cents(data.debtPayments) });
   return <section aria-label="Spending summary" className={`${summaryPanelClass} min-w-0 space-y-4`}>
-    <div><h3 className="font-heading text-lg font-semibold">{label}</h3><p className="mt-1 text-sm text-muted-foreground">Counts expenses and card payments from your wallets. Transfers between wallets aren't counted.</p><p className="mt-1 text-xs text-muted-foreground">Search and type filters only change the list, not these totals.</p></div>
+    <div><h3 className="font-heading text-lg font-semibold">{label}</h3><p className="mt-1 text-sm text-muted-foreground">Counts expenses and card payments from your wallets. Transfers between wallets aren&apos;t counted.</p><p className="mt-1 text-xs text-muted-foreground">Search and type filters only change the list, not these totals.</p></div>
     <div><p className="text-sm text-muted-foreground">{current ? "Spent so far" : "Spent"}</p><p className={`${summaryAmountClass} break-words`}>{money(spent)}</p>
-      {result.comparisonError ? <div className="mt-2 text-sm"><p role="status">Comparison couldn't load</p><Button variant="outline" className="mt-2 min-h-11" aria-label="Retry comparison" onClick={() => void result.retry()}>Retry</Button></div>
+      {result.comparisonError ? <div className="mt-2 text-sm"><p role="status">Comparison couldn&apos;t load</p><Button variant="outline" className="mt-2 min-h-11" aria-label="Retry comparison" onClick={() => void result.retry()}>Retry</Button></div>
         : result.comparison && result.comparison.transactionCount > 0 ? <p className="mt-1 text-sm text-muted-foreground">{difference === BigInt(0) ? "Same as" : `${money(difference < BigInt(0) ? -difference : difference)} ${difference < BigInt(0) ? "less" : "more"} than`} {rangeLabel(previous.start, previous.end)}</p>
           : result.isComparisonLoading ? <p role="status" className="mt-1 text-sm text-muted-foreground">Loading comparison…</p> : null}
     </div>
     {spent === BigInt(0) && <div className="space-y-2"><p>No spending recorded for {label}.</p><Button className="min-h-11" onClick={onAddTransaction}>Add Transaction</Button></div>}
     <div className="space-y-2 [--destructive:0_72%_42%] dark:[--destructive:0_84%_60%]">
-      {limitResult.isLoading ? <p role="status">Loading spending limit…</p> : limitResult.error ? <div><p role="status">Spending limit couldn't load.</p><Button variant="outline" className="min-h-11" onClick={() => void limitResult.retry().catch(() => undefined)}>Retry limit</Button></div> : limit !== undefined && <>
+      {limitResult.isLoading ? <p role="status">Loading spending limit…</p> : limitResult.error ? <div><p role="status">Spending limit couldn&apos;t load.</p><Button variant="outline" className="min-h-11" onClick={() => void limitResult.retry().catch(() => undefined)}>Retry limit</Button></div> : limit !== undefined && <>
         {matchingLimit && current && <div className="space-y-2"><p>{money(spent)} of {money(limitCents)} used</p><div role="progressbar" aria-label="Spending limit used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Number(spent >= limitCents ? BigInt(100) : spent * BigInt(100) / limitCents)} className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full ${over ? "bg-destructive" : "bg-primary"}`} style={{ width: `${Number(spent >= limitCents ? BigInt(100) : spent * BigInt(100) / limitCents)}%` }} /></div><p className={over ? "text-destructive" : "text-muted-foreground"}>{money(over ? spent - limitCents : limitCents - spent)} {over ? "over your limit" : "left"}</p></div>}
         {matchingLimit && !current && <p className="text-sm text-muted-foreground">Limit applies to the current period only</p>}
       </>}
@@ -54,7 +54,7 @@ export function SpendingSummaryPanel({ period, today, onAddTransaction }: { peri
     </div>
     <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border/30 pt-4 text-sm"><p>Income {money(cents(data.income))}</p><p>Net {money(cents(data.net))}</p></div>
     {rows.length > 0 && <ul aria-label="Spending by category" className="space-y-2 border-t border-border/30 pt-4">{rows.map(row => <li key={row.name} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm"><span className="min-w-0 break-words">{row.name}</span><span className="tabular-nums">{money(row.amount)} <span className="text-muted-foreground">({spent > BigInt(0) ? `${Number((row.amount * BigInt(1000) + spent / BigInt(2)) / spent) / 10}%` : "0%"})</span></span></li>)}</ul>}
-    {data.excludedCurrencyTransactionCount > 0 && <p className="text-sm text-muted-foreground">{data.excludedCurrencyTransactionCount} transactions in other currencies aren't included.</p>}
+    {data.excludedCurrencyTransactionCount > 0 && <p className="text-sm text-muted-foreground">{data.excludedCurrencyTransactionCount} transactions in other currencies aren&apos;t included.</p>}
     <p className="border-t border-border/30 pt-4 text-xs text-muted-foreground">Totals cover {rangeLabel(period.start, spentToDateEnd(period, today))}. The list covers the full selected period and may include future-dated entries and complete installment schedules outside it. Full group amounts are not period spending.</p>
   </section>;
 }
