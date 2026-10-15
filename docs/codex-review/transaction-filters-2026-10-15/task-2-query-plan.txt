@@ -1,0 +1,326 @@
+literal search
+Result  (cost=7932.15..7932.16 rows=1 width=32) (actual time=21.615..21.626 rows=1 loops=1)
+  Buffers: shared hit=672
+  CTE owner_rows
+    ->  Result  (cost=6.72..1138.66 rows=12000 width=103) (actual time=0.137..13.360 rows=12000 loops=1)
+          One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+          Buffers: shared hit=264
+          ->  Hash Left Join  (cost=6.72..568.66 rows=12000 width=116) (actual time=0.125..5.333 rows=12000 loops=1)
+                Hash Cond: (t.category_id = c.id)
+                Buffers: shared hit=264
+                ->  Hash Left Join  (cost=2.12..532.43 rows=12000 width=120) (actual time=0.093..4.259 rows=12000 loops=1)
+                      Hash Cond: (t.transfer_to_account_id = d.id)
+                      Buffers: shared hit=261
+                      ->  Hash Left Join  (cost=1.06..499.87 rows=12000 width=124) (actual time=0.083..3.199 rows=12000 loops=1)
+                            Hash Cond: (t.account_id = a.id)
+                            Buffers: shared hit=260
+                            ->  Seq Scan on transactions t  (cost=0.00..422.81 rows=12000 width=128) (actual time=0.067..0.934 rows=12000 loops=1)
+                                  Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                  Rows Removed by Filter: 1105
+                                  Buffers: shared hit=259
+                            ->  Hash  (cost=1.04..1.04 rows=1 width=28) (actual time=0.009..0.010 rows=1 loops=1)
+                                  Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                  Buffers: shared hit=1
+                                  ->  Result  (cost=0.02..1.04 rows=1 width=28) (actual time=0.005..0.006 rows=1 loops=1)
+                                        One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                        Buffers: shared hit=1
+                                        ->  Seq Scan on accounts a  (cost=0.02..1.04 rows=1 width=28) (actual time=0.003..0.003 rows=1 loops=1)
+                                              Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                              Rows Removed by Filter: 3
+                                              Buffers: shared hit=1
+                      ->  Hash  (cost=1.04..1.04 rows=1 width=28) (actual time=0.006..0.007 rows=1 loops=1)
+                            Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                            Buffers: shared hit=1
+                            ->  Result  (cost=0.02..1.04 rows=1 width=28) (actual time=0.004..0.004 rows=1 loops=1)
+                                  One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                  Buffers: shared hit=1
+                                  ->  Seq Scan on accounts d  (cost=0.02..1.04 rows=1 width=28) (actual time=0.002..0.002 rows=1 loops=1)
+                                        Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                        Rows Removed by Filter: 3
+                                        Buffers: shared hit=1
+                ->  Hash  (cost=4.58..4.58 rows=1 width=28) (actual time=0.026..0.027 rows=9 loops=1)
+                      Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                      Buffers: shared hit=3
+                      ->  Seq Scan on categories c  (cost=0.00..4.58 rows=1 width=28) (actual time=0.012..0.023 rows=9 loops=1)
+                            Filter: (((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) OR ((user_id IS NULL) AND is_default)) AND ((((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = user_id) AND (NOT is_default)) OR ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = user_id) OR is_default))
+                            Rows Removed by Filter: 19
+                            Buffers: shared hit=3
+  CTE candidates
+    ->  GroupAggregate  (cost=1753.73..3058.73 rows=12000 width=190) (actual time=18.335..18.564 rows=120 loops=1)
+          Group Key: r.entry_key, m.matching_ids
+          Buffers: shared hit=269
+          ->  Sort  (cost=1753.73..1783.73 rows=12000 width=226) (actual time=18.303..18.309 rows=120 loops=1)
+                Sort Key: r.entry_key, m.matching_ids, r.source_currency
+                Sort Method: quicksort  Memory: 44kB
+                Buffers: shared hit=269
+                ->  Hash Join  (cost=668.52..940.69 rows=12000 width=226) (actual time=16.873..18.183 rows=120 loops=1)
+                      Hash Cond: (r.entry_key = m.entry_key)
+                      Buffers: shared hit=264
+                      ->  CTE Scan on owner_rows r  (cost=0.00..240.00 rows=12000 width=194) (actual time=0.138..0.559 rows=12000 loops=1)
+                            Buffers: shared hit=46
+                      ->  Hash  (cost=666.02..666.02 rows=200 width=64) (actual time=16.716..16.717 rows=120 loops=1)
+                            Buckets: 1024  Batches: 1  Memory Usage: 22kB
+                            Buffers: shared hit=218
+                            ->  Subquery Scan on m  (cost=616.52..666.02 rows=200 width=64) (actual time=16.657..16.703 rows=120 loops=1)
+                                  Buffers: shared hit=218
+                                  ->  GroupAggregate  (cost=616.52..664.02 rows=200 width=64) (actual time=16.657..16.698 rows=120 loops=1)
+                                        Group Key: owner_rows.entry_key
+                                        Buffers: shared hit=218
+                                        ->  Sort  (cost=616.52..631.52 rows=6000 width=60) (actual time=16.647..16.650 rows=120 loops=1)
+                                              Sort Key: owner_rows.entry_key, owner_rows.date, owner_rows.created_at, owner_rows.id
+                                              Sort Method: quicksort  Memory: 37kB
+                                              Buffers: shared hit=218
+                                              ->  CTE Scan on owner_rows  (cost=0.00..240.00 rows=6000 width=60) (actual time=0.132..16.565 rows=120 loops=1)
+                                                    Filter: matches
+                                                    Rows Removed by Filter: 11880
+                                                    Buffers: shared hit=218
+  CTE eligible
+    ->  CTE Scan on candidates  (cost=0.00..240.00 rows=12000 width=190) (actual time=18.336..18.595 rows=120 loops=1)
+          Buffers: shared hit=269
+  InitPlan 4 (returns $5)
+    ->  Aggregate  (cost=2954.70..2954.71 rows=1 width=32) (actual time=21.404..21.407 rows=1 loops=1)
+          Buffers: shared hit=672
+          ->  Nested Loop  (cost=2010.89..2953.95 rows=50 width=229) (actual time=18.952..20.793 rows=50 loops=1)
+                Buffers: shared hit=672
+                ->  Limit  (cost=1991.68..1991.80 rows=50 width=198) (actual time=18.820..18.826 rows=50 loops=1)
+                      Buffers: shared hit=272
+                      ->  Sort  (cost=1991.68..2021.68 rows=12000 width=198) (actual time=18.819..18.822 rows=50 loops=1)
+                            Sort Key: ordered."position"
+                            Sort Method: top-N heapsort  Memory: 37kB
+                            Buffers: shared hit=272
+                            ->  Subquery Scan on ordered  (cost=1053.04..1593.04 rows=12000 width=198) (actual time=18.711..18.746 rows=120 loops=1)
+                                  Buffers: shared hit=269
+                                  ->  WindowAgg  (cost=1053.04..1473.04 rows=12000 width=350) (actual time=18.710..18.738 rows=120 loops=1)
+                                        Buffers: shared hit=269
+                                        ->  Sort  (cost=1053.04..1083.04 rows=12000 width=301) (actual time=18.704..18.707 rows=120 loops=1)
+                                              Sort Key: e.created_at DESC NULLS LAST, e.entry_key DESC
+                                              Sort Method: quicksort  Memory: 43kB
+                                              Buffers: shared hit=269
+                                              ->  CTE Scan on eligible e  (cost=0.00..240.00 rows=12000 width=301) (actual time=18.337..18.624 rows=120 loops=1)
+                                                    Buffers: shared hit=269
+                ->  Aggregate  (cost=19.21..19.22 rows=1 width=32) (actual time=0.039..0.039 rows=1 loops=50)
+                      Buffers: shared hit=400
+                      ->  Sort  (cost=19.19..19.19 rows=1 width=254) (actual time=0.028..0.028 rows=1 loops=50)
+                            Sort Key: t_1.date, t_1.created_at, t_1.id
+                            Sort Method: quicksort  Memory: 25kB
+                            Buffers: shared hit=400
+                            ->  Result  (cost=8.49..19.18 rows=1 width=254) (actual time=0.027..0.027 rows=1 loops=50)
+                                  One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                  Buffers: shared hit=400
+                                  ->  Nested Loop Left Join  (cost=8.49..19.18 rows=1 width=254) (actual time=0.025..0.026 rows=1 loops=50)
+                                        Join Filter: (c_1.id = t_1.category_id)
+                                        Rows Removed by Join Filter: 9
+                                        Buffers: shared hit=400
+                                        ->  Nested Loop Left Join  (cost=8.47..14.57 rows=1 width=218) (actual time=0.010..0.010 rows=1 loops=50)
+                                              Join Filter: (d_1.id = t_1.transfer_to_account_id)
+                                              Rows Removed by Join Filter: 1
+                                              Buffers: shared hit=250
+                                              ->  Nested Loop Left Join  (cost=8.45..13.51 rows=1 width=189) (actual time=0.007..0.007 rows=1 loops=50)
+                                                    Join Filter: (a_1.id = t_1.account_id)
+                                                    Buffers: shared hit=200
+                                                    ->  Bitmap Heap Scan on transactions t_1  (cost=8.43..12.46 rows=1 width=160) (actual time=0.002..0.003 rows=1 loops=50)
+                                                          Recheck Cond: ((id = ordered.sort_id) OR ((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) AND (installment_group_id = (ordered.group_id)::uuid)))
+                                                          Filter: ((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) AND (((ordered.group_id IS NULL) AND (id = ordered.sort_id)) OR ((ordered.group_id IS NOT NULL) AND (installment_group_id = (ordered.group_id)::uuid))))
+                                                          Heap Blocks: exact=50
+                                                          Buffers: shared hit=150
+                                                          ->  BitmapOr  (cost=8.43..8.43 rows=1 width=0) (actual time=0.002..0.002 rows=0 loops=50)
+                                                                Buffers: shared hit=100
+                                                                ->  Bitmap Index Scan on transactions_pkey  (cost=0.00..4.29 rows=1 width=0) (actual time=0.001..0.001 rows=1 loops=50)
+                                                                      Index Cond: (id = ordered.sort_id)
+                                                                      Buffers: shared hit=100
+                                                                ->  Bitmap Index Scan on transactions_installment_owner_idx  (cost=0.00..4.14 rows=1 width=0) (actual time=0.000..0.000 rows=0 loops=50)
+                                                                      Index Cond: ((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) AND (installment_group_id = (ordered.group_id)::uuid))
+                                                    ->  Result  (cost=0.02..1.04 rows=1 width=29) (actual time=0.002..0.002 rows=1 loops=50)
+                                                          One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                                          Buffers: shared hit=50
+                                                          ->  Seq Scan on accounts a_1  (cost=0.02..1.04 rows=1 width=29) (actual time=0.001..0.001 rows=1 loops=50)
+                                                                Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                                                Rows Removed by Filter: 2
+                                                                Buffers: shared hit=50
+                                              ->  Result  (cost=0.02..1.04 rows=1 width=29) (actual time=0.002..0.002 rows=1 loops=50)
+                                                    One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                                    Buffers: shared hit=50
+                                                    ->  Seq Scan on accounts d_1  (cost=0.02..1.04 rows=1 width=29) (actual time=0.000..0.000 rows=1 loops=50)
+                                                          Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                                          Rows Removed by Filter: 3
+                                                          Buffers: shared hit=50
+                                        ->  Seq Scan on categories c_1  (cost=0.00..4.58 rows=1 width=36) (actual time=0.003..0.014 rows=9 loops=50)
+                                              Filter: (((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) OR ((user_id IS NULL) AND is_default)) AND ((((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = user_id) AND (NOT is_default)) OR ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = user_id) OR is_default))
+                                              Rows Removed by Filter: 19
+                                              Buffers: shared hit=150
+  InitPlan 5 (returns $6)
+    ->  Aggregate  (cost=270.00..270.01 rows=1 width=8) (actual time=0.010..0.010 rows=1 loops=1)
+          ->  CTE Scan on eligible  (cost=0.00..240.00 rows=12000 width=0) (actual time=0.000..0.005 rows=120 loops=1)
+  InitPlan 6 (returns $7)
+    ->  Aggregate  (cost=270.00..270.01 rows=1 width=8) (actual time=0.008..0.009 rows=1 loops=1)
+          ->  CTE Scan on eligible eligible_1  (cost=0.00..240.00 rows=12000 width=0) (actual time=0.000..0.004 rows=120 loops=1)
+  InitPlan 7 (returns $8)
+    ->  Aggregate  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
+          ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0 loops=1)
+                One-Time Filter: false
+  InitPlan 8 (returns $9)
+    ->  Aggregate  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
+          ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0 loops=1)
+                One-Time Filter: false
+Planning:
+  Buffers: shared hit=353
+Planning Time: 5.648 ms
+Execution Time: 22.181 ms
+
+unfiltered history
+Result  (cost=7505.94..7505.95 rows=1 width=32) (actual time=77.925..77.940 rows=1 loops=1)
+  Buffers: shared hit=661
+  CTE owner_rows
+    ->  Result  (cost=2.14..712.45 rows=12000 width=103) (actual time=0.087..6.073 rows=12000 loops=1)
+          One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+          Buffers: shared hit=261
+          ->  Hash Left Join  (cost=2.14..532.45 rows=12000 width=70) (actual time=0.081..3.803 rows=12000 loops=1)
+                Hash Cond: (t.transfer_to_account_id = d.id)
+                Buffers: shared hit=261
+                ->  Hash Left Join  (cost=1.06..499.87 rows=12000 width=82) (actual time=0.072..2.894 rows=12000 loops=1)
+                      Hash Cond: (t.account_id = a.id)
+                      Buffers: shared hit=260
+                      ->  Seq Scan on transactions t  (cost=0.00..422.81 rows=12000 width=110) (actual time=0.061..0.925 rows=12000 loops=1)
+                            Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                            Rows Removed by Filter: 1105
+                            Buffers: shared hit=259
+                      ->  Hash  (cost=1.04..1.04 rows=1 width=20) (actual time=0.007..0.008 rows=1 loops=1)
+                            Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                            Buffers: shared hit=1
+                            ->  Result  (cost=0.02..1.04 rows=1 width=20) (actual time=0.004..0.005 rows=1 loops=1)
+                                  One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                  Buffers: shared hit=1
+                                  ->  Seq Scan on accounts a  (cost=0.02..1.04 rows=1 width=20) (actual time=0.002..0.003 rows=1 loops=1)
+                                        Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                        Rows Removed by Filter: 3
+                                        Buffers: shared hit=1
+                ->  Hash  (cost=1.04..1.04 rows=1 width=20) (actual time=0.005..0.005 rows=1 loops=1)
+                      Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                      Buffers: shared hit=1
+                      ->  Result  (cost=0.02..1.04 rows=1 width=20) (actual time=0.003..0.004 rows=1 loops=1)
+                            One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                            Buffers: shared hit=1
+                            ->  Seq Scan on accounts d  (cost=0.02..1.04 rows=1 width=20) (actual time=0.002..0.002 rows=1 loops=1)
+                                  Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                  Rows Removed by Filter: 3
+                                  Buffers: shared hit=1
+  CTE candidates
+    ->  GroupAggregate  (cost=1753.73..3058.73 rows=12000 width=190) (actual time=26.677..52.125 rows=12000 loops=1)
+          Group Key: r.entry_key, m.matching_ids
+          Buffers: shared hit=261
+          ->  Sort  (cost=1753.73..1783.73 rows=12000 width=226) (actual time=26.598..27.659 rows=12000 loops=1)
+                Sort Key: r.entry_key, m.matching_ids, r.source_currency
+                Sort Method: quicksort  Memory: 2353kB
+                Buffers: shared hit=261
+                ->  Hash Join  (cost=668.52..940.69 rows=12000 width=226) (actual time=19.578..22.289 rows=12000 loops=1)
+                      Hash Cond: (r.entry_key = m.entry_key)
+                      Buffers: shared hit=261
+                      ->  CTE Scan on owner_rows r  (cost=0.00..240.00 rows=12000 width=194) (actual time=0.088..0.499 rows=12000 loops=1)
+                            Buffers: shared hit=43
+                      ->  Hash  (cost=666.02..666.02 rows=200 width=64) (actual time=19.483..19.484 rows=12000 loops=1)
+                            Buckets: 16384 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 1511kB
+                            Buffers: shared hit=218
+                            ->  Subquery Scan on m  (cost=616.52..666.02 rows=200 width=64) (actual time=13.323..18.020 rows=12000 loops=1)
+                                  Buffers: shared hit=218
+                                  ->  GroupAggregate  (cost=616.52..664.02 rows=200 width=64) (actual time=13.323..17.481 rows=12000 loops=1)
+                                        Group Key: owner_rows.entry_key
+                                        Buffers: shared hit=218
+                                        ->  Sort  (cost=616.52..631.52 rows=6000 width=60) (actual time=13.312..13.822 rows=12000 loops=1)
+                                              Sort Key: owner_rows.entry_key, owner_rows.date, owner_rows.created_at, owner_rows.id
+                                              Sort Method: quicksort  Memory: 1603kB
+                                              Buffers: shared hit=218
+                                              ->  CTE Scan on owner_rows  (cost=0.00..240.00 rows=6000 width=60) (actual time=0.001..9.597 rows=12000 loops=1)
+                                                    Filter: matches
+                                                    Buffers: shared hit=218
+  CTE eligible
+    ->  CTE Scan on candidates  (cost=0.00..240.00 rows=12000 width=190) (actual time=26.679..55.371 rows=12000 loops=1)
+          Buffers: shared hit=261
+  InitPlan 4 (returns $5)
+    ->  Aggregate  (cost=2954.70..2954.71 rows=1 width=32) (actual time=75.255..75.260 rows=1 loops=1)
+          Buffers: shared hit=661
+          ->  Nested Loop  (cost=2010.89..2953.95 rows=50 width=229) (actual time=72.263..74.653 rows=50 loops=1)
+                Buffers: shared hit=661
+                ->  Limit  (cost=1991.68..1991.80 rows=50 width=198) (actual time=72.139..72.147 rows=50 loops=1)
+                      Buffers: shared hit=261
+                      ->  Sort  (cost=1991.68..2021.68 rows=12000 width=198) (actual time=72.138..72.141 rows=50 loops=1)
+                            Sort Key: ordered."position"
+                            Sort Method: top-N heapsort  Memory: 37kB
+                            Buffers: shared hit=261
+                            ->  Subquery Scan on ordered  (cost=1053.04..1593.04 rows=12000 width=198) (actual time=67.428..70.441 rows=12000 loops=1)
+                                  Buffers: shared hit=261
+                                  ->  WindowAgg  (cost=1053.04..1473.04 rows=12000 width=350) (actual time=67.427..69.742 rows=12000 loops=1)
+                                        Buffers: shared hit=261
+                                        ->  Sort  (cost=1053.04..1083.04 rows=12000 width=301) (actual time=67.421..67.748 rows=12000 loops=1)
+                                              Sort Key: e.created_at DESC NULLS LAST, e.entry_key DESC
+                                              Sort Method: quicksort  Memory: 2260kB
+                                              Buffers: shared hit=261
+                                              ->  CTE Scan on eligible e  (cost=0.00..240.00 rows=12000 width=301) (actual time=26.681..57.905 rows=12000 loops=1)
+                                                    Buffers: shared hit=261
+                ->  Aggregate  (cost=19.21..19.22 rows=1 width=32) (actual time=0.050..0.050 rows=1 loops=50)
+                      Buffers: shared hit=400
+                      ->  Sort  (cost=19.19..19.19 rows=1 width=254) (actual time=0.036..0.036 rows=1 loops=50)
+                            Sort Key: t_1.date, t_1.created_at, t_1.id
+                            Sort Method: quicksort  Memory: 25kB
+                            Buffers: shared hit=400
+                            ->  Result  (cost=8.49..19.18 rows=1 width=254) (actual time=0.035..0.035 rows=1 loops=50)
+                                  One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                  Buffers: shared hit=400
+                                  ->  Nested Loop Left Join  (cost=8.49..19.18 rows=1 width=254) (actual time=0.033..0.033 rows=1 loops=50)
+                                        Join Filter: (c.id = t_1.category_id)
+                                        Rows Removed by Join Filter: 9
+                                        Buffers: shared hit=400
+                                        ->  Nested Loop Left Join  (cost=8.47..14.57 rows=1 width=218) (actual time=0.012..0.012 rows=1 loops=50)
+                                              Join Filter: (d_1.id = t_1.transfer_to_account_id)
+                                              Rows Removed by Join Filter: 1
+                                              Buffers: shared hit=250
+                                              ->  Nested Loop Left Join  (cost=8.45..13.51 rows=1 width=189) (actual time=0.009..0.009 rows=1 loops=50)
+                                                    Join Filter: (a_1.id = t_1.account_id)
+                                                    Buffers: shared hit=200
+                                                    ->  Bitmap Heap Scan on transactions t_1  (cost=8.43..12.46 rows=1 width=160) (actual time=0.003..0.003 rows=1 loops=50)
+                                                          Recheck Cond: ((id = ordered.sort_id) OR ((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) AND (installment_group_id = (ordered.group_id)::uuid)))
+                                                          Filter: ((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) AND (((ordered.group_id IS NULL) AND (id = ordered.sort_id)) OR ((ordered.group_id IS NOT NULL) AND (installment_group_id = (ordered.group_id)::uuid))))
+                                                          Heap Blocks: exact=50
+                                                          Buffers: shared hit=150
+                                                          ->  BitmapOr  (cost=8.43..8.43 rows=1 width=0) (actual time=0.001..0.001 rows=0 loops=50)
+                                                                Buffers: shared hit=100
+                                                                ->  Bitmap Index Scan on transactions_pkey  (cost=0.00..4.29 rows=1 width=0) (actual time=0.001..0.001 rows=1 loops=50)
+                                                                      Index Cond: (id = ordered.sort_id)
+                                                                      Buffers: shared hit=100
+                                                                ->  Bitmap Index Scan on transactions_installment_owner_idx  (cost=0.00..4.14 rows=1 width=0) (actual time=0.000..0.000 rows=0 loops=50)
+                                                                      Index Cond: ((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) AND (installment_group_id = (ordered.group_id)::uuid))
+                                                    ->  Result  (cost=0.02..1.04 rows=1 width=29) (actual time=0.002..0.002 rows=1 loops=50)
+                                                          One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                                          Buffers: shared hit=50
+                                                          ->  Seq Scan on accounts a_1  (cost=0.02..1.04 rows=1 width=29) (actual time=0.001..0.001 rows=1 loops=50)
+                                                                Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                                                Rows Removed by Filter: 2
+                                                                Buffers: shared hit=50
+                                              ->  Result  (cost=0.02..1.04 rows=1 width=29) (actual time=0.002..0.002 rows=1 loops=50)
+                                                    One-Time Filter: ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                                    Buffers: shared hit=50
+                                                    ->  Seq Scan on accounts d_1  (cost=0.02..1.04 rows=1 width=29) (actual time=0.000..0.001 rows=1 loops=50)
+                                                          Filter: (user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid)
+                                                          Rows Removed by Filter: 3
+                                                          Buffers: shared hit=50
+                                        ->  Seq Scan on categories c  (cost=0.00..4.58 rows=1 width=36) (actual time=0.007..0.019 rows=9 loops=50)
+                                              Filter: (((user_id = '59e803d1-7f09-4bc9-9198-abccb5c08d2f'::uuid) OR ((user_id IS NULL) AND is_default)) AND ((((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = user_id) AND (NOT is_default)) OR ((((NULLIF(current_setting('request.jwt.claims'::text, true), ''::text))::jsonb ->> 'sub'::text))::uuid = user_id) OR is_default))
+                                              Rows Removed by Filter: 19
+                                              Buffers: shared hit=150
+  InitPlan 5 (returns $6)
+    ->  Aggregate  (cost=270.00..270.01 rows=1 width=8) (actual time=1.334..1.334 rows=1 loops=1)
+          ->  CTE Scan on eligible  (cost=0.00..240.00 rows=12000 width=0) (actual time=0.001..0.711 rows=12000 loops=1)
+  InitPlan 6 (returns $7)
+    ->  Aggregate  (cost=270.00..270.01 rows=1 width=8) (actual time=1.153..1.153 rows=1 loops=1)
+          ->  CTE Scan on eligible eligible_1  (cost=0.00..240.00 rows=12000 width=0) (actual time=0.000..0.743 rows=12000 loops=1)
+  InitPlan 7 (returns $8)
+    ->  Aggregate  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
+          ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0 loops=1)
+                One-Time Filter: false
+  InitPlan 8 (returns $9)
+    ->  Aggregate  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
+          ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0 loops=1)
+                One-Time Filter: false
+Planning:
+  Buffers: shared hit=22
+Planning Time: 1.038 ms
+Execution Time: 79.524 ms

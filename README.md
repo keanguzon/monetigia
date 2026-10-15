@@ -32,6 +32,7 @@
 - **Hallmark Visual Hierarchy:** Borderless editorial masthead, clean progress tracks, and priority flagging.
 
 ### 💳 Multi-Vault Account Management
+- **PHP only:** All amounts are Philippine pesos. Currency selection and conversion are not supported.
 - **Dedicated Account Types:** Manage Cash, High-Yield Savings (e.g., Maya, SeaBank, GoTyme), Traditional Banks, Credit Cards, and PayLater/BNPL ledgers.
 - **Debt & PayLater Amortization:** Built-in schedule engine for managing credit balances, cutoff dates, and debt payoff timelines.
 - **Two-Way Transfers:** Record internal transfers between accounts without skewing expense or income reports.
@@ -85,8 +86,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 ### 4. Database Setup
 1. In your Supabase dashboard, open the **SQL Editor**.
-2. Run the migration script located at `supabase/schema.sql` to initialize tables, indexes, and Row Level Security (RLS) policies.
+2. For a fresh database, apply `supabase/migrations/*.sql` once in filename order. For an existing database, apply only pending migrations; do not reapply the historical baseline or `schema.sql`.
 3. Configure your desired auth providers under **Authentication > Providers** (e.g. Google OAuth).
+
+For the transaction filters and PHP-only update, follow the [rollout steps](docs/codex-review/pending-rollout/transaction-filters-rollout.md). Pushing code does not install SQL migrations.
 
 ### 5. Run local development server
 ```bash

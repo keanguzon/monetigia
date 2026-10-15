@@ -169,31 +169,35 @@ export default function InstallmentHistoryGroup({ group, sortMode, debtState, se
         </button>
 
         <div className="flex flex-wrap items-center justify-between gap-3 pl-[3.25rem] sm:justify-end sm:pl-0">
-          {showRecordedAmount && <span className="text-xs text-muted-foreground tabular-nums">Recorded total {formatHistoryMoney(recordedAmount)}</span>}
-          <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
-            {formattedRemaining === "Unavailable" ? formattedRemaining : `−${formattedRemaining}`}
-          </span>
-          {onRequestEditDescription && (
+          <div className="min-w-0">
+            {showRecordedAmount && <span className="block text-xs text-muted-foreground tabular-nums">Recorded total {formatHistoryMoney(recordedAmount)}</span>}
+            <span className="block whitespace-nowrap text-sm font-semibold tabular-nums text-red-700 dark:text-red-400 sm:text-base">
+              {formattedRemaining === "Unavailable" ? formattedRemaining : `−${formattedRemaining}`}
+            </span>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:ml-0">
+            {onRequestEditDescription && (
+              <button
+                type="button"
+                aria-label={`Edit description for ${groupLabel}`}
+                disabled={!writesEnabled || group.descriptionState === "needs_review" && group.descriptionProofState !== "needs_review"}
+                onClick={() => onRequestEditDescription(group)}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
             <button
               type="button"
-              aria-label={`Edit description for ${groupLabel}`}
-              disabled={!writesEnabled || group.descriptionState === "needs_review" && group.descriptionProofState !== "needs_review"}
-              onClick={() => onRequestEditDescription(group)}
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label={`${expanded ? "Collapse" : "Expand"} installments for ${groupLabel}`}
+              aria-expanded={expanded}
+              aria-controls={scheduleId}
+              onClick={toggleExpanded}
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <Pencil className="h-4 w-4" aria-hidden="true" />
+              <ChevronDown className={`h-4 w-4 text-primary transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
-          )}
-          <button
-            type="button"
-            aria-label={`${expanded ? "Collapse" : "Expand"} installments for ${groupLabel}`}
-            aria-expanded={expanded}
-            aria-controls={scheduleId}
-            onClick={toggleExpanded}
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <ChevronDown className={`h-4 w-4 text-primary transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
-          </button>
+          </div>
         </div>
       </div>
       {group.descriptionState === "needs_review" && group.descriptionProofState !== "needs_review" && <p role="status" className="px-3 pb-2 text-sm text-amber-800 dark:text-amber-200 sm:px-5">This installment description needs review before the group can be edited.</p>}

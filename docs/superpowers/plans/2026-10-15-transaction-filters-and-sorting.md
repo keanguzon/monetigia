@@ -112,68 +112,68 @@ Display “Showing N of M matches,” counting logical entries. Do not use compl
 
 **Files:** create `src/lib/transactions/history-query.ts`, `tests/transaction-history-query.test.ts`; extend types in `src/lib/transactions/history.ts`.
 
-- [ ] Define `HistorySort`, `HistoryFilters`, date-selection union and `HistoryQuery` as pure typed contracts; normalize sorted/deduplicated UUID arrays and trimmed search.
-- [ ] Map old `date_added`/`transaction_date` choices to their descending replacements; identify all callers, tests and expanded group fallback labels.
-- [ ] Validate exact money and real inclusive calendar dates; draft invalid states must not become an applied query.
-- [ ] Add failing tests for every mode, mixed filters, literal search, Uncategorized, min/max edge cases and equivalent query fingerprints.
-- [ ] Implement, run focused tests/typecheck and commit `feat(transactions): define history filter contracts`.
+- [x] Define `HistorySort`, `HistoryFilters`, date-selection union and `HistoryQuery` as pure typed contracts; normalize sorted/deduplicated UUID arrays and trimmed search.
+- [x] Map old `date_added`/`transaction_date` choices to their descending replacements; identify all callers, tests and expanded group fallback labels.
+- [x] Validate exact money and real inclusive calendar dates; draft invalid states must not become an applied query.
+- [x] Add failing tests for every mode, mixed filters, literal search, Uncategorized, min/max edge cases and equivalent query fingerprints.
+- [x] Implement, run focused tests/typecheck and commit `feat(transactions): define history filter contracts`.
 
 ## Task 2: Owner-scoped server filtering and logical-entry paging
 
 **Files:** create `supabase/migrations/202610150001_transaction_history_filters.sql`, `tests/database/transaction-history-filters.test.mjs`; modify `src/types/database.ts`, narrowly allowlist the migration in `.gitignore`.
 
-- [ ] Add `public.transaction_history_page(p_query jsonb)` returning JSON with `version`, ordered `entries`, `nextOffset`, `totalMatchingEntries`, `excludedCurrencyEntryCount` and `invalidAmountEntryCount`.
-- [ ] Each entry returns its key/kind, complete rows, matching row IDs, exact recorded amount or null, currency and canonical sorting metadata. Preserve fields required by existing adapters; monetary JSON fields are strings.
-- [ ] Whitelist every request key and sort mode; validate offset, array/search sizes, UUIDs, dates and money. Page size is fixed at 50; no caller-controlled SQL or owner ID.
-- [ ] Use `SECURITY INVOKER`, fixed `pg_catalog, public` search path, explicit owner predicates, authenticated-only execution; private category names and destination-wallet data must never cross ownership boundaries.
-- [ ] Apply same-row filter predicates before grouping, entry amount checks before paging and sibling hydration after paging. Use deterministic SQL ordering; avoid dynamic SQL.
-- [ ] RED/GREEN database tests: all six sorts/ties, >1,000 rows, >50 groups, same-row conjunction, cross-page uniqueness, complete siblings, both transfer wallets, Uncategorized, exact cents, null/invalid money, PHP exclusions, hostile search, anonymous/cross-owner access and LF/CRLF reapplication.
-- [ ] Inspect query plans on a realistic large fixture. Add indexes only for an observed costly predicate; reuse the owner/date index. Do not add a general search engine or speculative indexes.
-- [ ] Commit `feat(transactions): add filtered history RPC`.
+- [x] Add `public.transaction_history_page(p_query jsonb)` returning JSON with `version`, ordered `entries`, `nextOffset`, `totalMatchingEntries`, `excludedCurrencyEntryCount` and `invalidAmountEntryCount`.
+- [x] Each entry returns its key/kind, complete rows, matching row IDs, exact recorded amount or null, currency and canonical sorting metadata. Preserve fields required by existing adapters; monetary JSON fields are strings.
+- [x] Whitelist every request key and sort mode; validate offset, array/search sizes, UUIDs, dates and money. Page size is fixed at 50; no caller-controlled SQL or owner ID.
+- [x] Use `SECURITY INVOKER`, fixed `pg_catalog, public` search path, explicit owner predicates, authenticated-only execution; private category names and destination-wallet data must never cross ownership boundaries.
+- [x] Apply same-row filter predicates before grouping, entry amount checks before paging and sibling hydration after paging. Use deterministic SQL ordering; avoid dynamic SQL.
+- [x] RED/GREEN database tests: all six sorts/ties, >1,000 rows, >50 groups, same-row conjunction, cross-page uniqueness, complete siblings, both transfer wallets, Uncategorized, exact cents, null/invalid money, PHP exclusions, hostile search, anonymous/cross-owner access and LF/CRLF reapplication.
+- [x] Inspect query plans on a realistic large fixture. Add indexes only for an observed costly predicate; reuse the owner/date index. Do not add a general search engine or speculative indexes.
+- [x] Commit `feat(transactions): add filtered history RPC`.
 
 ## Task 3: History adapter and request controller
 
 **Files:** modify `src/lib/transactions/history.ts`; create `src/hooks/use-transaction-history.ts`, `tests/transaction-history-controller.test.tsx`; extend `tests/transaction-history.test.tsx`.
 
-- [ ] Replace list reads with a validated RPC adapter while retaining existing single/group-detail loaders and provenance validation.
-- [ ] Expose ordered entries, matching IDs/counts, loading/error/load-more/refresh actions. Do not reorder the server's pages with the legacy date comparator.
-- [ ] Use the existing owner capture/current checks and monotonic request generations. Debounce search; invalidate synchronously when applied inputs change.
-- [ ] Keep full normalized query on load-more, Retry and write refresh. Replace loaded pages after writes so newly nonmatching entries disappear and moved entries reorder.
-- [ ] RED/GREEN tests for auth transitions, search debounce, stale query/page responses, load-more failures, preserved queries and post-edit/delete membership changes.
-- [ ] Commit `feat(transactions): control filtered history requests`.
+- [x] Replace list reads with a validated RPC adapter while retaining existing single/group-detail loaders and provenance validation.
+- [x] Expose ordered entries, matching IDs/counts, loading/error/load-more/refresh actions. Do not reorder the server's pages with the legacy date comparator.
+- [x] Use the existing owner capture/current checks and monotonic request generations. Debounce search; invalidate synchronously when applied inputs change.
+- [x] Keep full normalized query on load-more, Retry and write refresh. Replace loaded pages after writes so newly nonmatching entries disappear and moved entries reorder.
+- [x] RED/GREEN tests for auth transitions, search debounce, stale query/page responses, load-more failures, preserved queries and post-edit/delete membership changes.
+- [x] Commit `feat(transactions): control filtered history requests`.
 
 ## Task 4: Compact filter and sort controls
 
 **Files:** create `src/components/transactions/TransactionFilterDialog.tsx`, `src/components/transactions/TransactionFilterChips.tsx`, `src/components/transactions/TransactionSortControl.tsx`, `tests/transaction-filters-ui.test.tsx`; modify `PeriodBar.tsx` narrowly.
 
-- [ ] Reuse Radix Dialog for a mobile bottom sheet and compact desktop presentation; one Filter icon with an active count, no duplicated visible filter forms.
-- [ ] Provide wallet/category selections, optional min/max and date inputs, Apply/Cancel/Clear all. Use loaded option names, include archived/referenced choices where accessible; failures must not look like no choices.
-- [ ] Render six sort choices with concise labels; native accessible selections on desktop and existing dropdown patterns on mobile.
-- [ ] Show removable active chips that wrap without document overflow. Hide the chip row when empty.
-- [ ] Add validation, draft discard, Reset/Apply, keyboard/Escape/focus-return tests. Ensure switching presets clears custom dates and vice versa.
-- [ ] Commit `feat(transactions): add compact filter controls`.
+- [x] Reuse Radix Dialog for a mobile bottom sheet and compact desktop presentation; one Filter icon with an active count, no duplicated visible filter forms.
+- [x] Provide wallet/category selections, optional min/max and date inputs, Apply/Cancel/Clear all. Use loaded option names, include archived/referenced choices where accessible; failures must not look like no choices.
+- [x] Render six sort choices with concise labels; native accessible selections on desktop and existing dropdown patterns on mobile.
+- [x] Show removable active chips that wrap without document overflow. Hide the chip row when empty.
+- [x] Add validation, draft discard, Reset/Apply, keyboard/Escape/focus-return tests. Ensure switching presets clears custom dates and vice versa.
+- [x] Commit `feat(transactions): add compact filter controls`.
 
 ## Task 5: Page, group and summary integration
 
 **Files:** modify transactions `page.tsx`, `InstallmentHistoryGroup.tsx`, `SpendingSummaryPanel.tsx`; extend `tests/transaction-history-page.test.tsx`, `tests/transaction-history.test.tsx`, `tests/spending-summary-panel.test.tsx`.
 
-- [ ] Wire the controller and controls, replacing loaded-only search/type logic. Keep financial commands, details and correction lifecycle intact.
-- [ ] Derive one active date selection and preserve query across edits/payments/corrections. Clear selection when filters change; prune selections after refresh.
-- [ ] Honor matching IDs for bulk selection; label additional siblings Outside filters. Show Recorded total only during amount operations.
-- [ ] Keep preset spending totals unchanged by list filters; custom dates hide preset summary/limit. Display concise counts and empty/error recovery.
-- [ ] RED/GREEN integration tests for complete matching groups, consistent six-mode order across load-more, old-history search, membership changes after metadata edits and no accidental selection of filtered-out siblings.
-- [ ] Commit `feat(transactions): integrate full-history filtering`.
+- [x] Wire the controller and controls, replacing loaded-only search/type logic. Keep financial commands, details and correction lifecycle intact.
+- [x] Derive one active date selection and preserve query across edits/payments/corrections. Clear selection when filters change; prune selections after refresh.
+- [x] Honor matching IDs for bulk selection; label additional siblings Outside filters. Show Recorded total only during amount operations.
+- [x] Keep preset spending totals unchanged by list filters; custom dates hide preset summary/limit. Display concise counts and empty/error recovery.
+- [x] RED/GREEN integration tests for complete matching groups, consistent six-mode order across load-more, old-history search, membership changes after metadata edits and no accidental selection of filtered-out siblings.
+- [x] Commit `feat(transactions): integrate full-history filtering`.
 
 ## Task 6: Integration QA and rollout record
 
 **Files:** create `docs/codex-review/transaction-filters-qa-2026-10-15.md`; targeted plan allowlist for this document when committing the approved plan.
 
-- [ ] Run full frontend/Node tests, sequential disposable database suites, typecheck and production build. Avoid a concurrent build during timed UI tests; the prior feature exposed resource-contention timeouts.
-- [ ] Browser QA: filter Apply/Cancel/Clear/chip removal, all six sorts, search beyond page one, load-more/Retry, custom/preset switching, selection and metadata refresh. Use synthetic data only.
-- [ ] Verify 320/375/768/1280 widths, both themes, keyboard focus, iPhone-like sheet scrolling and concise copy. Record screenshots and actual observations; physical iPhone/PWA remains a separate acceptance step.
-- [ ] Independent final review with one scoped fix round. Preserve evidence and leave unrelated audit/cache/security work outside this feature.
-- [ ] Supply a read-only catalog check and ordered installation instructions for the new RPC. Verify production migration before releasing dependent frontend code; do not assume Git push executes SQL.
-- [ ] Commit the QA checkpoint. Push/deploy only on explicit subsequent authorization.
+- [x] Run full frontend/Node tests, sequential disposable database suites, typecheck and production build. Avoid a concurrent build during timed UI tests; the prior feature exposed resource-contention timeouts.
+- [x] Browser QA: filter Apply/Cancel/Clear/chip removal, all six sorts, search beyond page one, load-more/Retry, custom/preset switching, selection and metadata refresh. Use synthetic data only.
+- [x] Verify 320/375/768/1280 widths, both themes, keyboard focus, iPhone-like sheet scrolling and concise copy. Record screenshots and actual observations; physical iPhone/PWA remains a separate acceptance step.
+- [x] Independent final review with one scoped fix round. Preserve evidence and leave unrelated audit/cache/security work outside this feature.
+- [x] Supply a read-only catalog check and ordered installation instructions for the new RPC. Verify production migration before releasing dependent frontend code; do not assume Git push executes SQL.
+- [x] Commit the QA checkpoint. Push/deploy only on explicit subsequent authorization.
 
 ## Not included
 

@@ -1,0 +1,15 @@
+# Task 1 report
+
+Commit: 0f49aad feat(transactions): define history filter contracts
+
+Implemented src/lib/transactions/history-query.ts and tests/transaction-history-query.test.ts. Existing history.ts and all consumers remain unchanged until integration.
+
+Wire HistoryQuery exact fields: version (literal 1), sort, type, search, walletIds, categoryIds, includeUncategorized, minAmount, maxAmount, start, end, offset. No page-size or owner input. Defaults all history/all types/empty filters/date_added_desc/offset zero. Page size 50; offset 0..1000000; supplied arrays max100 before normalization; UUID lowercase/dedup/sorted; search trimmed max120 Unicode code points. Money exact canonical two decimal string, null/blank unbounded, range0..9999999999999.99. Dates valid Gregorian civil YYYY-MM-DD year0001..9999, paired inclusive ordered bounds; future accepted.
+
+Exports: HistorySort, HistoryType, HistoryFilters, HistoryQuery, HistoryDateSelection; HISTORY_SORTS, HISTORY_QUERY_PAGE_SIZE, HISTORY_QUERY_MAX_OFFSET, HISTORY_QUERY_MAX_IDS, HISTORY_QUERY_MAX_SEARCH_LENGTH, DEFAULT_HISTORY_QUERY; defaultHistoryQuery(), normalizeHistoryQuery(input?: Partial<HistoryQuery>), parseHistoryQuery(input: unknown), historyQueryFingerprint(input: Partial<HistoryQuery>), normalizeLegacyHistorySort(sort), normalizeHistoryAmount(value:unknown,field?), isHistoryCivilDate(value), historyDateBounds(selection), HistoryQueryValidationError (field). Parser rejects unknown keys/invalid supplied values; accepts omitted fields with defaults. Fingerprint includes offset. Legacy mapping date_added->date_added_desc and transaction_date->transaction_date_desc. UI date union: {kind:all}, {kind:preset,period:SpendingPeriod}, {kind:custom,start,end}; date union stays outside wire.
+
+Legacy migration points: history.ts TransactionHistorySort, entryDate/entryCreatedAt/entrySortId/sortHistoryEntries/loadHistoryPage; transactions/page.tsx state line107 and desktop/mobile controls around644-688; InstallmentHistoryGroup.tsx fallback explanation line205 checks transaction_date; tests/transaction-history.test.tsx, transaction-history-page.test.tsx, debt-history-qa.test.tsx include old sorts. Expanded fallback label is 'Sorted by latest due date'. Future integration must recognize both new transaction_date directions there.
+
+Task2 response contract remains Task2 producer responsibility; recommended envelope entry metadata key/kind/rows/matchingRowIds/recordedAmount/currency/transactionDate/createdAt/sortId, page version/entries/nextOffset/totalMatchingEntries/excludedCurrencyEntryCount/invalidAmountEntryCount. No premature runtime response type added.
+
+Verification: RED missing-module failure before implementation (initial sandbox EPERM rerun escalated); GREEN 28 query tests; focused compatibility 58/58 tests across query + existing history; npx tsc --noEmit exit0; git diff --check exit0. Full suite deliberately deferred per scoped parent instructions and approved integration QA plan. Git index needed sandbox escalation; targeted two-file commit only. Untracked audit_report_gemini.md and chat-export-2026-10-14.md preserved.

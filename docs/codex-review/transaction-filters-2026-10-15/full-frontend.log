@@ -1,0 +1,177 @@
+
+> monetigia@1.1.0 test
+> node --test tests/navigation-goals.test.cjs tests/local-preview-csp.test.cjs tests/theme-css.test.cjs && vitest run
+
+✔ development allows only the configured normalized HTTP(S) loopback API origin (7.7199ms)
+✔ only a configured HTTP loopback API suppresses upgrade-insecure-requests in development (2.5978ms)
+✔ production and nondevelopment headers remain byte-equivalent even with a loopback API configured (13.5889ms)
+✔ development rejects nonloopback, unsupported protocols, credentials, malformed URLs and control-character injection (16.0247ms)
+✔ a configured loopback URL cannot add path, query, fragment or encoded header directives to CSP (3.5013ms)
+✔ navigation ignores same route, fragments, external links and modified clicks (48.8629ms)
+✔ allocation events preserve combined progress and never infer legacy funding (118.1463ms)
+✔ Tailwind retains the synchronization rules triggered by the theme hook (637.7625ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1219.8735
+
+ RUN  v3.2.7 C:/Users/PC/Documents/monetigia
+
+ ✓ tests/transaction-history-format.test.ts (1 test) 3ms
+ ✓ tests/settings.test.tsx (35 tests) 5419ms
+   ✓ settings page > shows a settings-shaped loading state while the profile is loading  541ms
+   ✓ settings page > shows a profile error and lets the person retry loading  309ms
+   ✓ settings page > saves a changed name and reports success only after a returned user row  517ms
+   ✓ settings page > keeps the typed name and shows an error when saving fails  470ms
+ ✓ tests/spending-limit-ui.test.tsx (13 tests) 4966ms
+   ✓ rejects invalid amount   411ms
+   ✓ rejects invalid amount 0  316ms
+   ✓ save normalizes money, failure stays open, cancel restores trigger focus  451ms
+   ✓ remove requires confirmation and escape restores focus  507ms
+   ✓ confirmed save with failed refresh offers only refresh and never replays save  570ms
+   ✓ account generation change closes dialog and ignores previous receipt  457ms
+   ✓ late refresh resolve cannot affect reopened dialog or its pending save  671ms
+   ✓ late refresh reject cannot affect reopened dialog or its pending save  677ms
+ ✓ tests/debt-account-create-ui.test.tsx (18 tests) 3615ms
+   ✓ preset credit None uses exact atomic input without direct insert  438ms
+   ✓ custom credit sends nullable icon and separate scheduled debts  501ms
+   ✓ ordinary preset retains direct insertion  389ms
+   ✓ unknown modal reopen restores frozen account and draft and retries only  340ms
+   ✓ unknown modal attempt survives closing and an actual unmount before reopen  389ms
+ ✓ tests/wallet-reservations.test.tsx (18 tests) 5090ms
+   ✓ newer debt refresh survives an older response (old failure: false)  923ms
+   ✓ newer debt refresh survives an older response (old failure: true)  401ms
+   ✓ late authentication cannot replace newer account metadata  301ms
+   ✓ unmount after a query error invalidates a manual modal-close reload before it overwrites the account cache  719ms
+   ✓ Wallets keeps stored card debt while preserving credit previews and filters  643ms
+   ✓ All months uses the current credit balance while a selected month uses its scheduled debt  618ms
+ ✓ tests/transaction-release.test.tsx (36 tests) 9318ms
+   ✓ ordinary expense shows Laptop release, declining writes nothing, then confirmation writes once  1564ms
+   ✓ editing Amount removes the prior release confirmation  416ms
+   ✓ editing Account removes the prior release confirmation  427ms
+   ✓ switching transaction type invalidates a release review  597ms
+   ✓ ordinary defaultAccountId opens expense in that wallet; goal shortcut invents neither wallet nor amount  361ms
+   ✓ custom release inputs quote the chosen goals before allowing confirmation  448ms
+   ✓ an unknown dialog save survives closure and reopening before another transaction can be entered  550ms
+   ✓ a rejected save stays visible above the scroll body and cancel clears it without retrying  337ms
+   ✓ release popup owns focus, hides the preserved form, and Escape declines only review  584ms
+   ✓ outside dismissal keeps reservations without closing the transaction form  339ms
+   ✓ pending confirmation blocks dismissal and double submit, closing after refresh once  431ms
+   ✓ stale review waits for renewed confirmation, zero releases: false  387ms
+   ✓ stale review waits for renewed confirmation, zero releases: true  374ms
+   ✓ custom quote failure restores the form with a human error and no write  393ms
+   ✓ declining review preserves all entered fields and parent scroll across Radix modal variants  333ms
+   ✓ release save rejection restores one focused parent error without discarding the draft  425ms
+   ✓ reviewing unchanged custom amounts restores confirmation after an identical server quote  394ms
+ ✓ tests/debt-correction-ui.test.tsx (13 tests) 2492ms
+   ✓ confirmation totals exact partially paid remaining centavos and sends the frozen row IDs  398ms
+   ✓ paid rows, mixed groups, duplicate IDs, and empty selections cannot be confirmed  423ms
+ ✓ tests/contributions.test.tsx (11 tests) 8129ms
+   ✓ goal shortcut selects the goal, leaves wallet empty and resets between openings  1110ms
+   ✓ Expense sends its explicit goal meaning and refreshes progress  680ms
+   ✓ Transfer sends its explicit goal meaning and refreshes progress  1041ms
+   ✓ Income sends its explicit goal meaning and refreshes progress  653ms
+   ✓ installment purchase date and due date stay separate, preserve edits, and reset on reopen  751ms
+   ✓ installment preview uses exact centavos and submits purchase date separately from its schedule  714ms
+   ✓ debt payment month follows its chosen payment date  604ms
+   ✓ failed save and cancellation do not add funding; Escape closes the dialog  591ms
+   ✓ reopening a contribution cannot submit a wallet retained from the previous goal while accounts load  499ms
+   ✓ credit goal-tagged installments remain informational and do not reserve funds  1015ms
+   ✓ page fixtures render summaries and expose a working spend-from-goal shortcut  466ms
+ ✓ tests/goal-actions.test.tsx (23 tests) 4386ms
+   ✓ goal reservation actions > reserving for a goal uses the reservation dialog and does not quote or create an expense  809ms
+   ✓ goal reservation actions > release changes reservations without changing actual wallet balance  522ms
+   ✓ goal reservation actions > move lists only owned active goals and keeps the selected wallet  457ms
+   ✓ goal reservation actions > cancel and rejected commands leave the finance snapshot untouched  377ms
+   ✓ goal reservation actions > unknown save retries the same request even after the selected goal changes  438ms
+   ✓ goal lifecycle presentation > completed status comes from lifecycle, shows spending, and offers reopen and archive  336ms
+ ✓ tests/existing-debt.test.tsx (28 tests) 3146ms
+   ✓ shared existing debt fields > renders only three rows until full 600-row schedule is requested  1050ms
+   ✓ shared existing debt fields > disables adding at either cap with a readable reason  1541ms
+ ✓ tests/legacy-goals.test.tsx (7 tests) 1607ms
+   ✓ unreviewed goal opens review and cannot spend or reserve legacy tagged money  321ms
+   ✓ review explains fake savings correction and only imports explicitly selected cash spending  408ms
+ ✓ tests/transaction-filters-ui.test.tsx (14 tests) 4762ms
+   ✓ TransactionFilterDialog > keeps a selected preset when only a wallet draft changes  524ms
+   ✓ TransactionFilterDialog > uses explicit date edits to replace a preset with a custom range  885ms
+   ✓ TransactionFilterDialog > rejects invalid money and reversed bounds before applying  877ms
+   ✓ TransactionFilterDialog > rejects a reversed custom date range  608ms
+   ✓ TransactionFilterDialog > Cancel discards a changed selection and returns focus to the trigger  381ms
+   ✓ TransactionFilterDialog > Reset clears only dialog drafts while Clear all calls the global action  373ms
+ ✓ tests/debt-history-qa.test.tsx (6 tests) 1636ms
+   ✓ each mouse checkbox toggle agrees with the selected count  539ms
+   ✓ clicking an installment row toggles selection without double toggling its checkbox  390ms
+ ✓ tests/debt-adoption-ui.test.tsx (6 tests) 2233ms
+   ✓ cancel and mismatched residual never send an adoption command  457ms
+   ✓ unknown save survives unmount and retry resends frozen full command  321ms
+   ✓ Wallets remount exposes immutable unknown adoption retry after server committed all residual  654ms
+ ✓ tests/spending-summary-panel.test.tsx (15 tests) 1614ms
+   ✓ shows concise totals and keeps accounting explanations collapsed until requested  303ms
+   ✓ period control starts all-time, supports keyboard navigation and clamps future halves  337ms
+ ✓ tests/dashboard-stats.test.tsx (11 tests) 1334ms
+   ✓ shows the RPC's PHP Income and Expenses for Last 7 days  327ms
+ ✓ tests/transaction-history.test.tsx (22 tests) 2912ms
+   ✓ installment history row > credit history uses complete snapshot ordinals and focused-list shortcuts  376ms
+   ✓ installment history row > page reset key clears selection and collapses the ledger  369ms
+   ✓ refresh prunes missing debt rows and preserves explicitly selected outside siblings  317ms
+ ✓ tests/mobile-navigation-recovery.test.tsx (9 tests) 926ms
+   ✓ mobile skeleton replaces interactive old content through 7999ms, then offers explicit refresh  302ms
+ ✓ tests/debt-snapshot-view.test.tsx (11 tests) 888ms
+ ✓ tests/spending-hooks.test.tsx (17 tests) 1064ms
+ ✓ tests/goal-finance-hooks.test.tsx (15 tests) 1052ms
+ ✓ tests/transaction-history-controller.test.tsx (12 tests) 852ms
+ ✓ tests/debt-hooks.test.tsx (18 tests) 685ms
+ ✓ tests/transaction-description-ui.test.tsx (4 tests) 941ms
+   ✓ transaction description editor > unconfirmed metadata survives recovery without the original transaction prop  373ms
+ ✓ tests/landing-oauth-loading.test.tsx (8 tests) 750ms
+ ✓ tests/category-spending-refresh.test.tsx (4 tests) 597ms
+ ✓ tests/mobile-navigation.test.tsx (9 tests) 653ms
+ ✓ tests/navigation.test.tsx (11 tests) 327ms
+ ✓ tests/mobile-navigation-visibility.test.tsx (6 tests) 337ms
+ ✓ tests/transaction-history-page.test.tsx (25 tests) 22779ms
+   ✓ period selection reloads history, drops a late previous response and resets to all-time  1368ms
+   ✓ transactions history pagination > loads older rows, shows a retry after a read error, and retries the same page  2487ms
+   ✓ transactions history pagination > offers both sort orders, keeps the default selection, and preserves filters when sorting  2584ms
+   ✓ transactions history pagination > supports keyboard selection and Escape returns focus without reloading  1076ms
+   ✓ transactions history pagination > confirms that deleting one installment leaves the remaining schedule  537ms
+   ✓ transactions history pagination > opens the complete installment description editor without opening the schedule  396ms
+   ✓ transactions history pagination > refreshes both loaded pages and selected detail, then rejects an older pending load-more response  7067ms
+   ✓ transactions history pagination > zero-row remount keeps correction retry tied to the saved correction kind  309ms
+   ✓ keeps authoritative transaction_date_desc order across load-more  333ms
+   ✓ custom and preset dates stay exclusive; global clear removes search and type while retaining sort  1470ms
+   ✓ search reaches an older backend match without loading older pages  605ms
+   ✓ a metadata save removes an entry that no longer matches while preserving its query  1675ms
+ ✓ tests/debt-page-layout.test.tsx (3 tests) 392ms
+ ✓ tests/dashboard-periods.test.tsx (4 tests) 690ms
+   ✓ keeps Last 7 days and its previous window contiguous  333ms
+ ✓ tests/theme-transition.test.tsx (5 tests) 340ms
+ ✓ tests/transaction-description-hooks.test.tsx (6 tests) 289ms
+ ✓ tests/debt-selection.test.tsx (6 tests) 516ms
+   ✓ toolbar calls the bounded actions and disables selections over the 600-row limit  388ms
+ ✓ tests/sidebar-breakpoint.test.tsx (1 test) 616ms
+   ✓ desktop collapse survives a mobile breakpoint round trip with five direct destinations  615ms
+ ✓ tests/debt-client.test.ts (11 tests) 67ms
+ ✓ tests/transaction-history-filtered.test.ts (20 tests) 66ms
+ ✓ tests/button-tooltips.test.tsx (2 tests) 279ms
+ ✓ tests/goal-summary.test.ts (41 tests) 55ms
+ ✓ tests/debt-snapshot-contracts.test.ts (4 tests) 26ms
+ ✓ tests/debt-creation-contracts.test.ts (6 tests) 30ms
+ ✓ tests/goal-finance-client.test.ts (10 tests) 24ms
+ ✓ tests/debt-schedule.test.ts (7 tests) 25ms
+ ✓ tests/debt-summary.test.ts (5 tests) 21ms
+ ✓ tests/transaction-history-query.test.ts (28 tests) 15ms
+ ✓ tests/local-today.test.tsx (4 tests | 1 skipped) 35ms
+ ✓ tests/debt-correction-contracts.test.ts (5 tests) 13ms
+ ✓ tests/installment-dates.test.ts (6 tests) 9ms
+ ✓ tests/transaction-description-contracts.test.ts (4 tests) 14ms
+ ✓ tests/spending-periods.test.ts (14 tests | 3 skipped) 11ms
+ ✓ tests/settings-viewport.test.tsx (1 test) 3ms
+
+ Test Files  52 passed (52)
+      Tests  615 passed | 4 skipped (619)
+   Start at  14:54:20
+   Duration  33.78s (transform 5.20s, setup 0ms, collect 51.14s, tests 98.05s, environment 55.22s, prepare 9.36s)

@@ -1,0 +1,133 @@
+
+> monetigia@1.1.0 build
+> next build
+
+   ▲ Next.js 14.1.0
+   - Environments: .env
+
+   Creating an optimized production build ...
+ ⨯ Failed to find font override values for font `Bricolage Grotesque`
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (102kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (139kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ⚠ Compiled with warnings
+
+./node_modules/@supabase/realtime-js/dist/module/lib/websocket-factory.js
+A Node.js API is used (process.versions at line: 43) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/@supabase/realtime-js/dist/module/lib/websocket-factory.js
+./node_modules/@supabase/realtime-js/dist/module/index.js
+./node_modules/@supabase/supabase-js/dist/index.mjs
+./node_modules/@supabase/ssr/dist/module/createBrowserClient.js
+./node_modules/@supabase/ssr/dist/module/index.js
+./src/lib/supabase/middleware.ts
+
+./node_modules/@supabase/supabase-js/dist/index.mjs
+A Node.js API is used (process.version at line: 389) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/@supabase/supabase-js/dist/index.mjs
+./node_modules/@supabase/ssr/dist/module/createBrowserClient.js
+./node_modules/@supabase/ssr/dist/module/index.js
+./src/lib/supabase/middleware.ts
+
+ ⨯ Failed to find font override values for font `Bricolage Grotesque`
+Browserslist: browsers data (caniuse-lite) is 10 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+   We detected TypeScript in your project and reconfigured your tsconfig.json file for you. Strict-mode is set to false by default.
+   The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+       - include was updated to add '.superpowers/sdd/2026-10-15-transaction-filters-and-sorting/production-build/types/**/*.ts'
+
+
+./src/app/(dashboard)/categories/page.tsx
+154:6  Warning: React Hook useEffect has a missing dependency: 'loadCategories'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/accounts/AccountsWorkspace.tsx
+87:6  Warning: React Hook useEffect has a missing dependency: 'debtCommand.pendingCommand'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+121:6  Warning: React Hook useEffect has a missing dependency: 'refreshCorrectionViews'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+140:6  Warning: React Hook useEffect has a missing dependency: 'loadAccounts'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/accounts/AddAccountModal.tsx
+66:87  Warning: React Hook useEffect has missing dependencies: 'creation.pendingInput' and 'frozen'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+79:150  Warning: React Hook useEffect has a missing dependency: 'finish'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/accounts/DebtHistoryGroup.tsx
+58:6  Warning: React Hook useEffect has a missing dependency: 'eligibleIds'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/accounts/LegacyDebtReviewDialog.tsx
+44:6  Warning: React Hook useEffect has a missing dependency: 'refreshOnly'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+45:123  Warning: React Hook useEffect has missing dependencies: 'onClose' and 'write'. Either include them or remove the dependency array. If 'onClose' changes too often, find the parent component that defines it and wrap that definition in useCallback.  react-hooks/exhaustive-deps
+
+./src/components/forms/AddAccountForm.tsx
+54:6  Warning: React Hook useEffect has a missing dependency: 'icon'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+70:146  Warning: React Hook useEffect has a missing dependency: 'finishCredit'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/transactions/AddTransactionModal.tsx
+119:6  Warning: React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/transactions/DebtCorrectionDialog.tsx
+129:6  Warning: React Hook useEffect has a missing dependency: 'write'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+137:6  Warning: React Hook useEffect has a missing dependency: 'session'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+176:6  Warning: React Hook useEffect has a missing dependency: 'userId'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/transactions/TransactionDescriptionEditor.tsx
+69:6  Warning: React Hook useEffect has missing dependencies: 'initialTransaction' and 'openedMetadata'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+86:6  Warning: React Hook useEffect has a missing dependency: 'transaction'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+95:6  Warning: React Hook useEffect has a missing dependency: 'write'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+106:6  Warning: React Hook useEffect has missing dependencies: 'write.pendingCommand' and 'write.refreshError'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/21) ...
+
+   Generating static pages (5/21)
+
+   Generating static pages (10/21)
+
+   Generating static pages (15/21)
+
+ ✓ Generating static pages (21/21)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ λ /                                    7.89 kB         158 kB
+├ ○ /_not-found                          0 B                0 B
+├ λ /accounts                            185 B           288 kB
+├ λ /accounts/debt                       185 B           288 kB
+├ λ /accounts/new                        2.97 kB         190 kB
+├ λ /api/storage/ensure-profiles-bucket  0 B                0 B
+├ λ /api/user/upload-avatar              0 B                0 B
+├ λ /auth/callback                       0 B                0 B
+├ λ /categories                          4.15 kB         178 kB
+├ λ /dashboard                           5.9 kB          222 kB
+├ ○ /forgot-password                     159 B          84.6 kB
+├ λ /goals                               27.7 kB         240 kB
+├ ○ /login                               159 B          84.6 kB
+├ ○ /manifest.webmanifest                0 B                0 B
+├ ○ /mobile-app                          15.9 kB         114 kB
+├ ○ /register                            159 B          84.6 kB
+├ ○ /reset-password                      159 B          84.6 kB
+├ λ /settings                            11.2 kB         190 kB
+├ λ /transactions                        31.6 kB         259 kB
+└ ○ /verify-email                        159 B          84.6 kB
++ First Load JS shared by all            84.5 kB
+  ├ chunks/8069-edae3549eeea8e18.js      28.9 kB
+  ├ chunks/fd9d1056-1b561437daab8b16.js  53.4 kB
+  └ other shared chunks (total)          2.17 kB
+
+
+ƒ Middleware                             160 kB
+
+○  (Static)   prerendered as static content
+λ  (Dynamic)  server-rendered on demand using Node.js
