@@ -60,7 +60,10 @@ vi.mock("@/components/transactions/DebtCorrectionDialog", () => ({
 
 import TransactionsPage from "@/app/(dashboard)/transactions/page";
 vi.mock("@/hooks/use-local-today", () => ({ useLocalToday: () => new Date(2026, 9, 15) }));
-vi.mock("@/hooks/use-spending", () => ({ useSpendingSummary: () => ({ data: undefined, isLoading: true }) }));
+vi.mock("@/hooks/use-spending", () => ({
+  useSpendingSummary: () => ({ data: undefined, isLoading: true }),
+  useSpendingLimit: () => ({ limit: null, error: null, isLoading: false, retry: async () => null }),
+}));
 
 test("period selection reloads history, drops a late previous response and resets to all-time", async () => {
   const reads: Array<{ start?: string; end?: string; offset: number }> = [];
